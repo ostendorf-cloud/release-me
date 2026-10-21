@@ -73,6 +73,8 @@ bump-minor-pre-major: true
 hidden-types: [chore, docs]
 fallback-type: misc
 token-env: RELEASE_TOKEN
+forge: gitlab
+base-url: https://gitlab.example.com
 changelog: HISTORY.md
 labels:
   pending: needs-release
@@ -88,6 +90,8 @@ files:
 				HiddenTypes:       []string{"chore", "docs"},
 				FallbackType:      "misc",
 				TokenEnv:          "RELEASE_TOKEN",
+				Forge:             "gitlab",
+				BaseURL:           "https://gitlab.example.com",
 				ChangelogPath:     "HISTORY.md",
 				Labels:            config.Labels{Pending: "needs-release", Tagged: "released"},
 				Files: []config.File{
@@ -160,6 +164,7 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{name: "rejects malformed YAML", content: "initial-version: [0.1.0\n"},
 		{name: "rejects a fallback type that bumps the version", content: "fallback-type: feat\n"},
 		{name: "rejects an unknown updater", content: "files:\n  - path: cmd/cli/version.go\n    updater: go\n"},
+		{name: "rejects a forge that is neither github nor gitlab", content: "forge: bitbucket\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

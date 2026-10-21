@@ -12,8 +12,10 @@ import (
 
 // Entry is one first parent commit since the last tag.
 type Entry struct {
-	// PullRequestNumber is the pull request number parsed from a
-	// "Merge pull request #N from ..." subject, or 0 for a direct commit.
+	// PullRequestNumber is the pull request number parsed from a GitHub
+	// "Merge pull request #N from ..." subject, or a GitLab merge request
+	// number read from the body of a "Merge branch '...' into '...'"
+	// subject, or 0 for a direct commit.
 	PullRequestNumber int
 	// Subject is the commit subject: the merge subject for a merge commit,
 	// or the commit's own subject for a direct commit.
@@ -23,7 +25,18 @@ type Entry struct {
 	Body string
 }
 
+// mergeSubject matches GitHub's merge commit subject, naming the pull
+// request number directly.
 var mergeSubject = regexp.MustCompile(`^Merge pull request #(\d+) from `)
+
+// gitlabMergeSubject matches GitLab's merge commit subject, which names
+// neither the source nor the merge request; the number is read from the
+// body instead, through gitlabMergeRequest.
+var gitlabMergeSubject = regexp.MustCompile(`^Merge branch '.+' into '.+'$`)
+
+// gitlabMergeRequest matches the merge request reference GitLab appends to
+// the merge commit body, "See merge request group/project!N".
+var gitlabMergeRequest = regexp.MustCompile(`See merge request \S*!(\d+)`)
 
 const (
 	recordSep = "\x1e"
@@ -52,9 +65,18 @@ func Walk(ctx context.Context, dir, since string) ([]Entry, error) {
 		body = strings.TrimRight(body, "\n")
 
 		entry := Entry{Subject: subject, Body: body}
-		if m := mergeSubject.FindStringSubmatch(subject); m != nil {
-			if number, err := strconv.Atoi(m[1]); err == nil {
-				entry.PullRequestNumber = number
+		switch {
+		case mergeSubject.MatchString(subject):
+			if m := mergeSubject.FindStringSubmatch(subject); m != nil {
+				if number, err := strconv.Atoi(m[1]); err == nil {
+					entry.PullRequestNumber = number
+				}
+			}
+		case gitlabMergeSubject.MatchString(subject):
+			if m := gitlabMergeRequest.FindStringSubmatch(body); m != nil {
+				if number, err := strconv.Atoi(m[1]); err == nil {
+					entry.PullRequestNumber = number
+				}
 			}
 		}
 		entries = append(entries, entry)

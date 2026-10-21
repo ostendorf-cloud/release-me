@@ -11,7 +11,7 @@ pull request, versions from Conventional Commits, a release pull request, a tag 
   pull request.
 - Opens and updates one release pull request per component with the changelog, bumps the
   version in the files you list, and on merge creates the tag and the release.
-- GitHub first. GitLab follows through the same forge interface.
+- Works against GitHub and GitLab, self hosted included, through the same forge interface.
 
 ## Install
 
@@ -34,8 +34,8 @@ release-me check       # config, labels and token
 
 Every writing command accepts `--dry-run`: it prints what would change and writes nothing, not
 even a branch. `--verbose` enables debug logging on stderr. Components and the major tag land
-in a later milestone; everything below works today, against a GitHub repository with one
-component.
+in a later milestone; everything below works today, against a GitHub or GitLab repository with
+one component.
 
 `next` prints the next version and the bump reason, for example `0.2.0 (feat)`. `changelog`
 prints the rendered entries for that version. Both print nothing and exit 0 when there is
@@ -75,8 +75,8 @@ an empty heading.
 ### release
 
 Tags and releases every merged pull request on the release branch that still carries the
-`pending` label: a tag `vX.Y.Z` on the merge commit, a GitHub release with the pull request's
-notes and changelog, draft and prerelease both false, then the label swapped from `pending` to
+`pending` label: a tag `vX.Y.Z` on the merge commit, a release with the pull request's notes
+and changelog, draft and prerelease both false, then the label swapped from `pending` to
 `tagged`. A tag that already exists, left over from an earlier, interrupted run, is not an
 error: the release and the label swap still happen, so the pull request does not stay pending
 forever, and the run reports it as already tagged.
@@ -91,8 +91,24 @@ pull request and releasing whatever merged since the last run.
 Validates `release-me.yaml`, that the `pending` and `tagged` labels exist on the repository,
 and that the token environment variable is both set and accepted by the forge: a rejected
 token is reported as such, not as a missing label, since the symptom from the forge is the
-same 401 either way. Prints every missing or invalid item and exits 1 when anything is
-missing, 0 otherwise.
+same 401 either way. Prints which forge it resolved and why, then every missing or invalid
+item, and exits 1 when anything is missing, 0 otherwise.
+
+### Forge
+
+Every command talks to the forge the `forge` config key names. Without that key, a GitLab
+origin remote selects the GitLab forge, by its host naming `gitlab`; anything else selects
+GitHub.
+
+GitHub reads its token from `token-env`, default `GITHUB_TOKEN`. GitLab reads its token from
+`token-env` too, but defaults to `GITLAB_TOKEN` instead when `token-env` is left unset, and
+sends it in the `PRIVATE-TOKEN` header. GitLab's base URL comes from the `base-url` config key,
+then the `CI_SERVER_URL` variable GitLab CI sets, then `https://gitlab.com`, for self hosted
+instances.
+
+A `ci/gitlab-ci.yaml` job template in this repository runs `release-me run` from the image on
+GHCR, on the default branch only. Include it from the project's `.gitlab-ci.yml` and set a
+`GITLAB_TOKEN` CI/CD variable, masked and protected.
 
 ### Notes block
 
@@ -106,7 +122,7 @@ Run the migration before upgrading.
 ````
 
 Add it by hand once the pull request is open. `pr` keeps it verbatim on every later update, and
-`release` carries it into the GitHub release, above the changelog.
+`release` carries it into the release, above the changelog.
 
 ### Override block
 
@@ -149,9 +165,14 @@ files:
 - `fallback-type`: the type assigned to text that does not parse as a conventional commit,
   default `other`. `feat`, `fix`, `perf` and `revert` are refused, unparseable text never
   bumps the version.
-- `token-env`: the environment variable holding the GitHub token, default `GITHUB_TOKEN`. It
-  governs API calls only; `pr`'s push to the release branch authenticates through the git
-  credentials the checkout's `origin` remote already carries, the same as any other push.
+- `token-env`: the environment variable holding the forge token, default `GITHUB_TOKEN`,
+  `GITLAB_TOKEN` when the forge is GitLab and the key is left unset. It governs API calls only;
+  `pr`'s push to the release branch authenticates through the git credentials the checkout's
+  `origin` remote already carries, the same as any other push.
+- `forge`: `github` or `gitlab`, default guessed from the origin remote's host. See
+  [Forge](#forge).
+- `base-url`: the forge's base URL, GitLab only, default the `CI_SERVER_URL` variable GitLab CI
+  sets, then `https://gitlab.com`. Ignored for GitHub.
 - `changelog`: the changelog file path, default `CHANGELOG.md`. `pr` prepends the new version's
   section to it, creating the file when it does not exist yet.
 - `labels.pending` and `labels.tagged`: the label names `pr`, `release` and `check` use,

@@ -1,0 +1,18 @@
+# release-me run, on the default branch only.
+#
+# Include this job from the repository's .gitlab-ci.yml:
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/ostendorf-cloud/release-me/main/ci/gitlab-ci.yaml
+#
+# The project needs a GITLAB_TOKEN CI/CD variable, masked and protected: a
+# project or group access token with API scope, matching the token-env
+# release-me.yaml defaults to for the gitlab forge.
+
+release-me:
+  stage: release
+  image: ghcr.io/ostendorf-cloud/release-me:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  script:
+    - release-me run

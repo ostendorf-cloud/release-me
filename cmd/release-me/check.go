@@ -13,7 +13,6 @@ import (
 
 	"github.com/ostendorf-cloud/release-me/internal/config"
 	"github.com/ostendorf-cloud/release-me/internal/forge"
-	forgegithub "github.com/ostendorf-cloud/release-me/internal/forge/github"
 	"github.com/ostendorf-cloud/release-me/internal/history"
 )
 
@@ -44,14 +43,8 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 
 	cfg, cfgErr := config.Load(filepath.Join(dir, "release-me.yaml"))
 	tokenEnv := config.DefaultTokenEnv
-	if cfgErr == nil {
-		tokenEnv = cfg.TokenEnv
-	}
-	token := os.Getenv(tokenEnv)
-	logger.Debug("read token", "env", tokenEnv, "set", token != "")
+	owner, repoName, forgeName := "", "", ""
 
-	var f forge.Forge
-	owner, repoName := "", ""
 	if cfgErr == nil {
 		var remoteErr error
 		owner, repoName, remoteErr = history.Remote(ctx, dir)
@@ -59,12 +52,29 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "release-me: origin remote: %v\n", remoteErr)
 			return 1
 		}
-		ghForge, forgeErr := forgegithub.New(token)
+
+		var forgeReason string
+		var resolveErr error
+		forgeName, forgeReason, resolveErr = resolveForgeName(ctx, dir, cfg.Forge)
+		if resolveErr != nil {
+			fmt.Fprintf(stderr, "release-me: forge: %v\n", resolveErr)
+			return 1
+		}
+		fmt.Fprintf(stdout, "forge: %s, resolved from %s\n", forgeName, forgeReason)
+		tokenEnv = forgeTokenEnv(forgeName, cfg.TokenEnv)
+	}
+
+	token := os.Getenv(tokenEnv)
+	logger.Debug("read token", "env", tokenEnv, "set", token != "")
+
+	var f forge.Forge
+	if cfgErr == nil {
+		built, forgeErr := buildForge(forgeName, cfg.BaseURL, token)
 		if forgeErr != nil {
 			fmt.Fprintf(stderr, "release-me: forge: %v\n", forgeErr)
 			return 1
 		}
-		f = ghForge
+		f = built
 	}
 
 	missing := doCheck(ctx, cfg, cfgErr, tokenEnv, token, owner, repoName, f)

@@ -74,6 +74,30 @@ func TestWalk(t *testing.T) {
 			},
 		},
 		{
+			name: "parses the merge request number from a GitLab merge subject and body",
+			setup: func(t *testing.T, dir string) {
+				commitEntry(t, dir, "chore: initial commit", "")
+				commitEntry(t, dir, "Merge branch 'feat-branch' into 'main'", "See merge request group/project!42")
+			},
+			want: []history.Entry{
+				{
+					PullRequestNumber: 42,
+					Subject:           "Merge branch 'feat-branch' into 'main'",
+					Body:              "See merge request group/project!42",
+				},
+				{Subject: "chore: initial commit"},
+			},
+		},
+		{
+			name: "treats a GitLab merge subject without the merge request reference as a direct commit",
+			setup: func(t *testing.T, dir string) {
+				commitEntry(t, dir, "Merge branch 'feat-branch' into 'main'", "")
+			},
+			want: []history.Entry{
+				{Subject: "Merge branch 'feat-branch' into 'main'"},
+			},
+		},
+		{
 			name: "keeps a multi line commit body",
 			setup: func(t *testing.T, dir string) {
 				commitEntry(t, dir, "fix: rename the config key", "BREAKING CHANGE: the old key is gone\n\nsee the migration guide")

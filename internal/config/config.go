@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package config loads release-me.yaml: initial-version,
-// bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
-// changelog and labels. major-tag stays unknown until milestone 5 reads it.
+// bump-minor-pre-major, hidden-types, fallback-type, token-env, forge,
+// base-url, files, changelog and labels. major-tag stays unknown until
+// milestone 5 reads it.
 package config
 
 import (
@@ -43,6 +44,11 @@ var DefaultHiddenTypes = []string{"chore", "docs", "ci", "style", "refactor", "t
 // never move the version.
 var bumpingTypes = map[string]bool{"feat": true, "fix": true, "perf": true, "revert": true}
 
+// validForges are the values accepted for the "forge" key, besides the
+// empty string, which leaves the forge to be guessed from the origin
+// remote.
+var validForges = map[string]bool{"github": true, "gitlab": true}
+
 // File is one entry of the "files" key: a file release-me bumps the version
 // in, through the named updater.
 type File struct {
@@ -64,6 +70,8 @@ type Config struct {
 	HiddenTypes       []string
 	FallbackType      string
 	TokenEnv          string
+	Forge             string
+	BaseURL           string
 	Files             []File
 	ChangelogPath     string
 	Labels            Labels
@@ -90,6 +98,8 @@ type raw struct {
 	HiddenTypes       *[]string  `yaml:"hidden-types"`
 	FallbackType      *string    `yaml:"fallback-type"`
 	TokenEnv          *string    `yaml:"token-env"`
+	Forge             *string    `yaml:"forge"`
+	BaseURL           *string    `yaml:"base-url"`
 	Files             *[]rawFile `yaml:"files"`
 	Changelog         *string    `yaml:"changelog"`
 	Labels            *rawLabels `yaml:"labels"`
@@ -151,6 +161,15 @@ func Load(path string) (cfg Config, err error) {
 	}
 	if r.TokenEnv != nil {
 		cfg.TokenEnv = *r.TokenEnv
+	}
+	if r.Forge != nil {
+		cfg.Forge = *r.Forge
+	}
+	if cfg.Forge != "" && !validForges[cfg.Forge] {
+		return Config{}, fmt.Errorf("config: parse %s: forge %q is neither %q nor %q", path, cfg.Forge, "github", "gitlab")
+	}
+	if r.BaseURL != nil {
+		cfg.BaseURL = *r.BaseURL
 	}
 	if r.Changelog != nil {
 		cfg.ChangelogPath = *r.Changelog
