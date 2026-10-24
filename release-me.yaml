@@ -1,4 +1,4 @@
-initial-version: 0.1.0
+initial-version: 0.2.0
 bump-minor-pre-major: true
 hidden-types: [chore, docs, ci, style, refactor, test, build]
 major-tag: true
