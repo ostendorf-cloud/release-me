@@ -28,25 +28,35 @@ const (
 	KindReleaseNotes Kind = "release-notes"
 )
 
-// writeAssociations are the GitHub "author_association" values that carry
-// write access or higher on the repository, the minimum a comment command
-// requires.
+// writeAssociations are the GitHub "author_association" values Parse
+// treats as close to write access. See Authorized's own doc comment for
+// exactly what this does and does not guarantee.
 var writeAssociations = map[string]bool{"OWNER": true, "MEMBER": true, "COLLABORATOR": true}
 
 // Authorized reports whether association, a comment event's
-// "author_association" field, carries write access or higher: OWNER,
-// MEMBER or COLLABORATOR.
+// "author_association" field, is OWNER, MEMBER or COLLABORATOR.
+//
+// This is close to, but not the same as, write access or higher on the
+// repository: MEMBER is any member of the owning organization, regardless
+// of that member's own permission on this particular repository, and
+// COLLABORATOR includes a collaborator added with only read or triage
+// access. Checking the repository's actual collaborator permission would
+// need an extra API call per comment; author_association is already on
+// the webhook payload GitHub computed server side, so Parse accepts the
+// wider set these three values actually describe instead.
 func Authorized(association string) bool {
 	return writeAssociations[association]
 }
 
 // Outcome is what Parse resolved one comment body to.
 type Outcome struct {
-	// Matched is true when body names mention at all, whether or not a
-	// recognized command word follows it.
+	// Matched is true when some line of body, once stripped of quoted,
+	// fenced, inline code and HTML comment text, starts with mention,
+	// whether or not a recognized command word follows it.
 	Matched bool
-	// Allowed reports whether the comment's author association carries
-	// write access or higher. Meaningless when Matched is false.
+	// Allowed reports whether the comment's author association is close
+	// to write access or higher; see Authorized. Meaningless when Matched
+	// is false.
 	Allowed bool
 	// Command is the recognized command word after the first Matched
 	// occurrence of mention that one follows, or "" when body names
@@ -74,11 +84,51 @@ type Outcome struct {
 // KindReleaseNotes to use verbatim.
 var commandWord = regexp.MustCompile(`(?s)^(\S+)[ \t\r\n]*(.*)$`)
 
-// Parse scans body for mention, GitHub's "@name" convention assumed, and
-// the recognized command word that follows the first occurrence it finds
-// one after, returning what it resolved and whether association
+// htmlComment, fencedBlock and inlineCode match the markdown constructs
+// sanitize removes before Parse ever looks for mention: a comment, quote
+// or illustrative snippet discussing a command must never be read as one.
+var (
+	htmlComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+	fencedBlock = regexp.MustCompile("(?s)```.*?```|~~~.*?~~~")
+	inlineCode  = regexp.MustCompile("`[^`\n]*`")
+)
+
+// sanitize strips HTML comments, fenced code blocks, inline code spans and
+// blockquote lines from body, so Parse never scans text the commenter
+// quoted, fenced or commented out rather than typed as a live command. A
+// GitHub "Quote reply" prefixes every quoted line with ">", which this
+// drops entirely rather than merely ignoring the prefix, since a quoted
+// command is never meant to run.
+func sanitize(body string) string {
+	body = htmlComment.ReplaceAllString(body, "")
+	body = fencedBlock.ReplaceAllString(body, "")
+	body = inlineCode.ReplaceAllString(body, "")
+
+	lines := strings.Split(body, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimLeft(line, " \t"), ">") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// Parse sanitizes body, then scans its lines for one that starts, after
+// only leading whitespace, with mention at a real token boundary, and
+// resolves the recognized command word that follows the first such line
+// one does, returning what it resolved and whether association
 // authorizes it. mention is compared literally; a repository's configured
 // "comment-mention" is passed as is.
+//
+// Requiring mention to open its own line, not merely appear anywhere in
+// body, is deliberate: a command embedded mid sentence, in a blockquote, a
+// fenced block, an inline code span or an HTML comment must never execute,
+// including when a maintainer's own "Quote reply" repeats a refused
+// command verbatim to say no to it. sanitize already drops every one of
+// those constructs; the line-start rule is a second, independent reason
+// each of them fails to match even if sanitize somehow missed one.
 //
 // A comment that never names mention at all returns Matched false: the
 // comment was not directed at release-me, and the caller replies to
@@ -94,44 +144,51 @@ func Parse(body, mention, association string) Outcome {
 		return out
 	}
 
-	pos := 0
-	for {
-		idx := strings.Index(body[pos:], mention)
-		if idx < 0 {
-			return out
-		}
-		start := pos + idx
-		end := start + len(mention)
-		pos = end
-		if !boundaryOK(body, start, end) {
-			continue
-		}
-		out.Matched = true
-		out.Allowed = Authorized(association)
+	clean := sanitize(body)
+	offset := 0
+	for _, line := range strings.Split(clean, "\n") {
+		trimmed := strings.TrimLeft(line, " \t")
+		leading := len(line) - len(trimmed)
 
-		tail := strings.TrimLeft(body[end:], " \t\r\n")
-		m := commandWord.FindStringSubmatch(tail)
-		if m == nil {
-			// Nothing but whitespace after this occurrence: "the mention
-			// alone". Keep scanning in case a later occurrence carries a
-			// real command.
-			continue
-		}
-		word, rest := m[1], m[2]
+		if strings.HasPrefix(trimmed, mention) {
+			after := trimmed[len(mention):]
+			if after == "" || isBoundary(after[0]) {
+				out.Matched = true
+				out.Allowed = Authorized(association)
 
-		switch word {
-		case string(KindReleaseAs):
-			out.Command = KindReleaseAs
-			applyReleaseAs(&out, rest)
-			return out
-		case string(KindReleaseNotes):
-			out.Command = KindReleaseNotes
-			out.Notes = strings.TrimSpace(rest)
-			out.Valid = true
-			return out
-		default:
-			continue
+				afterAbs := offset + leading + len(mention)
+				tail := strings.TrimLeft(clean[afterAbs:], " \t\r\n")
+				if m := commandWord.FindStringSubmatch(tail); m != nil {
+					if done := resolveCommand(&out, m[1], m[2]); done {
+						return out
+					}
+				}
+				// No recognized command word on this line: keep scanning
+				// in case a later line carries a real command.
+			}
 		}
+		offset += len(line) + 1
+	}
+	return out
+}
+
+// resolveCommand fills out from word and rest, the command word and
+// remaining text commandWord matched on one line. done is true when word
+// is recognized, so Parse stops scanning; false for an unrecognized word,
+// so Parse keeps looking at later lines.
+func resolveCommand(out *Outcome, word, rest string) (done bool) {
+	switch word {
+	case string(KindReleaseAs):
+		out.Command = KindReleaseAs
+		applyReleaseAs(out, rest)
+		return true
+	case string(KindReleaseNotes):
+		out.Command = KindReleaseNotes
+		out.Notes = strings.TrimSpace(rest)
+		out.Valid = true
+		return true
+	default:
+		return false
 	}
 }
 
@@ -175,23 +232,10 @@ func parseVersion(s string) (normalized string, ok bool) {
 	return sv.String(), true
 }
 
-// boundaryOK reports whether body[start:end] is a whole mention token: the
-// byte right before start, when one exists, and the byte right after end,
-// when one exists, are both outside the set a mention could continue
-// with, so "@release-me" never matches inside "@release-me-fan" or
-// "foo@release-me".
-func boundaryOK(body string, start, end int) bool {
-	if start > 0 && !isBoundary(body[start-1]) {
-		return false
-	}
-	if end < len(body) && !isBoundary(body[end]) {
-		return false
-	}
-	return true
-}
-
 // isBoundary reports whether b cannot continue a mention token: every byte
-// except a letter, a digit, "-", "_" and "@".
+// except a letter, a digit, "-", "_" and "@". Parse only ever checks the
+// byte right after a line-starting match, since the mention is already
+// known to open the line.
 func isBoundary(b byte) bool {
 	switch {
 	case b >= 'a' && b <= 'z', b >= 'A' && b <= 'Z', b >= '0' && b <= '9', b == '-', b == '_', b == '@':

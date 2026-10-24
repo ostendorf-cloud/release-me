@@ -32,9 +32,17 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:        "the mention alone followed by trailing punctuation names no command",
-			body:        "cc @release-me, any thoughts?",
+			body:        "@release-me, any thoughts?",
 			association: "OWNER",
 			want:        commentcmd.Outcome{Matched: true, Allowed: true},
+		},
+		{
+			name:        "the mention indented on its own line still matches",
+			body:        "Thanks for looking at this.\n  @release-me release-as 1.2.3",
+			association: "OWNER",
+			want: commentcmd.Outcome{
+				Matched: true, Allowed: true, Command: commentcmd.KindReleaseAs, Version: "1.2.3", Valid: true,
+			},
 		},
 		{
 			name:        "a valid release-as command from an owner",
@@ -46,7 +54,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:        "a valid release-as command from a member",
-			body:        "please @release-me release-as 2.0.0 to recover from the burned tags",
+			body:        "@release-me release-as 2.0.0 to recover from the burned tags",
 			association: "MEMBER",
 			want: commentcmd.Outcome{
 				Matched: true, Allowed: true, Command: commentcmd.KindReleaseAs, Version: "2.0.0", Valid: true,
@@ -129,16 +137,16 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
-			name:        "a second mention embedded in unrelated text is the one that matches",
-			body:        "cc @release-me-fan, unrelated. Also @release-me release-as 2.0.0 please.",
+			name:        "a decoy mention on an earlier line does not stop the real command below it",
+			body:        "cc @release-me-fan, unrelated.\n@release-me release-as 2.0.0 please.",
 			association: "OWNER",
 			want: commentcmd.Outcome{
 				Matched: true, Allowed: true, Command: commentcmd.KindReleaseAs, Version: "2.0.0", Valid: true,
 			},
 		},
 		{
-			name:        "a decoy mention with no real command after it names no command",
-			body:        "cc @release-me-fan, nothing else here.",
+			name:        "a decoy mention that opens its own line but continues past the boundary names no command",
+			body:        "@release-me-fan, nothing else here.",
 			association: "OWNER",
 			want:        commentcmd.Outcome{Matched: false},
 		},
@@ -149,10 +157,46 @@ func TestParse(t *testing.T) {
 			want:        commentcmd.Outcome{Matched: false},
 		},
 		{
+			name:        "a mention that does not open its own line never matches",
+			body:        "please see cc @release-me release-as 1.2.3",
+			association: "OWNER",
+			want:        commentcmd.Outcome{Matched: false},
+		},
+		{
 			name:        "an unrecognized word after the mention names no command",
 			body:        "@release-me what do you think?",
 			association: "OWNER",
 			want:        commentcmd.Outcome{Matched: true, Allowed: true},
+		},
+		{
+			name:        "a quoted command inside a blockquote line never executes",
+			body:        "> @release-me release-as 9.9.9\n\nNo, we should not do that.",
+			association: "OWNER",
+			want:        commentcmd.Outcome{Matched: false},
+		},
+		{
+			name:        "a command inside an inline code span never executes",
+			body:        "Do not run `@release-me release-as 9.9.9`, it is wrong.",
+			association: "OWNER",
+			want:        commentcmd.Outcome{Matched: false},
+		},
+		{
+			name:        "a command inside a fenced code block never executes",
+			body:        "```\n@release-me release-as 9.9.9\n```\nexample only",
+			association: "OWNER",
+			want:        commentcmd.Outcome{Matched: false},
+		},
+		{
+			name:        "a command inside an HTML comment never executes",
+			body:        "<!-- @release-me release-as 9.9.9 -->",
+			association: "OWNER",
+			want:        commentcmd.Outcome{Matched: false},
+		},
+		{
+			name:        "a command on its own line inside a multi-line HTML comment never executes",
+			body:        "<!--\n@release-me release-as 9.9.9\n-->",
+			association: "OWNER",
+			want:        commentcmd.Outcome{Matched: false},
 		},
 	}
 	for _, tc := range cases {
