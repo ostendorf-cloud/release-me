@@ -187,7 +187,12 @@ func doPRComponent(
 
 	versionStr := rel.version.Version
 	entries := rel.entries
+	versionOverride := ""
+	overrideValid := false
 	if existing != nil {
+		versionOverride, versionStr, overrideValid = applyVersionOverride(existing.Body, versionStr, logger, comp.Name, existing.Number)
+	}
+	if existing != nil && !overrideValid {
 		preType, isPre, err := selectPreReleaseType(existing.Labels, cfg.Labels)
 		if err != nil {
 			return fmt.Errorf("release-me: component %s: pull request #%d: %w", comp.Name, existing.Number, err)
@@ -232,7 +237,7 @@ func doPRComponent(
 		Beta:   cfg.Labels.Beta,
 		Rc:     cfg.Labels.Rc,
 	}
-	body := releasepr.Body(versionStr, tag, guideLabels, notes, section)
+	body := releasepr.Body(versionStr, tag, guideLabels, notes, versionOverride, section)
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body:
@@ -349,7 +354,12 @@ func doPRLocked(
 		break
 	}
 
+	versionOverride := ""
+	overrideValid := false
 	if existing != nil {
+		versionOverride, versionStr, overrideValid = applyVersionOverride(existing.Body, versionStr, logger, "locked family", existing.Number)
+	}
+	if existing != nil && !overrideValid {
 		preType, isPre, err := selectPreReleaseType(existing.Labels, cfg.Labels)
 		if err != nil {
 			return fmt.Errorf("release-me: locked family: pull request #%d: %w", existing.Number, err)
@@ -409,7 +419,7 @@ func doPRLocked(
 		Beta:   cfg.Labels.Beta,
 		Rc:     cfg.Labels.Rc,
 	}
-	body := releasepr.Body(versionStr, strings.Join(tags, ", "), guideLabels, notes, section)
+	body := releasepr.Body(versionStr, strings.Join(tags, ", "), guideLabels, notes, versionOverride, section)
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body:
@@ -555,6 +565,31 @@ func ensurePendingLabel(ctx context.Context, f forge.Forge, owner, repoName stri
 		return fmt.Errorf("release-me: add label %q to release pull request #%d: %w", pending, number, err)
 	}
 	return nil
+}
+
+// applyVersionOverride reads the release-me-version fenced block from an
+// existing release pull request's body, a write-access commenter's
+// "release-as" command or a hand edit, and reports what pr should do with
+// it: raw is the block's exact text, read back unchanged so Body can carry
+// it through to the re-rendered pull request even when it does not parse;
+// overridden is computed, with raw substituted for it when raw parses as a
+// real semantic version; ok is true exactly then, so the caller skips the
+// normal pre-release label handling: the override wins outright over the
+// computed bump instead of combining with it. who and number name the
+// component or locked family and the pull request in the warning logged
+// when raw is present but does not parse, the override then left unused
+// for this run rather than failing it.
+func applyVersionOverride(body, computed string, logger *slog.Logger, who string, number int) (raw, overridden string, ok bool) {
+	raw, found := releasepr.ExtractVersionOverride(body)
+	if !found {
+		return "", computed, false
+	}
+	if sv, parseOK := version.ParseTag("v" + raw); parseOK {
+		return raw, sv.String(), true
+	}
+	logger.Warn("ignoring a release-me-version override that does not parse as a version",
+		"component", who, "number", number, "value", raw)
+	return raw, computed, false
 }
 
 // changelogUpdate is one component's changelog file path and the entries
