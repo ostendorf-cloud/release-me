@@ -116,6 +116,12 @@ func TestDoReleaseResumesAnOrphanedDraftOnARerunOfTheWholePipeline(t *testing.T)
 		MergeCommits: map[int]string{9: "deadbeef"},
 		PRLabels:     map[int][]string{9: {"release: pending"}},
 	}
+	// This scenario, a draft release orphaned between tagging and
+	// publishing, only exists when the repository opted into drafting:
+	// off, the default, CreateRelease publishes immediately and there is
+	// never a draft left to resume.
+	cfg := config.Default()
+	cfg.DraftUntilAssetsAttach = true
 	var stdout bytes.Buffer
 
 	// The first run: release-me tags, drafts and swaps the label, exactly
@@ -123,11 +129,14 @@ func TestDoReleaseResumesAnOrphanedDraftOnARerunOfTheWholePipeline(t *testing.T)
 	// step that is meant to run right after it is not part of this test:
 	// it is a shell step, not release-me's own code, and it is the one
 	// that fails, leaving the release a draft.
-	if err := doRelease(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
+	if err := doRelease(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doRelease() first run error = %v", err)
 	}
 	if len(f.CreatedTags) != 1 || len(f.CreatedReleases) != 1 || len(f.SetLabelsCalls) != 1 {
 		t.Fatalf("first run: tags=%+v releases=%+v labels=%+v", f.CreatedTags, f.CreatedReleases, f.SetLabelsCalls)
+	}
+	if !f.CreatedReleases[0].Draft {
+		t.Fatalf("CreatedReleases = %+v, want the first run to draft it", f.CreatedReleases)
 	}
 
 	// The pull request now carries the swapped label, read back from the
@@ -136,7 +145,7 @@ func TestDoReleaseResumesAnOrphanedDraftOnARerunOfTheWholePipeline(t *testing.T)
 	f.ListResponses[0].PullRequests[0].Labels = []string{"release: tagged"}
 	stdout.Reset()
 
-	if err := doRelease(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
+	if err := doRelease(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doRelease() rerun error = %v", err)
 	}
 	if len(f.CreatedTags) != 1 || len(f.CreatedReleases) != 1 {

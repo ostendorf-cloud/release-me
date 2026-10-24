@@ -103,6 +103,7 @@ author:
   name: renovate
   email: renovate@example.com
 major-tag: true
+draft-until-assets-attach: true
 files:
   - path: cmd/cli/version.go
   - path: deploy/values.yaml
@@ -123,9 +124,10 @@ files:
 					Pending: "needs-release", Tagged: "released",
 					Alpha: "needs-alpha", Beta: "needs-beta", Rc: "needs-rc",
 				},
-				Author:     config.Author{Name: "renovate", Email: "renovate@example.com"},
-				MajorTag:   true,
-				Versioning: config.DefaultVersioning,
+				Author:                 config.Author{Name: "renovate", Email: "renovate@example.com"},
+				MajorTag:               true,
+				Versioning:             config.DefaultVersioning,
+				DraftUntilAssetsAttach: true,
 				Files: []config.File{
 					{Path: "cmd/cli/version.go", Updater: "marker"},
 					{Path: "deploy/values.yaml", Updater: "marker"},
@@ -481,6 +483,40 @@ func TestLoadRejectsAnUnknownVersioningValue(t *testing.T) {
 
 	if _, err := config.Load(path); err == nil {
 		t.Fatal("Load() error = nil, want an error")
+	}
+}
+
+func TestDefaultSetsDraftUntilAssetsAttachToFalse(t *testing.T) {
+	t.Parallel()
+	if got := config.Default().DraftUntilAssetsAttach; got {
+		t.Fatalf("DraftUntilAssetsAttach = %v, want false", got)
+	}
+}
+
+func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{name: "left out defaults to false", content: "", want: false},
+		{name: "explicit false stays off", content: "draft-until-assets-attach: false\n", want: false},
+		{name: "explicit true turns it on", content: "draft-until-assets-attach: true\n", want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeFile(t, tc.content)
+
+			got, err := config.Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got.DraftUntilAssetsAttach != tc.want {
+				t.Fatalf("DraftUntilAssetsAttach = %v, want %v", got.DraftUntilAssetsAttach, tc.want)
+			}
+		})
 	}
 }
 

@@ -95,13 +95,16 @@ type Forge interface {
 	MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 
 	// CreateRelease creates a release for tag, with the given name and
-	// body, marked as a pre-release when prerelease is true. The release
-	// is always created as a draft: the forge cannot tell whether the
-	// repository has GitHub's immutable releases setting on, and a draft
-	// is exempt from it either way, so a caller can still attach assets
-	// before publishing the release. ErrReleaseExists is returned when a
-	// release for tag already exists.
-	CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease bool) error
+	// body, marked as a pre-release when prerelease is true, as a draft
+	// when draft is true. The caller decides draft, rather than this
+	// always drafting: only a repository with GitHub's immutable
+	// releases setting on needs the release held back as a draft until
+	// assets attach, and release-me cannot detect that setting itself.
+	// A draft is exempt from immutability either way, so a caller that
+	// does ask for one can still attach assets before publishing it.
+	// ErrReleaseExists is returned when a release for tag already
+	// exists.
+	CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error
 
 	// IsReleaseDraft reports whether the release for tag is still a
 	// draft, as opposed to already published. ErrReleaseNotFound is

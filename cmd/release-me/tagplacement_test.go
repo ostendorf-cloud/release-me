@@ -64,7 +64,7 @@ func TestATaggedMergeCommitKeepsTheReleasedPullRequestOutOfTheNextRelease(t *tes
 		PRLabels:      map[int][]string{9: {"release: pending"}},
 	}
 
-	results, err := tagrelease.Run(t.Context(), f, "owner", "repo", comp, labels, false, discardLogger())
+	results, err := tagrelease.Run(t.Context(), f, "owner", "repo", comp, labels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestATaggedSquashCommitKeepsTheReleasedPullRequestOutOfTheNextRelease(t *te
 		PRLabels:      map[int][]string{9: {"release: pending"}},
 	}
 
-	results, err := tagrelease.Run(t.Context(), f, "owner", "repo", comp, labels, false, discardLogger())
+	results, err := tagrelease.Run(t.Context(), f, "owner", "repo", comp, labels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -196,7 +196,7 @@ func TestAComponentWithoutANewReleaseIsUnaffectedByAnotherComponentsRelease(t *t
 		MergeCommits: map[int]string{8: sha1},
 		PRLabels:     map[int][]string{8: {"release: pending"}},
 	}
-	if _, err := tagrelease.Run(t.Context(), f1, "owner", "repo", backendComp, labels, false, discardLogger()); err != nil {
+	if _, err := tagrelease.Run(t.Context(), f1, "owner", "repo", backendComp, labels, false, false, discardLogger()); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	runGit(t, dir, "tag", f1.CreatedTags[0].Tag, f1.CreatedTags[0].SHA)
@@ -213,7 +213,7 @@ func TestAComponentWithoutANewReleaseIsUnaffectedByAnotherComponentsRelease(t *t
 		MergeCommits: map[int]string{9: sha2},
 		PRLabels:     map[int][]string{9: {"release: pending"}},
 	}
-	if _, err := tagrelease.Run(t.Context(), f2, "owner", "repo", backendComp, labels, false, discardLogger()); err != nil {
+	if _, err := tagrelease.Run(t.Context(), f2, "owner", "repo", backendComp, labels, false, false, discardLogger()); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
 	runGit(t, dir, "tag", f2.CreatedTags[0].Tag, f2.CreatedTags[0].SHA)

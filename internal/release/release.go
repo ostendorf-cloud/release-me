@@ -107,9 +107,14 @@ func lockedReleaseBody(prBody, name string) string {
 // branch, tagging and releasing every component in comps at the same
 // version and merge commit: the release per component as Run already
 // renders it, drawing each one's own slice of the combined changelog from
-// the single pull request body.
+// the single pull request body. draftUntilAssetsAttach is release-me.yaml's
+// "draft-until-assets-attach" key: false, the default, releases
+// immediately, published, exactly as release-me did before that key
+// existed; true drafts instead, and also resumes a release a prior,
+// interrupted run already tagged and drafted but never got to publish.
 func RunLocked(
-	ctx context.Context, f forge.Forge, owner, repoName, branch string, comps []Component, labels Labels, dryRun bool, logger *slog.Logger,
+	ctx context.Context, f forge.Forge, owner, repoName, branch string, comps []Component, labels Labels,
+	draftUntilAssetsAttach, dryRun bool, logger *slog.Logger,
 ) ([]Result, error) {
 	prs, err := f.PullRequests(ctx, owner, repoName, branch, "closed")
 	if err != nil {
@@ -134,7 +139,7 @@ func RunLocked(
 				return nil, fmt.Errorf("release: locked family: pull request #%d: version %q does not parse", pr.Number, versionStr)
 			}
 
-			res, err := releaseLockedFamily(ctx, f, owner, repoName, pr, versionStr, ver, comps, labels, dryRun)
+			res, err := releaseLockedFamily(ctx, f, owner, repoName, pr, versionStr, ver, comps, labels, draftUntilAssetsAttach, dryRun)
 			if err != nil {
 				return nil, err
 			}
@@ -142,7 +147,11 @@ func RunLocked(
 			continue
 		}
 
-		if dryRun || !slices.Contains(pr.Labels, labels.Tagged) {
+		// Resuming an orphaned draft only ever applies when this
+		// repository opted into drafting in the first place: off, a
+		// release publishes the moment it is created, so a tagged pull
+		// request never has anything left to resume.
+		if dryRun || !draftUntilAssetsAttach || !slices.Contains(pr.Labels, labels.Tagged) {
 			continue
 		}
 		versionStr, _, ok := VersionFromLockedTitle(pr.Title)
@@ -193,10 +202,11 @@ func resumeLockedFamily(
 
 // releaseLockedFamily tags and releases every component in comps, for one
 // merged locked release pull request, then swaps its label once for the
-// whole family.
+// whole family. draftUntilAssetsAttach decides whether CreateRelease drafts
+// the release or publishes it immediately; see RunLocked.
 func releaseLockedFamily(
 	ctx context.Context, f forge.Forge, owner, repoName string, pr forge.PullRequest, versionStr string,
-	ver version.Semver, comps []Component, labels Labels, dryRun bool,
+	ver version.Semver, comps []Component, labels Labels, draftUntilAssetsAttach, dryRun bool,
 ) ([]Result, error) {
 	if dryRun {
 		results := make([]Result, 0, len(comps))
@@ -238,7 +248,8 @@ func releaseLockedFamily(
 		}
 
 		body := lockedReleaseBody(pr.Body, comp.Name)
-		if err := f.CreateRelease(ctx, owner, repoName, tag, name, body, ver.IsPreRelease()); err != nil && !errors.Is(err, forge.ErrReleaseExists) {
+		if err := f.CreateRelease(ctx, owner, repoName, tag, name, body, ver.IsPreRelease(), draftUntilAssetsAttach); err != nil &&
+			!errors.Is(err, forge.ErrReleaseExists) {
 			return nil, fmt.Errorf("release: locked family: component %s: pull request #%d: create release %s: %w", comp.Name, pr.Number, tag, err)
 		}
 
@@ -395,9 +406,14 @@ func applyMajorTag(
 // Run tags, releases and swaps the label of every merged, pending-labeled
 // pull request on comp's branch, for the component comp names. dryRun
 // reports what would happen and calls neither CreateTag, CreateRelease nor
-// SetLabels.
+// SetLabels. draftUntilAssetsAttach is release-me.yaml's
+// "draft-until-assets-attach" key: false, the default, releases
+// immediately, published, exactly as release-me did before that key
+// existed; true drafts instead, and also resumes a release a prior,
+// interrupted run already tagged and drafted but never got to publish.
 func Run(
-	ctx context.Context, f forge.Forge, owner, repoName string, comp Component, labels Labels, dryRun bool, logger *slog.Logger,
+	ctx context.Context, f forge.Forge, owner, repoName string, comp Component, labels Labels,
+	draftUntilAssetsAttach, dryRun bool, logger *slog.Logger,
 ) ([]Result, error) {
 	prs, err := f.PullRequests(ctx, owner, repoName, comp.Branch, "closed")
 	if err != nil {
@@ -427,7 +443,7 @@ func Run(
 				name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
 			}
 
-			result, err := releaseOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr, tag, name, ver, labels, dryRun, comp.MajorTag)
+			result, err := releaseOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr, tag, name, ver, labels, draftUntilAssetsAttach, dryRun, comp.MajorTag)
 			if err != nil {
 				return nil, err
 			}
@@ -435,7 +451,11 @@ func Run(
 			continue
 		}
 
-		if dryRun || !slices.Contains(pr.Labels, labels.Tagged) {
+		// Resuming an orphaned draft only ever applies when this
+		// repository opted into drafting in the first place: off, a
+		// release publishes the moment it is created, so a tagged pull
+		// request never has anything left to resume.
+		if dryRun || !draftUntilAssetsAttach || !slices.Contains(pr.Labels, labels.Tagged) {
 			continue
 		}
 		result, resumed, err := resumeOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr)
@@ -486,9 +506,12 @@ func resumeOne(
 	}, true, nil
 }
 
+// releaseOne tags and releases pr, swapping its label, for the component
+// componentName names. draftUntilAssetsAttach decides whether
+// CreateRelease drafts the release or publishes it immediately; see Run.
 func releaseOne(
 	ctx context.Context, f forge.Forge, owner, repoName, componentName, tagPrefix string,
-	pr forge.PullRequest, tag, releaseName string, ver version.Semver, labels Labels, dryRun, majorTagEnabled bool,
+	pr forge.PullRequest, tag, releaseName string, ver version.Semver, labels Labels, draftUntilAssetsAttach, dryRun, majorTagEnabled bool,
 ) (Result, error) {
 	versionStr := ver.String()
 	if dryRun {
@@ -522,7 +545,8 @@ func releaseOne(
 	}
 
 	body := releasepr.ReleaseBody(pr.Body)
-	if err := f.CreateRelease(ctx, owner, repoName, tag, releaseName, body, ver.IsPreRelease()); err != nil && !errors.Is(err, forge.ErrReleaseExists) {
+	if err := f.CreateRelease(ctx, owner, repoName, tag, releaseName, body, ver.IsPreRelease(), draftUntilAssetsAttach); err != nil &&
+		!errors.Is(err, forge.ErrReleaseExists) {
 		return Result{}, fmt.Errorf("release: component %s: pull request #%d: create release %s: %w", componentName, pr.Number, tag, err)
 	}
 

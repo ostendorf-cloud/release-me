@@ -66,7 +66,7 @@ type MoveTagCall struct {
 // CreateReleaseCall records one call to CreateRelease.
 type CreateReleaseCall struct {
 	Owner, Repo, Tag, Name, Body string
-	Prerelease                   bool
+	Prerelease, Draft            bool
 }
 
 // Fake is a forge.Forge backed by fixed, pre-configured responses. It
@@ -129,10 +129,10 @@ type Fake struct {
 
 	// ReleaseDrafts is the draft status IsReleaseDraft reports, by tag
 	// name: true for a draft, false for a published release. A
-	// successful CreateRelease call sets its tag here to true, the same
-	// as the real forge, which always drafts. A tag absent from this map
-	// has no release at all, as far as IsReleaseDraft is concerned, and
-	// is reported as forge.ErrReleaseNotFound.
+	// successful CreateRelease call sets its tag here to whatever draft
+	// it was called with, the same as the real forge. A tag absent from
+	// this map has no release at all, as far as IsReleaseDraft is
+	// concerned, and is reported as forge.ErrReleaseNotFound.
 	ReleaseDrafts map[string]bool
 
 	// NextNumber is the pull request number CreatePullRequest assigns next.
@@ -251,18 +251,21 @@ func (f *Fake) MoveTag(_ context.Context, owner, repo, tag, sha string) error {
 }
 
 // CreateRelease implements forge.Forge.
-func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body string, prerelease bool) error {
+func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error {
 	if err, ok := f.CreateReleaseErrs[tag]; ok {
 		return err
 	}
 	if f.ExistingReleases[tag] {
 		return forge.ErrReleaseExists
 	}
-	f.CreatedReleases = append(f.CreatedReleases, CreateReleaseCall{Owner: owner, Repo: repo, Tag: tag, Name: name, Body: body, Prerelease: prerelease})
+	f.CreatedReleases = append(
+		f.CreatedReleases,
+		CreateReleaseCall{Owner: owner, Repo: repo, Tag: tag, Name: name, Body: body, Prerelease: prerelease, Draft: draft},
+	)
 	if f.ReleaseDrafts == nil {
 		f.ReleaseDrafts = map[string]bool{}
 	}
-	f.ReleaseDrafts[tag] = true
+	f.ReleaseDrafts[tag] = draft
 	return nil
 }
 

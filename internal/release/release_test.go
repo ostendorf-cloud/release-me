@@ -77,7 +77,7 @@ func TestRunTagsReleasesAndSwapsTheLabel(t *testing.T) {
 		PRLabels:     map[int][]string{9: {"release: pending"}},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -95,8 +95,41 @@ func TestRunTagsReleasesAndSwapsTheLabel(t *testing.T) {
 	if f.CreatedReleases[0].Body != wantBody {
 		t.Fatalf("release body = %q, want %q", f.CreatedReleases[0].Body, wantBody)
 	}
+	// draftUntilAssetsAttach is off, the default: the release publishes
+	// immediately, exactly as release-me did before that key existed.
+	if f.CreatedReleases[0].Draft {
+		t.Fatalf("CreatedReleases = %+v, want Draft false", f.CreatedReleases)
+	}
 	if len(f.SetLabelsCalls) != 1 || !reflect.DeepEqual(f.SetLabelsCalls[0].Labels, []string{"release: tagged"}) {
 		t.Fatalf("SetLabelsCalls = %+v", f.SetLabelsCalls)
+	}
+}
+
+// TestRunDraftsTheReleaseWhenDraftUntilAssetsAttachIsOn covers the other
+// half of the same choice TestRunTagsReleasesAndSwapsTheLabel already
+// covers for the off, default case: draftUntilAssetsAttach true drafts
+// the release instead of publishing it immediately, the shape a
+// repository with GitHub's immutable releases setting on opts into.
+func TestRunDraftsTheReleaseWhenDraftUntilAssetsAttachIsOn(t *testing.T) {
+	t.Parallel()
+	pr := forge.PullRequest{Number: 9, Title: "chore(main): release v0.2.0", Labels: []string{"release: pending"}, Merged: true}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		MergeCommits: map[int]string{9: "deadbeef"},
+		PRLabels:     map[int][]string{9: {"release: pending"}},
+	}
+
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, true, false, discardLogger())
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(results) != 1 || results[0].Tag != "v0.2.0" {
+		t.Fatalf("Run() = %+v", results)
+	}
+	if len(f.CreatedReleases) != 1 || !f.CreatedReleases[0].Draft {
+		t.Fatalf("CreatedReleases = %+v, want Draft true", f.CreatedReleases)
 	}
 }
 
@@ -112,7 +145,7 @@ func TestRunStillReleasesAndSwapsTheLabelWhenTheTagAlreadyExists(t *testing.T) {
 		PRLabels:     map[int][]string{9: {"release: pending"}},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -142,7 +175,7 @@ func TestRunToleratesAReleaseThatAlreadyExistsTooWhenTheTagDoes(t *testing.T) {
 		PRLabels:         map[int][]string{9: {"release: pending"}},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -173,7 +206,7 @@ func TestRunFailsLoudlyWhenCreateReleaseReturnsANonRecoverableError(t *testing.T
 		CreateReleaseErrs: map[string]error{"v0.2.0": releaseErr},
 	}
 
-	_, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, discardLogger())
+	_, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, false, discardLogger())
 	if !errors.Is(err, releaseErr) {
 		t.Fatalf("Run() error = %v, want it to wrap %v", err, releaseErr)
 	}
@@ -207,7 +240,7 @@ func TestRunResumesAnAlreadyTaggedPullRequestWhoseReleaseIsStillADraft(t *testin
 		ReleaseDrafts: map[string]bool{"v0.2.0": true},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, true, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -233,7 +266,7 @@ func TestRunDoesNotResumeAnAlreadyTaggedPullRequestOnceItsReleaseIsPublished(t *
 		ReleaseDrafts: map[string]bool{"v0.2.0": false},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, true, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -251,7 +284,7 @@ func TestRunIgnoresAPullRequestWithoutThePendingLabel(t *testing.T) {
 		},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -269,7 +302,7 @@ func TestRunIgnoresAnUnmergedPullRequest(t *testing.T) {
 		},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -294,7 +327,7 @@ func TestRunTagsAndNamesTheReleaseForAConfiguredComponent(t *testing.T) {
 	}
 	comp := release.Component{Name: "frontend", Branch: "release-me/frontend", TagPrefix: "frontend/v", Multi: true}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -319,7 +352,7 @@ func TestRunIgnoresAPullRequestTitledForADifferentComponent(t *testing.T) {
 	}
 	comp := release.Component{Name: "frontend", Branch: "release-me/frontend", TagPrefix: "frontend/v", Multi: true}
 
-	_, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, discardLogger())
+	_, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, false, discardLogger())
 	if err == nil {
 		t.Fatal("Run() error = nil, want an error naming the mismatched title")
 	}
@@ -365,7 +398,7 @@ func TestRunCreatesTheMajorTagOnAStableRelease(t *testing.T) {
 	}
 	comp := release.Component{Name: "main", Branch: "release-me/main", TagPrefix: "v", MajorTag: true}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -393,7 +426,7 @@ func TestRunMovesAnExistingMajorTagOnAStableRelease(t *testing.T) {
 	}
 	comp := release.Component{Name: "main", Branch: "release-me/main", TagPrefix: "v", MajorTag: true}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -416,7 +449,7 @@ func TestRunSkipsTheMajorTagWhenItIsOffForTheComponent(t *testing.T) {
 		PRLabels:     map[int][]string{9: {"release: pending"}},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -439,7 +472,7 @@ func TestRunDryRunReportsTheMajorTagWithoutWritingIt(t *testing.T) {
 	}
 	comp := release.Component{Name: "main", Branch: "release-me/main", TagPrefix: "v", MajorTag: true}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, true, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, true, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -463,7 +496,7 @@ func TestRunDoesNotMoveTheMajorTagForAPreReleaseVersion(t *testing.T) {
 	}
 	comp := release.Component{Name: "main", Branch: "release-me/main", TagPrefix: "v", MajorTag: true}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", comp, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -490,7 +523,7 @@ func TestRunDryRunChangesNothing(t *testing.T) {
 		MergeCommits: map[int]string{9: "deadbeef"},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, true, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, true, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -516,7 +549,7 @@ func TestRunMarksAPreReleaseVersionAsAPreReleaseAndSwapsItsTypeLabel(t *testing.
 		PRLabels:     map[int][]string{9: {"release: pending", "release: alpha"}},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -546,7 +579,7 @@ func TestRunKeepsAHumanAddedLabelWhenSwappingAPreReleaseType(t *testing.T) {
 		PRLabels:     map[int][]string{9: {"release: pending", "release: rc", "priority: high"}},
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -615,7 +648,7 @@ func TestRunLockedTagsAndReleasesEveryComponentFromOneMergedPullRequest(t *testi
 		{Name: "b", Branch: "release-me/main", TagPrefix: "b/v", Multi: true},
 	}
 
-	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, discardLogger())
+	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, false, discardLogger())
 	if err != nil {
 		t.Fatalf("RunLocked() error = %v", err)
 	}
@@ -645,6 +678,46 @@ func TestRunLockedTagsAndReleasesEveryComponentFromOneMergedPullRequest(t *testi
 	if len(f.SetLabelsCalls) != 1 || !reflect.DeepEqual(f.SetLabelsCalls[0].Labels, []string{"release: tagged"}) {
 		t.Fatalf("SetLabelsCalls = %+v, want one swap to release: tagged", f.SetLabelsCalls)
 	}
+	// draftUntilAssetsAttach is off, the default: every component's
+	// release publishes immediately, exactly as release-me did before
+	// that key existed.
+	if f.CreatedReleases[0].Draft || f.CreatedReleases[1].Draft {
+		t.Fatalf("CreatedReleases = %+v, want Draft false for both", f.CreatedReleases)
+	}
+}
+
+// TestRunLockedDraftsEveryReleaseWhenDraftUntilAssetsAttachIsOn covers the
+// other half of the same choice
+// TestRunLockedTagsAndReleasesEveryComponentFromOneMergedPullRequest already
+// covers for the off, default case.
+func TestRunLockedDraftsEveryReleaseWhenDraftUntilAssetsAttachIsOn(t *testing.T) {
+	t.Parallel()
+	pr := forge.PullRequest{
+		Number: 9, Title: "chore: release v0.3.0 (a, b)",
+		Labels: []string{"release: pending"}, Merged: true,
+	}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		MergeCommits: map[int]string{9: "deadbeef"},
+		PRLabels:     map[int][]string{9: {"release: pending"}},
+	}
+	comps := []release.Component{
+		{Name: "a", Branch: "release-me/main", TagPrefix: "a/v", Multi: true},
+		{Name: "b", Branch: "release-me/main", TagPrefix: "b/v", Multi: true},
+	}
+
+	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, true, false, discardLogger())
+	if err != nil {
+		t.Fatalf("RunLocked() error = %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("RunLocked() = %+v, want two results", results)
+	}
+	if len(f.CreatedReleases) != 2 || !f.CreatedReleases[0].Draft || !f.CreatedReleases[1].Draft {
+		t.Fatalf("CreatedReleases = %+v, want Draft true for both", f.CreatedReleases)
+	}
 }
 
 func TestRunLockedDryRunWritesNothing(t *testing.T) {
@@ -661,7 +734,7 @@ func TestRunLockedDryRunWritesNothing(t *testing.T) {
 		{Name: "b", Branch: "release-me/main", TagPrefix: "b/v"},
 	}
 
-	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, true, discardLogger())
+	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, true, discardLogger())
 	if err != nil {
 		t.Fatalf("RunLocked() error = %v", err)
 	}
@@ -695,7 +768,7 @@ func TestRunLockedResumesOnlyTheComponentWhoseReleaseIsStillADraft(t *testing.T)
 		{Name: "b", Branch: "release-me/main", TagPrefix: "b/v", Multi: true},
 	}
 
-	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, discardLogger())
+	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, true, false, discardLogger())
 	if err != nil {
 		t.Fatalf("RunLocked() error = %v", err)
 	}

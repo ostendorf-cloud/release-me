@@ -70,7 +70,7 @@ func doRelease(ctx context.Context, dir string, cfg config.Config, component str
 		results, err := tagrelease.Run(
 			ctx, f, owner, repoName,
 			tagrelease.Component{Name: comp.Name, Branch: comp.Branch, TagPrefix: comp.TagPrefix, Multi: comp.Multi, MajorTag: comp.MajorTag},
-			labels, dryRun, logger,
+			labels, cfg.DraftUntilAssetsAttach, dryRun, logger,
 		)
 		if err != nil {
 			return fmt.Errorf("release-me: %w", err)
@@ -117,7 +117,7 @@ func doReleaseLocked(
 	}
 	branch := resolved[0].Branch
 
-	results, err := tagrelease.RunLocked(ctx, f, owner, repoName, branch, comps, labels, dryRun, logger)
+	results, err := tagrelease.RunLocked(ctx, f, owner, repoName, branch, comps, labels, cfg.DraftUntilAssetsAttach, dryRun, logger)
 	if err != nil {
 		return fmt.Errorf("release-me: %w", err)
 	}

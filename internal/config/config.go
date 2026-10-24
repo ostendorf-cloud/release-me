@@ -3,7 +3,8 @@
 
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
-// changelog, changelog-source, labels, major-tag and components.
+// changelog, changelog-source, labels, major-tag,
+// draft-until-assets-attach and components.
 package config
 
 import (
@@ -181,6 +182,14 @@ type Config struct {
 	// VersioningIndependent. It applies to the whole family; there is no
 	// per-component override.
 	Versioning Versioning
+	// DraftUntilAssetsAttach is the top-level "draft-until-assets-attach"
+	// key, default false: when true, release creates every release as a
+	// draft instead of publishing it immediately, and resumes publishing
+	// one left a draft by an earlier, interrupted run. Only a repository
+	// with GitHub's immutable releases setting turned on needs this; it
+	// applies to the whole repository, there is no per-component
+	// override. See docs/adr/0001-draft-releases-until-assets-attach.md.
+	DraftUntilAssetsAttach bool
 	// Components is the "components" key, in the order release-me.yaml
 	// declares them, or nil when the key is absent: a repository without
 	// it is one component at the repository root, as Resolve reports.
@@ -336,18 +345,19 @@ type rawAuthor struct {
 // raw mirrors Config with pointer fields, so Load can tell a key left out of
 // the file apart from one set to its zero value.
 type raw struct {
-	InitialVersion    *string    `yaml:"initial-version"`
-	BumpMinorPreMajor *bool      `yaml:"bump-minor-pre-major"`
-	HiddenTypes       *[]string  `yaml:"hidden-types"`
-	FallbackType      *string    `yaml:"fallback-type"`
-	TokenEnv          *string    `yaml:"token-env"`
-	Files             *[]rawFile `yaml:"files"`
-	Changelog         *string    `yaml:"changelog"`
-	ChangelogSource   *string    `yaml:"changelog-source"`
-	Labels            *rawLabels `yaml:"labels"`
-	Author            *rawAuthor `yaml:"author"`
-	MajorTag          *bool      `yaml:"major-tag"`
-	Versioning        *string    `yaml:"versioning"`
+	InitialVersion         *string    `yaml:"initial-version"`
+	BumpMinorPreMajor      *bool      `yaml:"bump-minor-pre-major"`
+	HiddenTypes            *[]string  `yaml:"hidden-types"`
+	FallbackType           *string    `yaml:"fallback-type"`
+	TokenEnv               *string    `yaml:"token-env"`
+	Files                  *[]rawFile `yaml:"files"`
+	Changelog              *string    `yaml:"changelog"`
+	ChangelogSource        *string    `yaml:"changelog-source"`
+	Labels                 *rawLabels `yaml:"labels"`
+	Author                 *rawAuthor `yaml:"author"`
+	MajorTag               *bool      `yaml:"major-tag"`
+	Versioning             *string    `yaml:"versioning"`
+	DraftUntilAssetsAttach *bool      `yaml:"draft-until-assets-attach"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -494,6 +504,9 @@ func Load(path string) (cfg Config, err error) {
 		if !validVersioning[cfg.Versioning] {
 			return Config{}, fmt.Errorf("config: parse %s: versioning %q is not independent, locked or linked", path, *r.Versioning)
 		}
+	}
+	if r.DraftUntilAssetsAttach != nil {
+		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach
 	}
 	if r.Components.Kind != 0 {
 		components, err := decodeComponents(path, &r.Components)
