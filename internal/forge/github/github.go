@@ -199,9 +199,17 @@ func (f *Forge) MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 	return nil
 }
 
-// CreateRelease implements forge.Forge.
-func (f *Forge) CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease bool) error {
-	draft := false
+// CreateRelease implements forge.Forge. draft is the caller's own choice,
+// release-me.yaml's "draft-until-assets-attach" key: GitHub's immutable
+// releases feature rejects any later change to a published release,
+// assets included, and the REST API exposes no field to tell whether a
+// repository has it on, so a repository that does needs the release held
+// back as a draft until assets attach. A draft release fires no "release"
+// webhook at all, so a caller that drafts one and attaches assets
+// afterward must publish it itself once they land, for example with
+// "gh release edit <tag> --draft=false", rather than wait on a webhook
+// that never comes.
+func (f *Forge) CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error {
 	_, resp, err := f.client.Repositories.CreateRelease(ctx, owner, repo, gogithub.CreateReleaseRequest{
 		TagName:    tag,
 		Name:       &name,
@@ -237,6 +245,32 @@ func releaseAlreadyExists(err error) bool {
 		}
 	}
 	return false
+}
+
+// IsReleaseDraft implements forge.Forge. It lists the repository's releases
+// and matches tag by hand, rather than GitHub's "get a release by tag name"
+// endpoint: that endpoint excludes drafts, confirmed live against this
+// repository, so it would read a still-draft release as not found. Listing
+// releases does include drafts, for a caller authenticated with push
+// access, the same access release-me already needs to create one.
+func (f *Forge) IsReleaseDraft(ctx context.Context, owner, repo, tag string) (bool, error) {
+	opts := &gogithub.ListOptions{PerPage: 100}
+	for {
+		releases, resp, err := f.client.Repositories.ListReleases(ctx, owner, repo, opts)
+		if err != nil {
+			return false, fmt.Errorf("github: list releases for %s/%s: %w", owner, repo, err)
+		}
+		for _, r := range releases {
+			if r.GetTagName() == tag {
+				return r.GetDraft(), nil
+			}
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return false, forge.ErrReleaseNotFound
 }
 
 // MergeCommit implements forge.Forge.

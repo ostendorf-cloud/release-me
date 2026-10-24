@@ -70,7 +70,7 @@ func doRelease(ctx context.Context, dir string, cfg config.Config, component str
 		results, err := tagrelease.Run(
 			ctx, f, owner, repoName,
 			tagrelease.Component{Name: comp.Name, Branch: comp.Branch, TagPrefix: comp.TagPrefix, Multi: comp.Multi, MajorTag: comp.MajorTag},
-			labels, dryRun, logger,
+			labels, cfg.DraftUntilAssetsAttach, dryRun, logger,
 		)
 		if err != nil {
 			return fmt.Errorf("release-me: %w", err)
@@ -81,12 +81,26 @@ func doRelease(ctx context.Context, dir string, cfg config.Config, component str
 			if r.MajorTagMessage != "" {
 				printLine(stdout, comp.Name, multi, r.MajorTagMessage)
 			}
+			printReleasedTag(stdout, dryRun, r.Tag)
 		}
 	}
 	if !any {
 		fmt.Fprintln(stdout, "nothing to release")
 	}
 	return nil
+}
+
+// printReleasedTag prints tag in the stable, unprefixed "released-tag: <tag>"
+// shape run-release-me.sh greps for, to fill the composite action's "tags"
+// output: every tag this run tagged, including one already tagged by an
+// earlier, interrupted run, since its release still needs assets attached
+// and publishing. Writes nothing in dry-run: CreateRelease was never
+// called, so there is no release yet for anything to act on.
+func printReleasedTag(w io.Writer, dryRun bool, tag string) {
+	if dryRun {
+		return
+	}
+	fmt.Fprintf(w, "released-tag: %s\n", tag)
 }
 
 // doReleaseLocked tags and releases every configured component together,
@@ -103,20 +117,20 @@ func doReleaseLocked(
 	}
 	branch := resolved[0].Branch
 
-	results, err := tagrelease.RunLocked(ctx, f, owner, repoName, branch, comps, labels, dryRun, logger)
+	results, err := tagrelease.RunLocked(ctx, f, owner, repoName, branch, comps, labels, cfg.DraftUntilAssetsAttach, dryRun, logger)
 	if err != nil {
 		return fmt.Errorf("release-me: %w", err)
 	}
 
 	multi := len(resolved) > 1
 	any := false
-	for i, r := range results {
+	for _, r := range results {
 		any = true
-		name := comps[i%len(comps)].Name
-		printLine(stdout, name, multi, r.Message)
+		printLine(stdout, r.Name, multi, r.Message)
 		if r.MajorTagMessage != "" {
-			printLine(stdout, name, multi, r.MajorTagMessage)
+			printLine(stdout, r.Name, multi, r.MajorTagMessage)
 		}
+		printReleasedTag(stdout, dryRun, r.Tag)
 	}
 	if !any {
 		fmt.Fprintln(stdout, "nothing to release")

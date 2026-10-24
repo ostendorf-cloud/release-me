@@ -50,6 +50,18 @@ inputs:
     required: false
     default: ""
 
+outputs:
+  tags:
+    description: >-
+      Newline-separated tags this run tagged a release for, one per released component, empty
+      when nothing was released or dry-run was set. release-me.yaml's draft-until-assets-attach
+      key decides what the release for each tag already is: false, the default, published
+      immediately, no action required. True drafts it instead, since GitHub's immutable
+      releases setting, when on, rejects a change to a published release, so release-me never
+      publishes one itself; attach any assets and publish each tag yourself, for example with
+      "gh release upload" and "gh release edit --draft=false".
+    value: ${{ steps.release-me.outputs.tags }}
+
 runs:
   using: composite
   steps:
@@ -117,6 +129,7 @@ runs:
       run: ${{ github.action_path }}/resolve-author.sh
 
     - name: Run release-me
+      id: release-me
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}

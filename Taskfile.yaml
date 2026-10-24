@@ -66,9 +66,9 @@ tasks:
       - hadolint Dockerfile
 
   lint:shell:
-    desc: Shell script lint
+    desc: Shell script lint for the composite action and this repository's own CI scripts
     cmds:
-      - shellcheck action/*.sh
+      - shellcheck action/*.sh scripts/*.sh
 
   lint:secrets:
     desc: Secret scan over the git history
@@ -81,9 +81,10 @@ tasks:
       - go test -race -count=1 ./...
 
   test:action:
-    desc: Composite action shell script tests
+    desc: Shell script tests for the composite action and this repository's own CI scripts
     cmds:
       - action/resolve-author_test.sh
+      - scripts/publish-release-assets_test.sh
 
   check:
     desc: Every check, one after another

@@ -17,9 +17,9 @@ and are not repeated here.
 - `internal/releasepr/`: branch, body, labels and the notes block of a release pull request.
 - `internal/release/`: tag, release and major tag.
 - `internal/migrate/`: another release tool's configuration translated into `release-me.yaml`.
-- `internal/goreleaser/`: no production code, only the test proving `.goreleaser.yaml`'s
-  release section sends the correct `prerelease` field to a fake GitHub API.
 - `action/`: the composite action. `Dockerfile`: the image for runners with an image cache.
+- `scripts/`: CI glue specific to this repository's own workflows, such as attaching and
+  publishing release assets after `release.yaml` drafts a release.
 - `release-me.yaml`: the tool's own release configuration.
 - `skills/`: agent skills for using release-me, one folder each, shipped through skills.sh.
 
@@ -57,4 +57,4 @@ task run -- next     # run the CLI from source
 
 ## Deviations
 
-- No `docs/adr` yet. The first decision worth keeping creates it.
+- None.

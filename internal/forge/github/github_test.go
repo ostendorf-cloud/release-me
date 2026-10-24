@@ -205,7 +205,7 @@ func TestPullRequestsListedMergeTimestampDrivesRelease(t *testing.T) {
 		Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
 	}
 
-	results, err := release.Run(context.Background(), f, "owner", "repo", comp, labels, false, slog.New(slog.DiscardHandler))
+	results, err := release.Run(context.Background(), f, "owner", "repo", comp, labels, false, false, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("release.Run() error = %v", err)
 	}
@@ -529,7 +529,7 @@ func TestMoveTagWrapsAServerError(t *testing.T) {
 	}
 }
 
-func TestCreateRelease(t *testing.T) {
+func TestCreateReleaseCreatesADraftRelease(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
 	var body map[string]any
@@ -541,18 +541,46 @@ func TestCreateRelease(t *testing.T) {
 	})
 	f := newTestForge(t, mux)
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false); err != nil {
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
-	if body["draft"] != false || body["prerelease"] != false {
-		t.Fatalf("body = %v, want draft and prerelease false", body)
+	// draft-until-assets-attach is on: immutable releases rejects any
+	// later change to a published release, assets included, and a
+	// draft is exempt from that, so the caller asks CreateRelease to
+	// hold it back until assets are ready to attach.
+	if body["draft"] != true || body["prerelease"] != false {
+		t.Fatalf("body = %v, want draft true and prerelease false", body)
 	}
 	if body["tag_name"] != "v0.1.0" || body["body"] != "Release v0.1.0" {
 		t.Fatalf("body = %v", body)
 	}
 }
 
-func TestCreateReleaseMarksAPreReleaseVersionAsAPreRelease(t *testing.T) {
+func TestCreateReleasePublishesImmediatelyWhenDraftIsFalse(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	var body map[string]any
+	mux.HandleFunc("/api/v3/repos/owner/repo/releases", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode release body: %v", err)
+		}
+		fmt.Fprint(w, `{"id": 1, "tag_name": "v0.1.0"}`)
+	})
+	f := newTestForge(t, mux)
+
+	// draft-until-assets-attach is off, the default: CreateRelease
+	// publishes immediately, exactly as release-me did before that key
+	// existed, so a repository that never turns it on sees no behavior
+	// change at all.
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false); err != nil {
+		t.Fatalf("CreateRelease() error = %v", err)
+	}
+	if body["draft"] != false || body["prerelease"] != false {
+		t.Fatalf("body = %v, want draft false and prerelease false", body)
+	}
+}
+
+func TestCreateReleaseMarksAPreReleaseVersionAsAPreReleaseDraft(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
 	var body map[string]any
@@ -564,7 +592,27 @@ func TestCreateReleaseMarksAPreReleaseVersionAsAPreRelease(t *testing.T) {
 	})
 	f := newTestForge(t, mux)
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true); err != nil {
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
+		t.Fatalf("CreateRelease() error = %v", err)
+	}
+	if body["draft"] != true || body["prerelease"] != true {
+		t.Fatalf("body = %v, want draft true and prerelease true", body)
+	}
+}
+
+func TestCreateReleaseMarksAPreReleaseVersionAsAPreReleaseWhenDraftIsFalse(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	var body map[string]any
+	mux.HandleFunc("/api/v3/repos/owner/repo/releases", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode release body: %v", err)
+		}
+		fmt.Fprint(w, `{"id": 1, "tag_name": "v0.1.0-alpha.1"}`)
+	})
+	f := newTestForge(t, mux)
+
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, false); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if body["draft"] != false || body["prerelease"] != true {
@@ -606,7 +654,7 @@ func TestCreateReleaseTellsAGenuineDuplicateApartFromAnImmutableRelease(t *testi
 			})
 			f := newTestForge(t, mux)
 
-			err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.1", "v0.1.1", "Release v0.1.1", false)
+			err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.1", "v0.1.1", "Release v0.1.1", false, false)
 			if err == nil {
 				t.Fatalf("CreateRelease() error = nil, want an error")
 			}
@@ -620,6 +668,78 @@ func TestCreateReleaseTellsAGenuineDuplicateApartFromAnImmutableRelease(t *testi
 				}
 				if len(errResp.Errors) != 1 || errResp.Errors[0].Message != "tag_name was used by an immutable release" {
 					t.Fatalf("CreateRelease() error's wrapped Errors = %+v, want GitHub's validation message", errResp.Errors)
+				}
+			}
+		})
+	}
+}
+
+func TestIsReleaseDraft(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		tag       string
+		handler   http.HandlerFunc
+		want      bool
+		wantErrIs error
+		wantErr   bool
+	}{
+		{
+			name: "reports true for a draft release, which get-by-tag alone would 404 on",
+			tag:  "v0.1.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": true}]`)
+			},
+			want: true,
+		},
+		{
+			name: "reports false for an already published release",
+			tag:  "v0.1.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": false}]`)
+			},
+			want: false,
+		},
+		{
+			name: "returns ErrReleaseNotFound when no release matches the tag",
+			tag:  "v0.9.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": true}]`)
+			},
+			wantErrIs: forge.ErrReleaseNotFound,
+		},
+		{
+			name: "wraps a server error",
+			tag:  "v0.1.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v3/repos/owner/repo/releases", tc.handler)
+			f := newTestForge(t, mux)
+
+			got, err := f.IsReleaseDraft(context.Background(), "owner", "repo", tc.tag)
+			switch {
+			case tc.wantErrIs != nil:
+				if !errors.Is(err, tc.wantErrIs) {
+					t.Fatalf("IsReleaseDraft() error = %v, want %v", err, tc.wantErrIs)
+				}
+			case tc.wantErr:
+				if err == nil {
+					t.Fatal("IsReleaseDraft() error = nil, want an error")
+				}
+			default:
+				if err != nil {
+					t.Fatalf("IsReleaseDraft() error = %v", err)
+				}
+				if got != tc.want {
+					t.Fatalf("IsReleaseDraft() = %v, want %v", got, tc.want)
 				}
 			}
 		})

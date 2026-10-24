@@ -24,6 +24,10 @@ var ErrTagExists = errors.New("tag already exists")
 // release for a tag that already has one.
 var ErrReleaseExists = errors.New("release already exists")
 
+// ErrReleaseNotFound is returned when IsReleaseDraft is asked about a tag
+// that has no release at all.
+var ErrReleaseNotFound = errors.New("release not found")
+
 // ErrUnauthorized is returned when the forge rejects the request's
 // credentials, as opposed to any other failure.
 var ErrUnauthorized = errors.New("unauthorized")
@@ -90,10 +94,27 @@ type Forge interface {
 	// Callers check TagExists first; MoveTag never creates a tag.
 	MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 
-	// CreateRelease creates a non-draft release for tag, with the given
-	// name and body, marked as a pre-release when prerelease is true.
-	// ErrReleaseExists is returned when a release for tag already exists.
-	CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease bool) error
+	// CreateRelease creates a release for tag, with the given name and
+	// body, marked as a pre-release when prerelease is true, as a draft
+	// when draft is true. The caller decides draft, rather than this
+	// always drafting: only a repository with GitHub's immutable
+	// releases setting on needs the release held back as a draft until
+	// assets attach, and release-me cannot detect that setting itself.
+	// A draft is exempt from immutability either way, so a caller that
+	// does ask for one can still attach assets before publishing it.
+	// ErrReleaseExists is returned when a release for tag already
+	// exists.
+	CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error
+
+	// IsReleaseDraft reports whether the release for tag is still a
+	// draft, as opposed to already published. ErrReleaseNotFound is
+	// returned when tag has no release at all. A caller uses this to resume a
+	// release that was tagged and drafted by an earlier run, but never
+	// got its assets attached and published: looking it up by tag alone,
+	// the way CreateRelease's own duplicate check or a plain "get a
+	// release by tag" would, excludes drafts, so an implementation must
+	// find it some other way.
+	IsReleaseDraft(ctx context.Context, owner, repo, tag string) (bool, error)
 
 	// MergeCommit returns the SHA of the commit a merged pull request was
 	// merged as.
