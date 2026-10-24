@@ -643,6 +643,43 @@ func TestMergeCommitReturnsTheMergeCommitSHA(t *testing.T) {
 	}
 }
 
+func TestCreateCommentPostsTheBody(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	var posted string
+	mux.HandleFunc("/api/v3/repos/owner/repo/issues/7/comments", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Body string `json:"body"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode comment body: %v", err)
+		}
+		posted = body.Body
+		fmt.Fprint(w, `{"id": 1}`)
+	})
+	f := newTestForge(t, mux)
+
+	if err := f.CreateComment(context.Background(), "owner", "repo", 7, "forced the next version to 2.0.0."); err != nil {
+		t.Fatalf("CreateComment() error = %v", err)
+	}
+	if posted != "forced the next version to 2.0.0." {
+		t.Fatalf("posted = %q, want %q", posted, "forced the next version to 2.0.0.")
+	}
+}
+
+func TestCreateCommentWrapsAServerError(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v3/repos/owner/repo/issues/7/comments", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	f := newTestForge(t, mux)
+
+	if err := f.CreateComment(context.Background(), "owner", "repo", 7, "hello"); err == nil {
+		t.Fatal("CreateComment() error = nil, want an error")
+	}
+}
+
 func TestNew(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

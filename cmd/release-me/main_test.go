@@ -26,6 +26,8 @@ func TestRun(t *testing.T) {
 		{name: "rejects an unknown flag on release", args: []string{"release", "--nope"}, wantCode: 2, wantErr: "flag provided but not defined"},
 		{name: "rejects an unknown flag on run", args: []string{"run", "--nope"}, wantCode: 2, wantErr: "flag provided but not defined"},
 		{name: "rejects an unknown flag on check", args: []string{"check", "--nope"}, wantCode: 2, wantErr: "flag provided but not defined"},
+		{name: "rejects an unknown flag on comment", args: []string{"comment", "--nope"}, wantCode: 2, wantErr: "flag provided but not defined"},
+		{name: "rejects comment without a pr-number", args: []string{"comment", "--body", "hi"}, wantCode: 2, wantErr: "--pr-number is required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

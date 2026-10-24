@@ -75,19 +75,29 @@ func gatherFamily(
 // changed components). released is false when no member has anything to
 // release.
 func familyVersion(cfg config.Config, members []familyMember) (result version.Result, released bool) {
-	var tags []version.Semver
-	for _, m := range members {
-		if m.ownHasTag {
-			tags = append(tags, m.ownVersion)
-		}
-	}
-	highest, highestOK := version.Highest(tags)
+	highest, highestOK := familyLastVersion(members)
 
 	var changes []version.Change
 	for _, m := range members {
 		changes = append(changes, m.changes...)
 	}
 	return version.Next(highest, highestOK, changes, cfg.InitialVersion, cfg.BumpMinorPreMajor)
+}
+
+// familyLastVersion returns the highest version any member of the family
+// already carries its own tag at, ok false when no member has one yet.
+// It is the same "last released version" a locked family's release-as
+// override is checked against, one tag prefix at a time, that
+// applyVersionOverride already checks for a single, independent
+// component.
+func familyLastVersion(members []familyMember) (highest version.Semver, ok bool) {
+	var tags []version.Semver
+	for _, m := range members {
+		if m.ownHasTag {
+			tags = append(tags, m.ownVersion)
+		}
+	}
+	return version.Highest(tags)
 }
 
 // familyReleases computes, for a linked or locked family run, the release

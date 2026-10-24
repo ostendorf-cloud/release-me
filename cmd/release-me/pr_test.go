@@ -18,6 +18,7 @@ import (
 	"github.com/ostendorf-cloud/release-me/internal/config"
 	"github.com/ostendorf-cloud/release-me/internal/forge"
 	"github.com/ostendorf-cloud/release-me/internal/forge/forgetest"
+	"github.com/ostendorf-cloud/release-me/internal/releasepr"
 )
 
 // mainBranch is the release branch of the implicit "main" component a
@@ -302,6 +303,133 @@ func TestDoPRKeepsTheNotesBlockAcrossAnUpdate(t *testing.T) {
 	}
 	if !strings.Contains(updatedBody, "stop a panic") {
 		t.Fatalf("updated body = %q, want the new entry", updatedBody)
+	}
+}
+
+func TestDoPRAppliesAVersionOverrideAndKeepsItAcrossAnUpdate(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	commitEntry(t, dir, "feat: add the next command")
+
+	f := newFake()
+	var first bytes.Buffer
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
+		t.Fatalf("doPR() first run error = %v", err)
+	}
+	created := f.CreatedPullRequests[0]
+	if !strings.Contains(created.Title, "v0.1.0") {
+		t.Fatalf("created title = %q, want v0.1.0", created.Title)
+	}
+
+	withOverride := releasepr.SetVersionOverride(created.Body, "5.0.0")
+	f.ListResponses = []forgetest.ListResponse{
+		{Head: mainBranch, State: "open", PullRequests: []forge.PullRequest{
+			{Number: 1, Title: created.Title, Body: withOverride, HeadSHA: bareBranchSHA(t, origin)},
+		}},
+	}
+
+	commitEntry(t, dir, "fix: stop a panic")
+
+	var second bytes.Buffer
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &second); err != nil {
+		t.Fatalf("doPR() second run error = %v", err)
+	}
+
+	if len(f.UpdatedPullRequests) != 1 {
+		t.Fatalf("UpdatedPullRequests = %+v, want one", f.UpdatedPullRequests)
+	}
+	updated := f.UpdatedPullRequests[0]
+	if !strings.Contains(updated.Title, "v5.0.0") {
+		t.Fatalf("updated title = %q, want v5.0.0", updated.Title)
+	}
+	if !strings.Contains(updated.Body, "```release-me-version\n5.0.0\n```") {
+		t.Fatalf("updated body = %q, want the version override block kept", updated.Body)
+	}
+
+	changelog := showBareBranchFile(t, origin, "CHANGELOG.md")
+	if !strings.Contains(changelog, "## v5.0.0") {
+		t.Fatalf("CHANGELOG.md on the release branch = %q, want the overridden version", changelog)
+	}
+}
+
+// TestDoPRIgnoresAVersionOverrideNotGreaterThanTheLastTag guards against a
+// release-as override producing a backwards release: a repository already
+// at v5.0.0 commenting "release-as 1.2.3" must not ship 1.2.3 over 5.0.0.
+func TestDoPRIgnoresAVersionOverrideNotGreaterThanTheLastTag(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	commitEntry(t, dir, "feat: add the original feature")
+	runGit(t, dir, "tag", "v5.0.0")
+	commitEntry(t, dir, "feat: add the next command")
+
+	f := newFake()
+	var first bytes.Buffer
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
+		t.Fatalf("doPR() first run error = %v", err)
+	}
+	created := f.CreatedPullRequests[0]
+	if !strings.Contains(created.Title, "v5.1.0") {
+		t.Fatalf("created title = %q, want v5.1.0", created.Title)
+	}
+
+	withOverride := releasepr.SetVersionOverride(created.Body, "1.2.3")
+	f.ListResponses = []forgetest.ListResponse{
+		{Head: mainBranch, State: "open", PullRequests: []forge.PullRequest{
+			{Number: 1, Title: created.Title, Body: withOverride, HeadSHA: bareBranchSHA(t, origin)},
+		}},
+	}
+
+	commitEntry(t, dir, "fix: stop a panic")
+
+	var second bytes.Buffer
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &second); err != nil {
+		t.Fatalf("doPR() second run error = %v", err)
+	}
+
+	if len(f.UpdatedPullRequests) != 1 {
+		t.Fatalf("UpdatedPullRequests = %+v, want one", f.UpdatedPullRequests)
+	}
+	updated := f.UpdatedPullRequests[0]
+	if !strings.Contains(updated.Title, "v5.1.0") {
+		t.Fatalf("updated title = %q, want the computed version kept, not the backwards override", updated.Title)
+	}
+	if !strings.Contains(updated.Body, "```release-me-version\n1.2.3\n```") {
+		t.Fatalf("updated body = %q, want the rejected override text kept verbatim for visibility", updated.Body)
+	}
+}
+
+func TestDoPRIgnoresAnUnparsableVersionOverride(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	commitEntry(t, dir, "feat: add the next command")
+
+	f := newFake()
+	var first bytes.Buffer
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
+		t.Fatalf("doPR() first run error = %v", err)
+	}
+	created := f.CreatedPullRequests[0]
+
+	withOverride := releasepr.SetVersionOverride(created.Body, "not-a-version")
+	f.ListResponses = []forgetest.ListResponse{
+		{Head: mainBranch, State: "open", PullRequests: []forge.PullRequest{
+			{Number: 1, Title: created.Title, Body: withOverride, HeadSHA: bareBranchSHA(t, origin)},
+		}},
+	}
+
+	commitEntry(t, dir, "fix: stop a panic")
+
+	var second bytes.Buffer
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &second); err != nil {
+		t.Fatalf("doPR() second run error = %v", err)
+	}
+
+	if len(f.UpdatedPullRequests) != 1 {
+		t.Fatalf("UpdatedPullRequests = %+v, want one", f.UpdatedPullRequests)
+	}
+	updated := f.UpdatedPullRequests[0]
+	if !strings.Contains(updated.Title, "v0.1.0") {
+		t.Fatalf("updated title = %q, want the computed version kept, not the unparsable override", updated.Title)
+	}
+	if !strings.Contains(updated.Body, "```release-me-version\nnot-a-version\n```") {
+		t.Fatalf("updated body = %q, want the unparsable override text kept verbatim", updated.Body)
 	}
 }
 

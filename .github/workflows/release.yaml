@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     types: [labeled, unlabeled]
+  issue_comment:
+    types: [created]
 
 permissions: {}
 
@@ -47,3 +49,52 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           app-slug: ${{ steps.app-token.outputs.app-slug }}
           version: source
+
+  comment:
+    runs-on: ubuntu-latest
+    # Every other filter, the release pull request's own labels included,
+    # is the comment command's own job: nothing here reads release-me.yaml,
+    # so the mention and the label names stay unchecked until it runs.
+    # "user.type != 'Bot'" additionally keeps this job from ever running
+    # on its own reply: without it, a reply naming the mention, however
+    # carefully worded, would still start a new run, and an app
+    # installation token, not GITHUB_TOKEN, has every permission needed
+    # to keep that loop going.
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot'
+    steps:
+      - name: Mint a release app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        with:
+          app-id: ${{ vars.GH_APP_RELEASE_APP_ID }}
+          private-key: ${{ secrets.GH_APP_RELEASE_PRIVATE_KEY }}
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.event.repository.default_branch }}
+
+      # No release-me release exists yet: build from source. Once the
+      # first one is tagged, this job should run the downloaded binary the
+      # same way the release job does.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build release-me
+        run: go build -o "${RUNNER_TEMP}/release-me" ./cmd/release-me
+
+      - name: Apply the comment command
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          "${RUNNER_TEMP}/release-me" comment \
+            --pr-number "${PR_NUMBER}" \
+            --association "${COMMENT_ASSOCIATION}" \
+            --body "${COMMENT_BODY}"

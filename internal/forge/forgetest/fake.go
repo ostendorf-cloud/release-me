@@ -69,6 +69,13 @@ type CreateReleaseCall struct {
 	Prerelease                   bool
 }
 
+// CreateCommentCall records one call to CreateComment.
+type CreateCommentCall struct {
+	Owner, Repo string
+	Number      int
+	Body        string
+}
+
 // Fake is a forge.Forge backed by fixed, pre-configured responses. It
 // records every write call, so tests can assert on them.
 type Fake struct {
@@ -137,6 +144,11 @@ type Fake struct {
 	CreatedTags         []CreateTagCall
 	MovedTags           []MoveTagCall
 	CreatedReleases     []CreateReleaseCall
+	CreatedComments     []CreateCommentCall
+
+	// CreateCommentErr, when set, is returned by CreateComment instead of
+	// recording a call.
+	CreateCommentErr error
 }
 
 // PullRequest implements forge.Forge.
@@ -257,6 +269,15 @@ func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body str
 // MergeCommit implements forge.Forge.
 func (f *Fake) MergeCommit(_ context.Context, _, _ string, number int) (string, error) {
 	return f.MergeCommits[number], nil
+}
+
+// CreateComment implements forge.Forge.
+func (f *Fake) CreateComment(_ context.Context, owner, repo string, number int, body string) error {
+	if f.CreateCommentErr != nil {
+		return f.CreateCommentErr
+	}
+	f.CreatedComments = append(f.CreatedComments, CreateCommentCall{Owner: owner, Repo: repo, Number: number, Body: body})
+	return nil
 }
 
 func (f *Fake) setPRLabels(number int, labels []string) {

@@ -187,7 +187,16 @@ func doPRComponent(
 
 	versionStr := rel.version.Version
 	entries := rel.entries
+	versionOverride := ""
+	overrideValid := false
 	if existing != nil {
+		_, last, hasLast, err := history.LastTag(ctx, dir, comp.TagPrefix)
+		if err != nil {
+			return fmt.Errorf("release-me: component %s: last tag: %w", comp.Name, err)
+		}
+		versionOverride, versionStr, overrideValid = applyVersionOverride(existing.Body, versionStr, last, hasLast, logger, comp.Name, existing.Number)
+	}
+	if existing != nil && !overrideValid {
 		preType, isPre, err := selectPreReleaseType(existing.Labels, cfg.Labels)
 		if err != nil {
 			return fmt.Errorf("release-me: component %s: pull request #%d: %w", comp.Name, existing.Number, err)
@@ -232,7 +241,7 @@ func doPRComponent(
 		Beta:   cfg.Labels.Beta,
 		Rc:     cfg.Labels.Rc,
 	}
-	body := releasepr.Body(versionStr, tag, guideLabels, notes, section)
+	body := releasepr.Body(versionStr, tag, guideLabels, notes, versionOverride, section)
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body:
@@ -349,7 +358,13 @@ func doPRLocked(
 		break
 	}
 
+	versionOverride := ""
+	overrideValid := false
 	if existing != nil {
+		last, hasLast := familyLastVersion(members)
+		versionOverride, versionStr, overrideValid = applyVersionOverride(existing.Body, versionStr, last, hasLast, logger, "locked family", existing.Number)
+	}
+	if existing != nil && !overrideValid {
 		preType, isPre, err := selectPreReleaseType(existing.Labels, cfg.Labels)
 		if err != nil {
 			return fmt.Errorf("release-me: locked family: pull request #%d: %w", existing.Number, err)
@@ -409,7 +424,7 @@ func doPRLocked(
 		Beta:   cfg.Labels.Beta,
 		Rc:     cfg.Labels.Rc,
 	}
-	body := releasepr.Body(versionStr, strings.Join(tags, ", "), guideLabels, notes, section)
+	body := releasepr.Body(versionStr, strings.Join(tags, ", "), guideLabels, notes, versionOverride, section)
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body:
@@ -555,6 +570,44 @@ func ensurePendingLabel(ctx context.Context, f forge.Forge, owner, repoName stri
 		return fmt.Errorf("release-me: add label %q to release pull request #%d: %w", pending, number, err)
 	}
 	return nil
+}
+
+// applyVersionOverride reads the release-me-version fenced block from an
+// existing release pull request's body, a write-access commenter's
+// "release-as" command or a hand edit, and reports what pr should do with
+// it: raw is the block's exact text, read back unchanged so Body can carry
+// it through to the re-rendered pull request even when it is unused this
+// run; overridden is computed, with raw substituted for it when raw
+// parses as a real semantic version strictly greater than last, the
+// highest version the component, or the whole locked family, already
+// carries a tag at; ok is true exactly then, so the caller skips the
+// normal pre-release label handling: the override wins outright over the
+// computed bump instead of combining with it. hasLast is false before any
+// tag exists at all, in which case any parseable version is accepted.
+// who and number name the component or locked family and the pull
+// request in the warning logged when raw is present but unused this run,
+// never failing it.
+func applyVersionOverride(
+	body, computed string, last version.Semver, hasLast bool, logger *slog.Logger, who string, number int,
+) (raw, overridden string, ok bool) {
+	raw, found := releasepr.ExtractVersionOverride(body)
+	if !found {
+		return "", computed, false
+	}
+
+	sv, parseOK := version.ParseTag("v" + raw)
+	switch {
+	case !parseOK:
+		logger.Warn("ignoring a release-me-version override that does not parse as a version",
+			"component", who, "number", number, "value", raw)
+		return raw, computed, false
+	case hasLast && !last.Less(sv):
+		logger.Warn("ignoring a release-me-version override that is not greater than the last released version",
+			"component", who, "number", number, "value", raw, "last", last.String())
+		return raw, computed, false
+	default:
+		return raw, sv.String(), true
+	}
 }
 
 // changelogUpdate is one component's changelog file path and the entries

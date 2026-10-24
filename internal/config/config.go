@@ -3,7 +3,8 @@
 
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
-// changelog, changelog-source, labels, major-tag and components.
+// changelog, changelog-source, labels, author, major-tag, versioning,
+// comment-mention and components.
 package config
 
 import (
@@ -53,6 +54,11 @@ const (
 	// DefaultVersioning is the versioning mode applied when the
 	// "versioning" key is left out of release-me.yaml.
 	DefaultVersioning = VersioningIndependent
+	// DefaultCommentMention is the mention prefix applied when the
+	// "comment-mention" key is left out of release-me.yaml: a comment on
+	// the release pull request naming it may issue a "release-as" or
+	// "release-notes" command.
+	DefaultCommentMention = "@release-me"
 	// lockedBranch is the shared release branch every component carries in
 	// VersioningLocked: one release pull request for the whole family,
 	// instead of one branch per component.
@@ -181,6 +187,11 @@ type Config struct {
 	// VersioningIndependent. It applies to the whole family; there is no
 	// per-component override.
 	Versioning Versioning
+	// CommentMention is the top-level "comment-mention" key: the mention
+	// prefix a write-access commenter's "release-as" or "release-notes"
+	// command on the release pull request must start with, default
+	// DefaultCommentMention. There is no per-component override.
+	CommentMention string
 	// Components is the "components" key, in the order release-me.yaml
 	// declares them, or nil when the key is absent: a repository without
 	// it is one component at the repository root, as Resolve reports.
@@ -348,6 +359,7 @@ type raw struct {
 	Author            *rawAuthor `yaml:"author"`
 	MajorTag          *bool      `yaml:"major-tag"`
 	Versioning        *string    `yaml:"versioning"`
+	CommentMention    *string    `yaml:"comment-mention"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -383,8 +395,9 @@ func Default() Config {
 			Pending: DefaultPendingLabel, Tagged: DefaultTaggedLabel,
 			Alpha: DefaultAlphaLabel, Beta: DefaultBetaLabel, Rc: DefaultRcLabel,
 		},
-		Author:     Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
-		Versioning: DefaultVersioning,
+		Author:         Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
+		Versioning:     DefaultVersioning,
+		CommentMention: DefaultCommentMention,
 	}
 }
 
@@ -494,6 +507,12 @@ func Load(path string) (cfg Config, err error) {
 		if !validVersioning[cfg.Versioning] {
 			return Config{}, fmt.Errorf("config: parse %s: versioning %q is not independent, locked or linked", path, *r.Versioning)
 		}
+	}
+	if r.CommentMention != nil {
+		if *r.CommentMention == "" {
+			return Config{}, fmt.Errorf("config: parse %s: comment-mention is empty", path)
+		}
+		cfg.CommentMention = *r.CommentMention
 	}
 	if r.Components.Kind != 0 {
 		components, err := decodeComponents(path, &r.Components)

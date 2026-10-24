@@ -327,3 +327,30 @@ func TestFakeMergeCommitReturnsTheConfiguredSHA(t *testing.T) {
 		t.Fatalf("MergeCommit() = %q, want %q", got, "deadbeef")
 	}
 }
+
+func TestFakeCreateCommentRecordsTheCall(t *testing.T) {
+	t.Parallel()
+	f := &forgetest.Fake{}
+
+	if err := f.CreateComment(context.Background(), "owner", "repo", 7, "forced the next version to 2.0.0."); err != nil {
+		t.Fatalf("CreateComment() error = %v", err)
+	}
+
+	want := []forgetest.CreateCommentCall{{Owner: "owner", Repo: "repo", Number: 7, Body: "forced the next version to 2.0.0."}}
+	if !reflect.DeepEqual(f.CreatedComments, want) {
+		t.Fatalf("CreatedComments = %+v, want %+v", f.CreatedComments, want)
+	}
+}
+
+func TestFakeCreateCommentReturnsTheConfiguredError(t *testing.T) {
+	t.Parallel()
+	wantErr := errors.New("boom")
+	f := &forgetest.Fake{CreateCommentErr: wantErr}
+
+	if err := f.CreateComment(context.Background(), "owner", "repo", 7, "hello"); !errors.Is(err, wantErr) {
+		t.Fatalf("CreateComment() error = %v, want %v", err, wantErr)
+	}
+	if len(f.CreatedComments) != 0 {
+		t.Fatalf("CreatedComments = %+v, want none recorded", f.CreatedComments)
+	}
+}
