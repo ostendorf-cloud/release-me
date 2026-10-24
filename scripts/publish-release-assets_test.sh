@@ -38,9 +38,11 @@ chmod +x "${fake_bin}/git"
 chmod +x "${fake_bin}/goreleaser"
 
 # fake-bin/gh logs every call. "release view" answers isDraft from the tag
-# name itself, "-draft" or "-published", so a test case needs no separate
-# state file. Anything else it does not recognize fails loudly, to catch a
-# call the script was not supposed to make.
+# name itself: "-draft" or "-published" need no separate state file,
+# "-view-fails" simulates a release GitHub cannot read back, a deleted
+# release, an expired token, a 5xx or a rate limit alike. Anything else it
+# does not recognize fails loudly, to catch a call the script was not
+# supposed to make.
 {
   echo '#!/usr/bin/env bash'
   echo 'echo "gh $*" >>"${CALL_LOG}"'
@@ -48,6 +50,7 @@ chmod +x "${fake_bin}/goreleaser"
   echo '  case "$3" in'
   echo '  *-draft) echo true ;;'
   echo '  *-published) echo false ;;'
+  echo '  *-view-fails) echo "fake gh: release view failed" >&2; exit 1 ;;'
   echo '  *) echo "fake gh: unknown tag $3" >&2; exit 1 ;;'
   echo '  esac'
   echo '  exit 0'
@@ -95,6 +98,49 @@ run_case() {
   echo "PASS ${case_name}"
 }
 
+# run_failure_case name tags want_stderr_substring
+run_failure_case() {
+  local case_name="$1" tags="$2" want_stderr_substring="$3"
+  CALL_LOG="${work}/calls.log"
+  : >"${CALL_LOG}"
+
+  local build_dir="${work}/build"
+  rm -rf "${build_dir}"
+  mkdir -p "${build_dir}"
+
+  local status
+  if (cd "${build_dir}" && TAGS="${tags}" "${script}") >"${work}/stdout" 2>"${work}/stderr"; then
+    status=0
+  else
+    status=$?
+  fi
+  if [ "${status}" -eq 0 ]; then
+    echo "FAIL ${case_name}: exit status = 0, want non-zero"
+    failures=$((failures + 1))
+    return
+  fi
+
+  if ! grep -qF "${want_stderr_substring}" "${work}/stderr"; then
+    echo "FAIL ${case_name}: stderr = $(cat "${work}/stderr"), want it to contain ${want_stderr_substring@Q}"
+    failures=$((failures + 1))
+    return
+  fi
+
+  # The failure must stop the script before it ever builds, uploads or
+  # publishes anything for the tag it could not read: treating an unread
+  # release as "nothing to do" would otherwise leave a draft with no
+  # assets and a workflow run reporting a false success.
+  local got_calls
+  got_calls="$(cat "${CALL_LOG}")"
+  if printf '%s' "${got_calls}" | grep -qE "goreleaser|release upload|release edit"; then
+    echo "FAIL ${case_name}: calls = ${got_calls@Q}, want it to stop before building, uploading or publishing"
+    failures=$((failures + 1))
+    return
+  fi
+
+  echo "PASS ${case_name}"
+}
+
 run_case "nothing released makes no call at all" "" ""
 
 run_case "a draft release is built, attached and published" "v1.0.0-draft" \
@@ -116,6 +162,10 @@ goreleaser release --clean --skip=announce,validate,publish
 gh release upload v1.0.0-draft dist/fixture_linux_amd64.tar.gz dist/fixture_1.0.0_checksums.txt --clobber
 gh release edit v1.0.0-draft --draft=false
 gh release view v2.0.0-published --json isDraft --jq .isDraft"
+
+run_failure_case \
+  "a gh release view failure stops the script instead of being treated as already published" \
+  "v1.0.0-view-fails" "cannot read the release for v1.0.0-view-fails"
 
 if [ "${failures}" -ne 0 ]; then
   echo "${failures} test(s) failed"

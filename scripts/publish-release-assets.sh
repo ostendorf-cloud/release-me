@@ -30,10 +30,27 @@ while IFS= read -r tag; do
     continue
   fi
 
-  if [ "$(gh release view "${tag}" --json isDraft --jq .isDraft)" != "true" ]; then
+  # A failing command substitution never trips "set -e" inside an "if" or
+  # "while" condition, a well known shell pitfall: that exemption would
+  # swallow a failure here too, treating a deleted release, an expired
+  # token, a 5xx or a rate limit the same as "already published", and
+  # exiting 0 having attached nothing. Reading the status into a variable
+  # first, on its own statement, keeps "set -e" in effect.
+  if ! draft="$(gh release view "${tag}" --json isDraft --jq .isDraft)"; then
+    echo "cannot read the release for ${tag}" >&2
+    exit 1
+  fi
+  case "${draft}" in
+  true) ;;
+  false)
     echo "${tag} is already published, assets must already be attached"
     continue
-  fi
+    ;;
+  *)
+    echo "unexpected isDraft value for ${tag}: ${draft}" >&2
+    exit 1
+    ;;
+  esac
 
   echo "building archives for ${tag}"
   rm -rf dist
