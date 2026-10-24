@@ -312,29 +312,51 @@ without editing the pull request body by hand:
 @release-me release-notes Run the migration before upgrading.
 ```
 
-Only a commenter with `write` access or higher on the repository, GitHub's own
-`author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, may issue either command; anyone
-else's comment naming the mention is refused, never acted on. `release-as` takes a plain
-`X.Y.Z` version, optionally prefixed with `v`; anything that does not parse is refused.
-`release-notes` takes the rest of the comment, verbatim, as the new content of the
-[notes block](#notes-block).
+A command only ever runs from a line that opens with the mention: one as the whole comment, or
+as the first thing on its own line inside a longer one. A mention quoted with a leading `>`,
+fenced, inside inline code, or inside an HTML comment is inert text, never a command, so a
+maintainer can always quote a refused command back to say no to it without that quote
+executing.
+
+Only a commenter whose GitHub `author_association` with the repository is `OWNER`, `MEMBER` or
+`COLLABORATOR` may issue either command; anyone else's comment naming the mention is refused,
+never acted on. This is close to, but not exactly, write access: `MEMBER` is any member of the
+owning organization regardless of that member's own permission on this repository, and
+`COLLABORATOR` includes one added with only read or triage access. Checking the repository's
+actual collaborator permission would need an extra API call per comment; `release-me` accepts
+the wider set these three values describe instead, the same trade-off avoiding an extra
+network round trip.
+
+`release-as` takes a plain `X.Y.Z` version, optionally prefixed with `v`, and rejects one that
+is not strictly greater than the last tag already released, so it can move a burned or wrong
+version forward but never backward. `release-notes` takes the rest of the comment, verbatim,
+as the new content of the [notes block](#notes-block); a fence terminator inside either
+argument is escaped so it can never plant a second, different block.
 
 The workflow always replies on the pull request stating what it did, or why it refused: the
-pull request the comment was posted on is not the release one, the commenter is not
-authorized, the command word after the mention was not recognized, or the `release-as`
-argument did not parse. A comment that never names the mention at all is left alone entirely,
-not replied to.
+commenter is not authorized, the pull request the comment was posted on is not the release
+one, the command word after the mention was not recognized, or the `release-as` argument did
+not parse or was not greater than the last released version. A comment that never names the
+mention at all is left alone entirely, not replied to. No reply ever repeats the mention
+itself, and the workflow job's own guard ignores a comment from a bot account, so the bot's
+own reply can never start another run of itself.
 
 `release-as` writes a fenced block `release-me-version`, read back the same way the notes
-block is, and read before the normal computed bump: present and parseable, it replaces the
-version for that run outright, changelog and all, until the pull request merges or the block
-is removed. It survives a later push the same way the notes block does:
+block is, and read before the normal computed bump, pre-release label included: present,
+parseable and greater than the last released version, it replaces the version for that run
+outright, changelog and all, until the pull request merges or the block is removed. It
+survives a later push the same way the notes block does:
 
 ````markdown
 ```release-me-version
 1.4.0
 ```
 ````
+
+The pull request's title and changelog still show the previously computed version until the
+next `pr` run re-renders the body; merging in that window releases the old version, not the
+override. The reply names this risk; nothing in this repository dispatches that next run
+immediately on comment today.
 
 Both commands work today through this repository's own `release.yaml` `comment` job; the
 composite action does not yet wire the `issue_comment` trigger for other repositories using
