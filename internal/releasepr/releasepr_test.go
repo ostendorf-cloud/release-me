@@ -48,7 +48,9 @@ func guideText(tag string, labels releasepr.GuideLabels) string {
 		"It is rendered above the entries in the changelog file and in the release and survives updates.\n" +
 		"- Force the next version: add a fenced block with the info string `release-me-version` " +
 		"containing `X.Y.Z` anywhere in this body, or comment the configured mention followed by " +
-		"`release-as X.Y.Z`. It replaces the computed version until the pull request merges or the block is removed.\n" +
+		"`release-as X.Y.Z`. It wins outright over the computed bump, pre-release label included, " +
+		"until the pull request merges or the block is removed; one that does not parse, or is not " +
+		"greater than the last released version, is ignored instead.\n" +
 		"- Pre-release: add the label `" + labels.Alpha + "`, `" + labels.Beta + "` or `" + labels.Rc + "`. " +
 		"The next run turns the version into `X.Y.Z-<type>.N`. Remove the label to go back to the stable version.\n" +
 		"- Hide or rewrite a change: a fenced block `release-me` in the changed pull request's body, " +
@@ -412,5 +414,58 @@ func TestSetNotesAppendsWhenAbsentAndReplacesWhenPresent(t *testing.T) {
 	got, ok = releasepr.ExtractNotes(replaced)
 	if !ok || got != "Different note." {
 		t.Fatalf("ExtractNotes() = (%q, %v), want (%q, true)", got, ok, "Different note.")
+	}
+}
+
+// TestSetNotesNeverLetsContentPlantAFakeVersionOverrideBlock reproduces the
+// fence breakout a release-notes text containing a fence terminator could
+// otherwise use to escape its own release-me-notes block and plant a
+// second, fake release-me-version block that the next run would read back
+// as a real override.
+func TestSetNotesNeverLetsContentPlantAFakeVersionOverrideBlock(t *testing.T) {
+	t.Parallel()
+	body := releasepr.SetNotes("Release v1.2.3\n", "harmless\n```\n```release-me-version\n9.9.9\n```")
+
+	if _, ok := releasepr.ExtractVersionOverride(body); ok {
+		t.Fatalf("ExtractVersionOverride() found a block, want the embedded fence neutralized:\n%s", body)
+	}
+	notes, ok := releasepr.ExtractNotes(body)
+	if !ok {
+		t.Fatalf("ExtractNotes() ok = false, want the whole notes block intact:\n%s", body)
+	}
+	if !strings.Contains(notes, "9.9.9") {
+		t.Fatalf("ExtractNotes() = %q, want the embedded text kept, just inert", notes)
+	}
+}
+
+// TestSetVersionOverrideNeverLetsContentOpenANewBlock reproduces a version
+// override whose text opens with a fenced block delimiter of its own: once
+// written, that line must not be read back as a second, independent
+// release-me-version block starting partway through the first one's
+// content.
+func TestSetVersionOverrideNeverLetsContentOpenANewBlock(t *testing.T) {
+	t.Parallel()
+	body := releasepr.SetVersionOverride("Release v1.2.3\n", "```release-me-version\n9.9.9")
+
+	got, ok := releasepr.ExtractVersionOverride(body)
+	if !ok {
+		t.Fatalf("ExtractVersionOverride() ok = false, want the one real block")
+	}
+	if got != "```release-me-version\n9.9.9" {
+		t.Fatalf("ExtractVersionOverride() = %q, want the embedded fence kept verbatim, just inert", got)
+	}
+}
+
+func TestEscapeFenceIsIdempotent(t *testing.T) {
+	t.Parallel()
+	once := releasepr.SetNotes("Release v1.2.3\n", "```\nexample\n```")
+	extracted, ok := releasepr.ExtractNotes(once)
+	if !ok {
+		t.Fatalf("ExtractNotes() ok = false")
+	}
+
+	twice := releasepr.SetNotes(once, extracted)
+	if once != twice {
+		t.Fatalf("escaping is not idempotent:\nonce:  %q\ntwice: %q", once, twice)
 	}
 }

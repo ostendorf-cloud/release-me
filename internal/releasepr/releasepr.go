@@ -49,13 +49,13 @@ func Body(version, tag string, labels GuideLabels, notes, versionOverride, chang
 
 	if versionOverride != "" {
 		b.WriteString("\n```release-me-version\n")
-		b.WriteString(versionOverride)
+		b.WriteString(escapeFence(versionOverride))
 		b.WriteString("\n```\n")
 	}
 
 	if notes != "" {
 		b.WriteString("\n```release-me-notes\n")
-		b.WriteString(notes)
+		b.WriteString(escapeFence(notes))
 		b.WriteString("\n```\n")
 	}
 
@@ -78,7 +78,9 @@ func guideBlock(tag string, labels GuideLabels) string {
 		"It is rendered above the entries in the changelog file and in the release and survives updates.\n")
 	b.WriteString("- Force the next version: add a fenced block with the info string `release-me-version` " +
 		"containing `X.Y.Z` anywhere in this body, or comment the configured mention followed by " +
-		"`release-as X.Y.Z`. It replaces the computed version until the pull request merges or the block is removed.\n")
+		"`release-as X.Y.Z`. It wins outright over the computed bump, pre-release label included, " +
+		"until the pull request merges or the block is removed; one that does not parse, or is not " +
+		"greater than the last released version, is ignored instead.\n")
 	if enabled := preReleaseLabelList(labels); enabled != "" {
 		fmt.Fprintf(&b, "- Pre-release: add the label %s. The next run turns the version into `X.Y.Z-<type>.N`. "+
 			"Remove the label to go back to the stable version.\n", enabled)
@@ -164,16 +166,40 @@ func SetVersionOverride(body, version string) string {
 }
 
 // setFencedBlock replaces pattern's match in body with a fenced block
-// carrying info and content, or appends that block at the end of body when
-// pattern does not match: the shape every comment command that edits a
-// release pull request body in place, outside of Body's own full render,
-// shares.
+// carrying info and escapeFence(content), or appends that block at the end
+// of body when pattern does not match: the shape every comment command
+// that edits a release pull request body in place, outside of Body's own
+// full render, shares.
 func setFencedBlock(body, info string, pattern *regexp.Regexp, content string) string {
-	block := fmt.Sprintf("```%s\n%s\n```", info, content)
+	block := fmt.Sprintf("```%s\n%s\n```", info, escapeFence(content))
 	if pattern.MatchString(body) {
 		return pattern.ReplaceAllLiteralString(body, block)
 	}
 	return strings.TrimRight(body, "\n") + "\n\n" + block + "\n"
+}
+
+// fenceLine matches a line of fenced block content that would itself be
+// read as a fence delimiter, opening or closing, by notesBlock,
+// versionBlock or conventional's own override block pattern: three or
+// more backticks at the true start of the line, column zero, with
+// nothing, not even a space, before them. ExtractNotes and
+// ExtractVersionOverride both anchor on exactly that "^```", so a line
+// already indented, including one this function already escaped, never
+// matches again: escapeFence is idempotent.
+var fenceLine = regexp.MustCompile("(?m)^`{3,}")
+
+// escapeFence returns content with every line that opens with three or
+// more backticks, column zero, indented by one space, so content written
+// verbatim into a release-me-notes or release-me-version fenced block can
+// never prematurely close that block or open a second, different one
+// inside it: release notes or a version override containing, say, a
+// pasted "```release-me-version" block stays inert text instead of being
+// read back as a real override on the next run. Markdown renderers still
+// treat up to three leading spaces as an ordinary fenced code block, so
+// the visible effect on a genuine code sample in release notes is
+// negligible.
+func escapeFence(content string) string {
+	return fenceLine.ReplaceAllString(content, " $0")
 }
 
 // changelogDetails matches the collapsed changelog block of a release pull
