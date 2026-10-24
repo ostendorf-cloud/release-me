@@ -113,6 +113,7 @@ release-me pr          # create or update the release pull requests
 release-me release     # tag and release merged release pull requests
 release-me run         # pr then release, the CI entry point
 release-me check       # config, labels and token
+release-me comment     # apply a release-as or release-notes comment command
 release-me migrate release-please   # translate a release-please setup, nothing written
 ```
 
@@ -228,6 +229,13 @@ environment variable is both set and accepted by the forge: a rejected token is 
 such, not as a missing label, since the symptom from the forge is the same 401 either way.
 Prints every missing or invalid item and exits 1 when anything is missing, 0 otherwise.
 
+### comment
+
+`comment` applies one GitHub comment to the release pull request it was posted on: see
+[Comment commands](#comment-commands). It is invoked by `.github/workflows/release.yaml`'s own
+`comment` job, through flags carrying that one comment's pull request number, author
+association and body, not something a human runs directly.
+
 ### migrate
 
 `migrate release-please` reads `release-please-config.json` and `.release-please-manifest.json`
@@ -292,6 +300,45 @@ fix: stop the panic on empty history
 
 An empty block hides the pull request from the changelog and the version computation
 entirely.
+
+### Comment commands
+
+A comment on the release pull request, prefixed with the configured `comment-mention`,
+`@release-me` by default, lets a commenter force the next version or set the release notes
+without editing the pull request body by hand:
+
+```text
+@release-me release-as 1.4.0
+@release-me release-notes Run the migration before upgrading.
+```
+
+Only a commenter with `write` access or higher on the repository, GitHub's own
+`author_association` of `OWNER`, `MEMBER` or `COLLABORATOR`, may issue either command; anyone
+else's comment naming the mention is refused, never acted on. `release-as` takes a plain
+`X.Y.Z` version, optionally prefixed with `v`; anything that does not parse is refused.
+`release-notes` takes the rest of the comment, verbatim, as the new content of the
+[notes block](#notes-block).
+
+The workflow always replies on the pull request stating what it did, or why it refused: the
+pull request the comment was posted on is not the release one, the commenter is not
+authorized, the command word after the mention was not recognized, or the `release-as`
+argument did not parse. A comment that never names the mention at all is left alone entirely,
+not replied to.
+
+`release-as` writes a fenced block `release-me-version`, read back the same way the notes
+block is, and read before the normal computed bump: present and parseable, it replaces the
+version for that run outright, changelog and all, until the pull request merges or the block
+is removed. It survives a later push the same way the notes block does:
+
+````markdown
+```release-me-version
+1.4.0
+```
+````
+
+Both commands work today through this repository's own `release.yaml` `comment` job; the
+composite action does not yet wire the `issue_comment` trigger for other repositories using
+it.
 
 ### Changelog modes
 
@@ -484,6 +531,9 @@ files:
 - `versioning`: `independent` (default), `locked` or `linked`. See
   [Versioning modes](#versioning-modes). There is no per-component override: it applies to the
   whole family.
+- `comment-mention`: the mention prefix a comment on the release pull request names to issue a
+  `release-as` or `release-notes` command, default `@release-me`. See
+  [Comment commands](#comment-commands). Cannot be empty.
 - `components`: maps a name to a `path` and optional overrides of `initial-version`,
   `bump-minor-pre-major`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
   `changelog`. A key
