@@ -81,12 +81,26 @@ func doRelease(ctx context.Context, dir string, cfg config.Config, component str
 			if r.MajorTagMessage != "" {
 				printLine(stdout, comp.Name, multi, r.MajorTagMessage)
 			}
+			printReleasedTag(stdout, dryRun, r.Tag)
 		}
 	}
 	if !any {
 		fmt.Fprintln(stdout, "nothing to release")
 	}
 	return nil
+}
+
+// printReleasedTag prints tag in the stable, unprefixed "released-tag: <tag>"
+// shape run-release-me.sh greps for, to fill the composite action's "tags"
+// output: every tag this run tagged, including one already tagged by an
+// earlier, interrupted run, since its release still needs assets attached
+// and publishing. Writes nothing in dry-run: CreateRelease was never
+// called, so there is no release yet for anything to act on.
+func printReleasedTag(w io.Writer, dryRun bool, tag string) {
+	if dryRun {
+		return
+	}
+	fmt.Fprintf(w, "released-tag: %s\n", tag)
 }
 
 // doReleaseLocked tags and releases every configured component together,
@@ -117,6 +131,7 @@ func doReleaseLocked(
 		if r.MajorTagMessage != "" {
 			printLine(stdout, name, multi, r.MajorTagMessage)
 		}
+		printReleasedTag(stdout, dryRun, r.Tag)
 	}
 	if !any {
 		fmt.Fprintln(stdout, "nothing to release")

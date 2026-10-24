@@ -529,7 +529,7 @@ func TestMoveTagWrapsAServerError(t *testing.T) {
 	}
 }
 
-func TestCreateRelease(t *testing.T) {
+func TestCreateReleaseCreatesADraftRelease(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
 	var body map[string]any
@@ -544,15 +544,18 @@ func TestCreateRelease(t *testing.T) {
 	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
-	if body["draft"] != false || body["prerelease"] != false {
-		t.Fatalf("body = %v, want draft and prerelease false", body)
+	// Always a draft: immutable releases rejects any later change to a
+	// published release, assets included, and release-me cannot tell
+	// whether a repository has that setting on.
+	if body["draft"] != true || body["prerelease"] != false {
+		t.Fatalf("body = %v, want draft true and prerelease false", body)
 	}
 	if body["tag_name"] != "v0.1.0" || body["body"] != "Release v0.1.0" {
 		t.Fatalf("body = %v", body)
 	}
 }
 
-func TestCreateReleaseMarksAPreReleaseVersionAsAPreRelease(t *testing.T) {
+func TestCreateReleaseMarksAPreReleaseVersionAsAPreReleaseDraft(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
 	var body map[string]any
@@ -567,8 +570,8 @@ func TestCreateReleaseMarksAPreReleaseVersionAsAPreRelease(t *testing.T) {
 	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
-	if body["draft"] != false || body["prerelease"] != true {
-		t.Fatalf("body = %v, want draft false and prerelease true", body)
+	if body["draft"] != true || body["prerelease"] != true {
+		t.Fatalf("body = %v, want draft true and prerelease true", body)
 	}
 }
 

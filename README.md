@@ -59,6 +59,14 @@ in place. `source` only builds this repository's own code: it is `go build`'s wo
 directory for `uses: ./action` from inside this repository, not the caller's checkout for
 `uses: ostendorf-cloud/release-me/action@ref`.
 
+Output: `tags`, the newline-separated tags this run tagged and drafted a release for, one per
+released component, empty when nothing was released. Every release release-me creates is a
+draft: GitHub's immutable releases setting, when on for the repository, rejects a change to a
+published release, so release-me never publishes one itself, draft or not. A caller that
+attaches binary assets, such as a step running `goreleaser` right after this action, publishes
+each tag afterward, for example with `gh release upload` followed by
+`gh release edit --draft=false`; see this repository's own `release.yaml` for the full shape.
+
 Trigger the calling workflow on `push` to the default branch, and also on `pull_request` with
 types `labeled` and `unlabeled`. The labeled trigger reruns `release-me run` right away when a
 release label changes, instead of waiting for the next push. Guard the job so the label run
@@ -190,7 +198,9 @@ run, branch content, title and body updated accordingly.
 
 Tags and releases every merged pull request on a component's release branch that still carries
 the `pending` label: a tag on the merge commit, a GitHub release with the pull request's notes
-and changelog, draft always false and prerelease true for a pre-release version. The label
+and changelog, draft always true and prerelease true for a pre-release version. A draft keeps
+the release safe from GitHub's immutable releases feature until a caller, such as a workflow
+that still needs to attach binary assets, publishes it. The label
 swap removes `pending`, and the matching pre-release type label when the version carries one,
 replacing both with `tagged`. The implicit `main` component tags `vX.Y.Z` and names the release
 after the tag, today's shape; a configured component tags `<name>/vX.Y.Z`, or its `tag-prefix`

@@ -68,7 +68,7 @@ tasks:
   lint:shell:
     desc: Shell script lint
     cmds:
-      - shellcheck action/*.sh
+      - shellcheck action/*.sh scripts/*.sh
 
   lint:secrets:
     desc: Secret scan over the git history
@@ -84,6 +84,7 @@ tasks:
     desc: Composite action shell script tests
     cmds:
       - action/resolve-author_test.sh
+      - scripts/publish-release-assets_test.sh
 
   check:
     desc: Every check, one after another

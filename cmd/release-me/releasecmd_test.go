@@ -48,6 +48,9 @@ func TestDoReleaseTagsAndReleasesAMergedPendingPullRequest(t *testing.T) {
 	if !strings.Contains(stdout.String(), "tagged and released v0.1.0") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "released-tag: v0.1.0") {
+		t.Fatalf("stdout = %q, want the released-tag marker run-release-me.sh greps for", stdout.String())
+	}
 }
 
 func TestDoReleaseStillFinishesAnAlreadyTaggedPullRequest(t *testing.T) {
@@ -74,6 +77,11 @@ func TestDoReleaseStillFinishesAnAlreadyTaggedPullRequest(t *testing.T) {
 	// leaving the pull request pending forever.
 	if !strings.Contains(stdout.String(), "already tagged v0.1.0") {
 		t.Fatalf("stdout = %q", stdout.String())
+	}
+	// The release and its draft still need assets attached, even though
+	// the tag already existed, so the marker is still printed.
+	if !strings.Contains(stdout.String(), "released-tag: v0.1.0") {
+		t.Fatalf("stdout = %q, want the released-tag marker for the already-tagged release too", stdout.String())
 	}
 	if len(f.CreatedReleases) != 1 {
 		t.Fatalf("CreatedReleases = %+v, want the release created", f.CreatedReleases)
@@ -177,6 +185,9 @@ func TestDoReleaseDryRunWritesNothing(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "would tag and release v0.1.0") {
 		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "released-tag:") {
+		t.Fatalf("stdout = %q, dry run must not print the released-tag marker: no release was created", stdout.String())
 	}
 	if len(f.CreatedTags) != 0 || len(f.CreatedReleases) != 0 || len(f.SetLabelsCalls) != 0 {
 		t.Fatalf("dry run wrote something: tags=%+v releases=%+v labels=%+v", f.CreatedTags, f.CreatedReleases, f.SetLabelsCalls)

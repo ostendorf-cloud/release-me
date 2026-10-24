@@ -199,9 +199,16 @@ func (f *Forge) MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 	return nil
 }
 
-// CreateRelease implements forge.Forge.
+// CreateRelease implements forge.Forge. It always creates a draft: GitHub's
+// immutable releases feature rejects any later change to a published
+// release, assets included, and the REST API exposes no field to tell
+// whether a repository has it on, so release-me never risks publishing
+// straight into it. A draft release fires no "release" webhook at all, so
+// a caller that attaches assets afterward must publish it itself once they
+// land, for example with "gh release edit <tag> --draft=false", rather than
+// wait on a webhook that never comes.
 func (f *Forge) CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease bool) error {
-	draft := false
+	draft := true
 	_, resp, err := f.client.Repositories.CreateRelease(ctx, owner, repo, gogithub.CreateReleaseRequest{
 		TagName:    tag,
 		Name:       &name,

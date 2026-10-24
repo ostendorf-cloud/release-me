@@ -25,15 +25,9 @@ archives:
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
 
-release:
-  # publish.yaml only runs goreleaser on an existing, already published
-  # release, so goreleaser never creates one here. mode: keep-existing
-  # (goreleaser's default) only keeps release-me's own release notes
-  # untouched if that ever changes: it governs ReleaseNotesMode and
-  # nothing else, so it does not protect the prerelease flag below.
-  mode: keep-existing
-  # Left unset, this defaults to false and is sent on every update
-  # regardless of mode, overwriting an existing pre-release's flag.
-  # auto recomputes it from the tag, matching what release-me's own
-  # Forge.CreateRelease call already determined for that tag.
-  prerelease: auto
+# No release section: release.yaml always runs this with --skip=publish,
+# since goreleaser's own GitHub release handling cannot see the draft
+# release release-me already created for the tag (GitHub's "get a release
+# by tag" lookup excludes drafts). release.yaml attaches the archives and
+# checksums built here with "gh release upload" and publishes with
+# "gh release edit --draft=false" instead. See docs/adr/0001.

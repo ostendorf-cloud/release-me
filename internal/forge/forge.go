@@ -90,9 +90,13 @@ type Forge interface {
 	// Callers check TagExists first; MoveTag never creates a tag.
 	MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 
-	// CreateRelease creates a non-draft release for tag, with the given
-	// name and body, marked as a pre-release when prerelease is true.
-	// ErrReleaseExists is returned when a release for tag already exists.
+	// CreateRelease creates a release for tag, with the given name and
+	// body, marked as a pre-release when prerelease is true. The release
+	// is always created as a draft: the forge cannot tell whether the
+	// repository has GitHub's immutable releases setting on, and a draft
+	// is exempt from it either way, so a caller can still attach assets
+	// before publishing the release. ErrReleaseExists is returned when a
+	// release for tag already exists.
 	CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease bool) error
 
 	// MergeCommit returns the SHA of the commit a merged pull request was

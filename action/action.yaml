@@ -50,6 +50,16 @@ inputs:
     required: false
     default: ""
 
+outputs:
+  tags:
+    description: >-
+      Newline-separated tags this run tagged and drafted a release for, one per released
+      component, empty when nothing was released or dry-run was set. The release for each tag
+      is a draft: GitHub's immutable releases setting, when on, rejects a change to a published
+      release, so release-me never publishes one itself. Attach any assets and publish each tag
+      yourself, for example with "gh release upload" and "gh release edit --draft=false".
+    value: ${{ steps.release-me.outputs.tags }}
+
 runs:
   using: composite
   steps:
@@ -117,6 +127,7 @@ runs:
       run: ${{ github.action_path }}/resolve-author.sh
 
     - name: Run release-me
+      id: release-me
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
