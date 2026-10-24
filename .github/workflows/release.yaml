@@ -55,7 +55,15 @@ jobs:
     # Every other filter, the release pull request's own labels included,
     # is the comment command's own job: nothing here reads release-me.yaml,
     # so the mention and the label names stay unchecked until it runs.
-    if: github.event_name == 'issue_comment' && github.event.issue.pull_request != null
+    # "user.type != 'Bot'" additionally keeps this job from ever running
+    # on its own reply: without it, a reply naming the mention, however
+    # carefully worded, would still start a new run, and an app
+    # installation token, not GITHUB_TOKEN, has every permission needed
+    # to keep that loop going.
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot'
     steps:
       - name: Mint a release app token
         id: app-token
