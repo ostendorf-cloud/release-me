@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Runs release-me with the inputs mapped to flags, and fills the action's
 # "tags" output from every "released-tag: <tag>" line it prints: the tags
-# this run tagged and drafted a release for, one per released component,
-# so a caller can attach assets and publish those releases itself.
+# this run tagged a release for, one per released component. With
+# draft-until-assets-attach off, the default, each one already published;
+# on, each is still a draft, so a caller attaches assets and publishes
+# those releases itself.
 set -euo pipefail
 
 args=(run)

@@ -1,8 +1,12 @@
 name: publish
 
-# release.yaml already attaches and publishes the binary assets itself,
-# right after release-me drafts a release: a draft fires no "release"
-# webhook, so a second workflow waiting on one would never run. See
+# release-me.yaml sets draft-until-assets-attach: true, so release.yaml
+# already attaches and publishes the binary assets itself, right after
+# release-me drafts a release: a draft fires no "release" webhook, so a
+# second workflow waiting on one would never run here. This job has no
+# "assets" step of its own because of that; a repository that leaves the
+# key off instead gets its release published immediately and keeps that
+# step, triggered by this same "published" webhook. See
 # docs/adr/0001-draft-releases-until-assets-attach.md. Publishing a draft
 # does fire "published" (never "created"), so this workflow still runs,
 # just once release.yaml has finished.

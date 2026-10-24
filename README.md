@@ -59,13 +59,24 @@ in place. `source` only builds this repository's own code: it is `go build`'s wo
 directory for `uses: ./action` from inside this repository, not the caller's checkout for
 `uses: ostendorf-cloud/release-me/action@ref`.
 
-Output: `tags`, the newline-separated tags this run tagged and drafted a release for, one per
-released component, empty when nothing was released. Every release release-me creates is a
-draft: GitHub's immutable releases setting, when on for the repository, rejects a change to a
-published release, so release-me never publishes one itself, draft or not. A caller that
-attaches binary assets, such as a step running `goreleaser` right after this action, publishes
-each tag afterward, for example with `gh release upload` followed by
-`gh release edit --draft=false`; see this repository's own `release.yaml` for the full shape.
+Output: `tags`, the newline-separated tags this run tagged a release for, one per released
+component, empty when nothing was released. `draft-until-assets-attach` in `release-me.yaml`
+decides whether that release publishes immediately or starts as a draft, default `false`, no
+behavior change from before this key existed. See [Configuration](#configuration) for what
+each setting needs from the calling workflow:
+
+- `false`, the default: the release publishes the moment it is tagged, same as every
+  release-me release before this key existed. A caller that attaches binary assets waits on
+  the `release: published` webhook, for example `publish.yaml`'s `image`-shaped job running
+  `goreleaser release --clean` right after.
+- `true`: only a repository with GitHub's immutable releases setting on needs this, since that
+  setting rejects a change to an already published release, assets included, and release-me
+  cannot detect it itself through the API. The release starts as a draft, exempt from
+  immutability, and a draft fires no `release` webhook at all, so the same job that tagged and
+  drafted it must also build, attach and publish it itself, for example with
+  `gh release upload` followed by `gh release edit --draft=false`; see this repository's own
+  `release.yaml` and `scripts/publish-release-assets.sh` for the full shape, the one this
+  repository uses.
 
 Trigger the calling workflow on `push` to the default branch, and also on `pull_request` with
 types `labeled` and `unlabeled`. The labeled trigger reruns `release-me run` right away when a
@@ -95,7 +106,10 @@ nothing earlier to download from. It is tagged and released by hand once: create
 create the GitHub release for it, then run `goreleaser release --clean` locally against that
 tag to build and upload its binaries, archives and checksums file (`task build:release` runs
 the same build as a `--snapshot`, without a tag or an upload, to check the build itself
-locally). `publish.yaml` carries every later release the same way, automatically.
+locally). Every later release carries the same build automatically, through whichever of the
+two workflow shapes above the repository uses: `publish.yaml`'s `release: published`-triggered
+job with `draft-until-assets-attach` left off, or `release.yaml`'s own build-attach-publish
+step with it turned on, the shape this repository's own `release-me.yaml` configures.
 
 Until that first release exists, this repository's own `release.yaml` runs the action with
 `version: source`, which builds `release-me` with `go build` from the checkout instead of
@@ -198,16 +212,22 @@ run, branch content, title and body updated accordingly.
 
 Tags and releases every merged pull request on a component's release branch that still carries
 the `pending` label: a tag on the merge commit, a GitHub release with the pull request's notes
-and changelog, draft always true and prerelease true for a pre-release version. A draft keeps
-the release safe from GitHub's immutable releases feature until a caller, such as a workflow
-that still needs to attach binary assets, publishes it. The label
-swap removes `pending`, and the matching pre-release type label when the version carries one,
-replacing both with `tagged`. The implicit `main` component tags `vX.Y.Z` and names the release
-after the tag, today's shape; a configured component tags `<name>/vX.Y.Z`, or its `tag-prefix`
-followed by the version, and names the release `<name> vX.Y.Z`. A tag that already exists,
-left over from an earlier, interrupted run, is not an error: the release and the label swap
-still happen, so the pull request does not stay pending forever, and the run reports it as
-already tagged.
+and changelog, prerelease true for a pre-release version. Draft follows `draft-until-
+assets-attach`, default `false`: off, the release publishes immediately; on, it starts a
+draft, exempt from GitHub's immutable releases feature, until a caller, such as a workflow
+step that still needs to attach binary assets, publishes it. The label swap removes `pending`,
+and the matching pre-release type label when the version carries one, replacing both with
+`tagged`. The implicit `main` component tags `vX.Y.Z` and names the release after the tag,
+today's shape; a configured component tags `<name>/vX.Y.Z`, or its `tag-prefix` followed by
+the version, and names the release `<name> vX.Y.Z`. A tag that already exists, left over from
+an earlier, interrupted run, is not an error: the release and the label swap still happen, so
+the pull request does not stay pending forever, and the run reports it as already tagged.
+
+With `draft-until-assets-attach: true`, `release` also looks at every merged pull request
+already carrying the `tagged` label: one whose release is still a draft had its asset attach or
+publish step fail after an earlier run tagged and drafted it, so this reprints the same
+`released-tag` marker for it, without creating anything again, letting the workflow's asset
+step retry. Off, the default, this never runs: a published release has nothing left to resume.
 
 With `major-tag: true`, every stable release additionally creates or force-moves the major
 tag, `vX` for the implicit `main` component or its tag prefix followed by `X` for a configured
@@ -484,6 +504,14 @@ files:
 - `versioning`: `independent` (default), `locked` or `linked`. See
   [Versioning modes](#versioning-modes). There is no per-component override: it applies to the
   whole family.
+- `draft-until-assets-attach`: drafts every release instead of publishing it immediately,
+  default `false`. There is no per-component override: it applies to the whole repository.
+  Only a repository with GitHub's immutable releases setting turned on needs `true`; it
+  rejects any later change to a published release, assets included, and release-me has no way
+  to detect that setting through the API. See `release` above for what `true` changes, and
+  [Install](#install) for the calling workflow each setting needs: `publish.yaml`'s own
+  webhook-triggered asset step for `false`, `release.yaml` attaching and publishing the
+  release itself for `true`.
 - `components`: maps a name to a `path` and optional overrides of `initial-version`,
   `bump-minor-pre-major`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
   `changelog`. A key

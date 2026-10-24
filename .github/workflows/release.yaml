@@ -53,10 +53,13 @@ jobs:
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
         if: steps.release-me.outputs.tags != ''
 
-      # release-me's own release is always a draft, so publishing it is on
-      # this same job: a draft fires no "release" webhook at all, so a
-      # second, webhook-triggered workflow would never run. See
-      # docs/adr/0001-draft-releases-until-assets-attach.md.
+      # release-me.yaml sets draft-until-assets-attach: true, so this
+      # repository's own release is a draft, and publishing it is on this
+      # same job: a draft fires no "release" webhook at all, so a second,
+      # webhook-triggered workflow would never run. A repository that
+      # leaves the key off instead publishes immediately and attaches
+      # assets the old way, through publish.yaml's own webhook-triggered
+      # job. See docs/adr/0001-draft-releases-until-assets-attach.md.
       - name: Build, attach and publish the assets for every tag just released
         if: steps.release-me.outputs.tags != ''
         env:
