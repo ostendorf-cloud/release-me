@@ -248,6 +248,16 @@ func (f *Forge) MergeCommit(ctx context.Context, owner, repo string, number int)
 	return pr.GetMergeCommitSHA(), nil
 }
 
+// CreateComment implements forge.Forge. A pull request is an issue on the
+// same number for this endpoint, go-github's own split between the two
+// APIs notwithstanding.
+func (f *Forge) CreateComment(ctx context.Context, owner, repo string, number int, body string) error {
+	if _, _, err := f.client.Issues.CreateComment(ctx, owner, repo, number, gogithub.IssueCommentRequest{Body: body}); err != nil {
+		return fmt.Errorf("github: comment on pull request #%d: %w", number, err)
+	}
+	return nil
+}
+
 // toPullRequest converts a go-github pull request into a forge.PullRequest.
 //
 // Merged reads both the single pull request endpoint's merged field and the

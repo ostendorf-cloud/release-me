@@ -98,4 +98,9 @@ type Forge interface {
 	// MergeCommit returns the SHA of the commit a merged pull request was
 	// merged as.
 	MergeCommit(ctx context.Context, owner, repo string, number int) (string, error)
+
+	// CreateComment posts body as a new comment on pull request number: a
+	// release pull request's own comment thread, not a threaded reply to
+	// any one existing comment.
+	CreateComment(ctx context.Context, owner, repo string, number int, body string) error
 }
