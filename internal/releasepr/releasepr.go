@@ -35,15 +35,23 @@ type GuideLabels struct {
 }
 
 // Body renders the release pull request body: the version line, the "How
-// this release works" guide, the preserved release-me-notes block when
-// notes is not empty, then the changelog for the version collapsed inside
-// a <details> block. tag is the tag merging this pull request creates,
-// and labels names the repository's configured label values, so the
-// guide always matches what merging and labelling actually do.
-func Body(version, tag string, labels GuideLabels, notes, changelogSection string) string {
+// this release works" guide, the preserved release-me-version override
+// block when versionOverride is not empty, the preserved release-me-notes
+// block when notes is not empty, then the changelog for the version
+// collapsed inside a <details> block. tag is the tag merging this pull
+// request creates, and labels names the repository's configured label
+// values, so the guide always matches what merging and labelling actually
+// do.
+func Body(version, tag string, labels GuideLabels, notes, versionOverride, changelogSection string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Release v%s\n\n", version)
 	b.WriteString(guideBlock(tag, labels))
+
+	if versionOverride != "" {
+		b.WriteString("\n```release-me-version\n")
+		b.WriteString(versionOverride)
+		b.WriteString("\n```\n")
+	}
 
 	if notes != "" {
 		b.WriteString("\n```release-me-notes\n")
@@ -68,6 +76,9 @@ func guideBlock(tag string, labels GuideLabels) string {
 		"With `major-tag` enabled, the moving major tag follows a stable release.\n", tag, labels.Tagged)
 	b.WriteString("- Release notes: add a fenced block with the info string `release-me-notes` anywhere in this body. " +
 		"It is rendered above the entries in the changelog file and in the release and survives updates.\n")
+	b.WriteString("- Force the next version: add a fenced block with the info string `release-me-version` " +
+		"containing `X.Y.Z` anywhere in this body, or comment the configured mention followed by " +
+		"`release-as X.Y.Z`. It replaces the computed version until the pull request merges or the block is removed.\n")
 	if enabled := preReleaseLabelList(labels); enabled != "" {
 		fmt.Fprintf(&b, "- Pre-release: add the label %s. The next run turns the version into `X.Y.Z-<type>.N`. "+
 			"Remove the label to go back to the stable version.\n", enabled)
@@ -113,6 +124,56 @@ func ExtractNotes(body string) (notes string, ok bool) {
 		return "", false
 	}
 	return strings.TrimRight(m[1], "\n"), true
+}
+
+// versionBlock matches the "release-me-version" fenced block of a release
+// pull request body, the version override a write-access commenter's
+// "release-as" command, or a hand edit, sets. Parallel to notesBlock: both
+// fences are anchored to the start of their own line, and the distinct info
+// string keeps it from ever matching the "release-me-notes" block.
+var versionBlock = regexp.MustCompile("(?sm)^```release-me-version[ \t]*$\n(.*?)^```[ \t]*$")
+
+// ExtractVersionOverride returns the free text of the release-me-version
+// fenced block in body, trimmed. ok is false when body carries no such
+// block. The text is read back exactly as written; a caller that needs a
+// real version decides for itself whether it parses.
+func ExtractVersionOverride(body string) (version string, ok bool) {
+	m := versionBlock.FindStringSubmatch(body)
+	if m == nil {
+		return "", false
+	}
+	return strings.TrimSpace(m[1]), true
+}
+
+// SetNotes returns body with its release-me-notes fenced block's content
+// replaced by notes, or a new block appended at the end when body carries
+// none yet. It is how a "release-notes" comment command sets the block
+// immediately, without the full render Body does: the next pr run's own
+// render moves it to Body's usual place.
+func SetNotes(body, notes string) string {
+	return setFencedBlock(body, "release-me-notes", notesBlock, notes)
+}
+
+// SetVersionOverride returns body with its release-me-version fenced
+// block's content replaced by version, or a new block appended at the end
+// when body carries none yet. It is how a "release-as" comment command
+// sets the override immediately, without the full render Body does: the
+// next pr run's own render moves it to Body's usual place.
+func SetVersionOverride(body, version string) string {
+	return setFencedBlock(body, "release-me-version", versionBlock, version)
+}
+
+// setFencedBlock replaces pattern's match in body with a fenced block
+// carrying info and content, or appends that block at the end of body when
+// pattern does not match: the shape every comment command that edits a
+// release pull request body in place, outside of Body's own full render,
+// shares.
+func setFencedBlock(body, info string, pattern *regexp.Regexp, content string) string {
+	block := fmt.Sprintf("```%s\n%s\n```", info, content)
+	if pattern.MatchString(body) {
+		return pattern.ReplaceAllLiteralString(body, block)
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + block + "\n"
 }
 
 // changelogDetails matches the collapsed changelog block of a release pull

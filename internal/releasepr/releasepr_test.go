@@ -46,6 +46,9 @@ func guideText(tag string, labels releasepr.GuideLabels) string {
 		"With `major-tag` enabled, the moving major tag follows a stable release.\n" +
 		"- Release notes: add a fenced block with the info string `release-me-notes` anywhere in this body. " +
 		"It is rendered above the entries in the changelog file and in the release and survives updates.\n" +
+		"- Force the next version: add a fenced block with the info string `release-me-version` " +
+		"containing `X.Y.Z` anywhere in this body, or comment the configured mention followed by " +
+		"`release-as X.Y.Z`. It replaces the computed version until the pull request merges or the block is removed.\n" +
 		"- Pre-release: add the label `" + labels.Alpha + "`, `" + labels.Beta + "` or `" + labels.Rc + "`. " +
 		"The next run turns the version into `X.Y.Z-<type>.N`. Remove the label to go back to the stable version.\n" +
 		"- Hide or rewrite a change: a fenced block `release-me` in the changed pull request's body, " +
@@ -85,7 +88,7 @@ func TestBodyRendersTheVersionGuideNotesAndChangelog(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := releasepr.Body("1.2.3", "v1.2.3", testLabels, tc.notes, tc.section)
+			got := releasepr.Body("1.2.3", "v1.2.3", testLabels, tc.notes, "", tc.section)
 			if got != tc.want {
 				t.Fatalf("Body() = %q, want %q", got, tc.want)
 			}
@@ -106,7 +109,7 @@ func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 	}
 	section := "## v0.4.0 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 
-	got := releasepr.Body("0.4.0", "frontend/v0.4.0", labels, "", section)
+	got := releasepr.Body("0.4.0", "frontend/v0.4.0", labels, "", "", section)
 
 	for _, want := range []string{
 		"tags `frontend/v0.4.0`",
@@ -124,7 +127,7 @@ func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 // the same way a human reading the collapsed section expects.
 func TestBodyRendersTheGuideExactlyOnce(t *testing.T) {
 	t.Parallel()
-	got := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n")
+	got := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "", "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n")
 
 	if n := strings.Count(got, "How this release works"); n != 1 {
 		t.Fatalf("Body() contains the guide %d times, want exactly 1:\n%s", n, got)
@@ -172,7 +175,7 @@ func TestBodyAndExtractionsRoundTrip(t *testing.T) {
 	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 	notes := "Upgrade note: run the migration first."
 
-	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, notes, section)
+	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, notes, "", section)
 
 	gotNotes, ok := releasepr.ExtractNotes(body)
 	if !ok || gotNotes != notes {
@@ -191,7 +194,7 @@ func TestBodyAndExtractionsRoundTrip(t *testing.T) {
 func TestReleaseBodyWithoutNotes(t *testing.T) {
 	t.Parallel()
 	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
-	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", section)
+	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "", section)
 
 	want := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing"
 	if got := releasepr.ReleaseBody(body); got != want {
@@ -206,7 +209,7 @@ func TestReleaseBodyWithoutNotes(t *testing.T) {
 func TestReleaseBodyDoesNotIncludeTheGuide(t *testing.T) {
 	t.Parallel()
 	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
-	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, "Upgrade note.", section)
+	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, "Upgrade note.", "", section)
 
 	got := releasepr.ReleaseBody(body)
 	if strings.Contains(got, "How this release works") || strings.Contains(got, "<details>") {
@@ -246,7 +249,7 @@ func TestExtractDate(t *testing.T) {
 		{
 			name: "reads the heading date",
 			body: releasepr.Body(
-				"1.2.3", "v1.2.3", testLabels, "", "## v1.2.3 (2026-03-14)\n\n### Features\n\n- add the thing\n",
+				"1.2.3", "v1.2.3", testLabels, "", "", "## v1.2.3 (2026-03-14)\n\n### Features\n\n- add the thing\n",
 			),
 			wantOK: true,
 			want:   "2026-03-14",
@@ -254,7 +257,7 @@ func TestExtractDate(t *testing.T) {
 		{
 			name: "reads the heading date of a pre-release version",
 			body: releasepr.Body(
-				"1.2.3-rc.1", "v1.2.3-rc.1", testLabels, "", "## v1.2.3-rc.1 (2026-03-14)\n\n### Features\n\n- add the thing\n",
+				"1.2.3-rc.1", "v1.2.3-rc.1", testLabels, "", "", "## v1.2.3-rc.1 (2026-03-14)\n\n### Features\n\n- add the thing\n",
 			),
 			wantOK: true,
 			want:   "2026-03-14",
@@ -303,7 +306,7 @@ func TestBodyNamesOnlyTheEnabledPreReleaseLabels(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := releasepr.Body("0.4.0", "v0.4.0", tc.labels, "", section)
+			got := releasepr.Body("0.4.0", "v0.4.0", tc.labels, "", "", section)
 			if tc.want != "" && !strings.Contains(got, tc.want) {
 				t.Fatalf("Body() = %q, want it to contain %q", got, tc.want)
 			}
@@ -311,5 +314,103 @@ func TestBodyNamesOnlyTheEnabledPreReleaseLabels(t *testing.T) {
 				t.Fatalf("Body() = %q, want no %q line", got, tc.wantNot)
 			}
 		})
+	}
+}
+
+func TestBodyRendersTheVersionOverrideBlock(t *testing.T) {
+	t.Parallel()
+	section := "## v2.0.0 (2026-01-02)\n\n### Features\n\n- add the thing\n"
+
+	got := releasepr.Body("2.0.0", "v2.0.0", testLabels, "", "2.0.0", section)
+
+	want := "```release-me-version\n2.0.0\n```"
+	if !strings.Contains(got, want) {
+		t.Fatalf("Body() = %q, want it to contain %q", got, want)
+	}
+}
+
+func TestBodyRendersNoVersionOverrideBlockWhenEmpty(t *testing.T) {
+	t.Parallel()
+	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
+
+	got := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "", section)
+
+	if strings.Contains(got, "```release-me-version") {
+		t.Fatalf("Body() = %q, want no release-me-version block", got)
+	}
+}
+
+func TestExtractVersionOverride(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		body     string
+		wantOK   bool
+		wantText string
+	}{
+		{name: "no block", body: "Release v1.2.3\n", wantOK: false},
+		{
+			name:     "a version override block",
+			body:     "Release v1.2.3\n\n```release-me-version\n2.0.0\n```\n\n<details>...",
+			wantOK:   true,
+			wantText: "2.0.0",
+		},
+		{
+			name:   "never matches the differently named notes block",
+			body:   "Release v1.2.3\n\n```release-me-notes\n2.0.0\n```\n",
+			wantOK: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			text, ok := releasepr.ExtractVersionOverride(tc.body)
+			if ok != tc.wantOK {
+				t.Fatalf("ExtractVersionOverride() ok = %v, want %v", ok, tc.wantOK)
+			}
+			if text != tc.wantText {
+				t.Fatalf("ExtractVersionOverride() = %q, want %q", text, tc.wantText)
+			}
+		})
+	}
+}
+
+func TestSetVersionOverrideAppendsWhenAbsentAndReplacesWhenPresent(t *testing.T) {
+	t.Parallel()
+	body := "Release v1.2.3\n\n<details><summary>How this release works</summary>...</details>\n"
+
+	withOverride := releasepr.SetVersionOverride(body, "2.0.0")
+	got, ok := releasepr.ExtractVersionOverride(withOverride)
+	if !ok || got != "2.0.0" {
+		t.Fatalf("ExtractVersionOverride() = (%q, %v), want (%q, true)", got, ok, "2.0.0")
+	}
+
+	replaced := releasepr.SetVersionOverride(withOverride, "2.1.0")
+	if n := strings.Count(replaced, "release-me-version"); n != 1 {
+		t.Fatalf("SetVersionOverride() produced %d blocks, want exactly 1:\n%s", n, replaced)
+	}
+	got, ok = releasepr.ExtractVersionOverride(replaced)
+	if !ok || got != "2.1.0" {
+		t.Fatalf("ExtractVersionOverride() = (%q, %v), want (%q, true)", got, ok, "2.1.0")
+	}
+}
+
+func TestSetNotesAppendsWhenAbsentAndReplacesWhenPresent(t *testing.T) {
+	t.Parallel()
+	body := "Release v1.2.3\n\n<details><summary>How this release works</summary>...</details>\n"
+
+	withNotes := releasepr.SetNotes(body, "Upgrade note.")
+	got, ok := releasepr.ExtractNotes(withNotes)
+	if !ok || got != "Upgrade note." {
+		t.Fatalf("ExtractNotes() = (%q, %v), want (%q, true)", got, ok, "Upgrade note.")
+	}
+
+	replaced := releasepr.SetNotes(withNotes, "Different note.")
+	if n := strings.Count(replaced, "release-me-notes"); n != 1 {
+		t.Fatalf("SetNotes() produced %d blocks, want exactly 1:\n%s", n, replaced)
+	}
+	got, ok = releasepr.ExtractNotes(replaced)
+	if !ok || got != "Different note." {
+		t.Fatalf("ExtractNotes() = (%q, %v), want (%q, true)", got, ok, "Different note.")
 	}
 }
