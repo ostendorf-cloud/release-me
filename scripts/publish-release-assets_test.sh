@@ -17,11 +17,16 @@ trap 'rm -rf "${work}"' EXIT
 fake_bin="${work}/fake-bin"
 mkdir -p "${fake_bin}"
 
-# fake-bin/git only logs the call: publish-release-assets.sh only ever
-# calls "git fetch", never anything that needs a real repository.
+# fake-bin/git logs the call. "rev-parse" answers a fixed fake SHA, the
+# only output publish-release-assets.sh reads from git, so the script's
+# own "restore the original ref" checkout at the end has something to
+# check out; "checkout" and "fetch" need no output at all.
 {
   echo '#!/usr/bin/env bash'
   echo 'echo "git $*" >>"${CALL_LOG}"'
+  echo 'if [ "$1" = "rev-parse" ]; then'
+  echo '  echo fake-sha'
+  echo 'fi'
 } >"${fake_bin}/git"
 chmod +x "${fake_bin}/git"
 
@@ -80,8 +85,14 @@ run_case() {
   rm -rf "${build_dir}"
   mkdir -p "${build_dir}"
 
-  if ! (cd "${build_dir}" && TAGS="${tags}" "${script}") >"${work}/stdout" 2>"${work}/stderr"; then
-    echo "FAIL ${case_name}: exit status = $?, want 0"
+  local status
+  if (cd "${build_dir}" && TAGS="${tags}" "${script}") >"${work}/stdout" 2>"${work}/stderr"; then
+    status=0
+  else
+    status=$?
+  fi
+  if [ "${status}" -ne 0 ]; then
+    echo "FAIL ${case_name}: exit status = ${status}, want 0"
     echo "stderr: $(cat "${work}/stderr")"
     failures=$((failures + 1))
     return
@@ -145,23 +156,31 @@ run_case "nothing released makes no call at all" "" ""
 
 run_case "a draft release is built, attached and published" "v1.0.0-draft" \
   "git fetch origin --tags --force
+git rev-parse HEAD
 gh release view v1.0.0-draft --json isDraft --jq .isDraft
+git checkout --quiet --detach v1.0.0-draft
 goreleaser release --clean --skip=announce,validate,publish
 gh release upload v1.0.0-draft dist/fixture_linux_amd64.tar.gz dist/fixture_1.0.0_checksums.txt --clobber
-gh release edit v1.0.0-draft --draft=false"
+gh release edit v1.0.0-draft --draft=false
+git checkout --quiet fake-sha"
 
 run_case "an already published release is left alone" "v1.0.0-published" \
   "git fetch origin --tags --force
-gh release view v1.0.0-published --json isDraft --jq .isDraft"
+git rev-parse HEAD
+gh release view v1.0.0-published --json isDraft --jq .isDraft
+git checkout --quiet fake-sha"
 
 run_case "every tag in a multi-line TAGS is handled" "v1.0.0-draft
 v2.0.0-published" \
   "git fetch origin --tags --force
+git rev-parse HEAD
 gh release view v1.0.0-draft --json isDraft --jq .isDraft
+git checkout --quiet --detach v1.0.0-draft
 goreleaser release --clean --skip=announce,validate,publish
 gh release upload v1.0.0-draft dist/fixture_linux_amd64.tar.gz dist/fixture_1.0.0_checksums.txt --clobber
 gh release edit v1.0.0-draft --draft=false
-gh release view v2.0.0-published --json isDraft --jq .isDraft"
+gh release view v2.0.0-published --json isDraft --jq .isDraft
+git checkout --quiet fake-sha"
 
 run_failure_case \
   "a gh release view failure stops the script instead of being treated as already published" \

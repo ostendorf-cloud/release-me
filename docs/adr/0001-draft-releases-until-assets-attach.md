@@ -15,7 +15,10 @@ Accepted
   exists and is immutable, it cannot be updated", confirmed live for v0.1.0 and v0.1.1.
 - A release that already hit this cannot be recovered: deleting and recreating it under the
   same tag is permanently blocked ("tag_name was used by an immutable release"), confirmed by
-  a live API probe.
+  a live API probe. v0.1.0 and v0.1.1 have both since been deleted outright, tag and release;
+  a fresh probe afterward, drafting and then trying to publish a new release at either tag
+  name, still fails with the same message. Neither version comes back, no matter what, if
+  anything, exists at that tag name today.
 - GitHub's REST API has no field on the repository object exposing the immutable releases
   setting, so release-me cannot read or react to it; the fix must work whether the setting is
   on or off.
@@ -27,11 +30,13 @@ Accepted
   404 for a draft; verified live against this repository. `gh release upload`, `gh release
   view` and `gh release edit --draft=false` all resolve a draft release by tag correctly,
   also verified live.
-- No webhook `release` activity type fires when a draft release is created: `published` and
-  `prereleased` fire only on an actual publish, and `created`/`edited`/`deleted` are
-  suppressed for drafts, confirmed against GitHub's events-that-trigger-workflows docs.
-  Converting a draft to published fires `published` (never `created`), even for a
-  pre-release, confirmed against the same docs.
+- No webhook `release` activity type fires when a draft release is created: `created`,
+  `edited` and `deleted` are suppressed outright for drafts, confirmed against GitHub's
+  events-that-trigger-workflows docs. Converting a draft to published fires `published`, never
+  `created`, even for a pre-release. `prereleased` does not fire at all for a pre-release
+  published from a draft release, only `published` does, confirmed against the same docs: a
+  workflow that subscribes to `prereleased` instead of `published` would never see one of
+  release-me's own pre-releases.
 
 ## Decision
 
@@ -84,6 +89,17 @@ webhook-triggered workflow.
   also look at merged pull requests already carrying the tagged label and check their release's
   draft status directly, as the Decision section above describes; a rerun of the whole pipeline,
   not only of release-me's own step, still finds and finishes a release orphaned this way.
+- Pull request #50 (issue #49) rewrites `CreateRelease`'s 422 handling in
+  `internal/forge/github`, to distinguish a genuine "already exists" 422 from any other reason
+  GitHub might return one. This branch left that handling as it already was, pre-#50, since
+  the two touch the same function for unrelated reasons; they will need an ordinary rebase or
+  merge once both land, but neither depends on the other landing first.
+- Not verified in this environment: a draft release's assets actually attaching and
+  publishing against a repository with GitHub's immutable releases setting turned on. That
+  setting is off on this repository today, and no `release.yaml` run has exercised the new
+  path end to end, so the immutable-releases-specific half of this fix rests on GitHub's
+  documented behavior and this ADR's own live probes against individual `gh` and API calls,
+  not on an observed, complete run.
 
 ## Alternatives
 

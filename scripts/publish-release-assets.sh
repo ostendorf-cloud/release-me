@@ -25,6 +25,17 @@ fi
 
 git fetch origin --tags --force
 
+# Every tag gets checked out by hand before its build: the job's checkout
+# step may sit on the base branch or a push's own commit, not necessarily
+# the merge commit release-me tagged, in particular on the pull_request
+# labeled/unlabeled trigger, and a locked family can tag more than one
+# component from more than one merge commit in the same run. goreleaser
+# must build the exact commit each tag names, never whatever the job
+# happens to have checked out. original_ref is restored once every tag is
+# done, by commit SHA rather than branch name: a push-triggered run leaves
+# the checkout detached, with no branch name to restore.
+original_ref="$(git rev-parse HEAD)"
+
 while IFS= read -r tag; do
   if [ -z "${tag}" ]; then
     continue
@@ -52,8 +63,10 @@ while IFS= read -r tag; do
     ;;
   esac
 
+  echo "checking out ${tag} to build its exact source"
+  git checkout --quiet --detach "${tag}"
+
   echo "building archives for ${tag}"
-  rm -rf dist
   GORELEASER_CURRENT_TAG="${tag}" goreleaser release --clean --skip=announce,validate,publish
 
   echo "attaching assets to the draft release ${tag}"
@@ -62,3 +75,5 @@ while IFS= read -r tag; do
   echo "publishing ${tag}"
   gh release edit "${tag}" --draft=false
 done <<<"${TAGS}"
+
+git checkout --quiet "${original_ref}"
