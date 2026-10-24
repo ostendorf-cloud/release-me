@@ -24,6 +24,10 @@ var ErrTagExists = errors.New("tag already exists")
 // release for a tag that already has one.
 var ErrReleaseExists = errors.New("release already exists")
 
+// ErrReleaseNotFound is returned when IsReleaseDraft is asked about a tag
+// that has no release at all.
+var ErrReleaseNotFound = errors.New("release not found")
+
 // ErrUnauthorized is returned when the forge rejects the request's
 // credentials, as opposed to any other failure.
 var ErrUnauthorized = errors.New("unauthorized")
@@ -98,6 +102,16 @@ type Forge interface {
 	// before publishing the release. ErrReleaseExists is returned when a
 	// release for tag already exists.
 	CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease bool) error
+
+	// IsReleaseDraft reports whether the release for tag is still a
+	// draft, as opposed to already published. ErrReleaseNotFound is
+	// returned when tag has no release at all. A caller uses this to resume a
+	// release that was tagged and drafted by an earlier run, but never
+	// got its assets attached and published: looking it up by tag alone,
+	// the way CreateRelease's own duplicate check or a plain "get a
+	// release by tag" would, excludes drafts, so an implementation must
+	// find it some other way.
+	IsReleaseDraft(ctx context.Context, owner, repo, tag string) (bool, error)
 
 	// MergeCommit returns the SHA of the commit a merged pull request was
 	// merged as.

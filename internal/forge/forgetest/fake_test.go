@@ -315,6 +315,45 @@ func TestFakeCreateReleaseReturnsErrReleaseExistsForAnExistingTag(t *testing.T) 
 	}
 }
 
+func TestFakeCreateReleaseRecordsItAsADraft(t *testing.T) {
+	t.Parallel()
+	f := &forgetest.Fake{}
+
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false); err != nil {
+		t.Fatalf("CreateRelease() error = %v", err)
+	}
+	draft, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	if err != nil {
+		t.Fatalf("IsReleaseDraft() error = %v", err)
+	}
+	if !draft {
+		t.Fatalf("IsReleaseDraft() = %v, want true: CreateRelease always drafts, the same as the real forge", draft)
+	}
+}
+
+func TestFakeIsReleaseDraftReportsAPublishedRelease(t *testing.T) {
+	t.Parallel()
+	f := &forgetest.Fake{ReleaseDrafts: map[string]bool{"v0.1.0": false}}
+
+	draft, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	if err != nil {
+		t.Fatalf("IsReleaseDraft() error = %v", err)
+	}
+	if draft {
+		t.Fatalf("IsReleaseDraft() = %v, want false", draft)
+	}
+}
+
+func TestFakeIsReleaseDraftReturnsErrReleaseNotFoundForAnUnknownTag(t *testing.T) {
+	t.Parallel()
+	f := &forgetest.Fake{}
+
+	_, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	if !errors.Is(err, forge.ErrReleaseNotFound) {
+		t.Fatalf("IsReleaseDraft() error = %v, want %v", err, forge.ErrReleaseNotFound)
+	}
+}
+
 func TestFakeMergeCommitReturnsTheConfiguredSHA(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{MergeCommits: map[int]string{11: "deadbeef"}}

@@ -188,6 +188,60 @@ func TestRunFailsLoudlyWhenCreateReleaseReturnsANonRecoverableError(t *testing.T
 	}
 }
 
+// TestRunResumesAnAlreadyTaggedPullRequestWhoseReleaseIsStillADraft
+// reproduces the orphaned-draft hole left by the Tagged label swapping in
+// immediately after CreateRelease, before any asset attaches or the
+// release publishes: a pull request already carrying Tagged, exactly what
+// an earlier, successful releaseOne call leaves behind, still has its
+// GitHub release sitting as a draft, because the asset attach or publish
+// step that was meant to run next, in the same or a later workflow run,
+// never finished. Run must find it anyway and resume it, instead of only
+// ever looking at pull requests still labeled Pending.
+func TestRunResumesAnAlreadyTaggedPullRequestWhoseReleaseIsStillADraft(t *testing.T) {
+	t.Parallel()
+	pr := forge.PullRequest{Number: 9, Title: "chore(main): release v0.2.0", Labels: []string{"release: tagged"}, Merged: true}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		ReleaseDrafts: map[string]bool{"v0.2.0": true},
+	}
+
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(results) != 1 || results[0].Tag != "v0.2.0" || results[0].Message != "resuming unpublished release v0.2.0" {
+		t.Fatalf("Run() = %+v, want one resumed result for the still-draft release", results)
+	}
+	// Resuming writes nothing: the tag and the release already exist, from
+	// the run that tagged this pull request and swapped its label.
+	// Calling CreateTag or CreateRelease again would risk a second,
+	// duplicate draft for the same tag instead of finishing the first.
+	if len(f.CreatedTags) != 0 || len(f.CreatedReleases) != 0 || len(f.SetLabelsCalls) != 0 {
+		t.Fatalf("resume wrote something: tags=%+v releases=%+v labels=%+v", f.CreatedTags, f.CreatedReleases, f.SetLabelsCalls)
+	}
+}
+
+func TestRunDoesNotResumeAnAlreadyTaggedPullRequestOnceItsReleaseIsPublished(t *testing.T) {
+	t.Parallel()
+	pr := forge.PullRequest{Number: 9, Title: "chore(main): release v0.2.0", Labels: []string{"release: tagged"}, Merged: true}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		ReleaseDrafts: map[string]bool{"v0.2.0": false},
+	}
+
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, discardLogger())
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("Run() = %+v, want no results once the release is already published", results)
+	}
+}
+
 func TestRunIgnoresAPullRequestWithoutThePendingLabel(t *testing.T) {
 	t.Parallel()
 	pr := forge.PullRequest{Number: 9, Title: "chore(main): release v0.2.0", Labels: []string{"release: tagged"}, Merged: true}
@@ -616,5 +670,39 @@ func TestRunLockedDryRunWritesNothing(t *testing.T) {
 	}
 	if len(f.CreatedTags) != 0 || len(f.CreatedReleases) != 0 || len(f.SetLabelsCalls) != 0 {
 		t.Fatalf("dry run wrote something: tags=%+v releases=%+v labels=%+v", f.CreatedTags, f.CreatedReleases, f.SetLabelsCalls)
+	}
+}
+
+// TestRunLockedResumesOnlyTheComponentWhoseReleaseIsStillADraft reproduces
+// the same orphaned-draft hole as the single-component case, for a locked
+// family: the shared pull request already carries Tagged, from an earlier
+// run that tagged and drafted every component's release, but the asset
+// step only finished publishing one of them. RunLocked must resume only
+// the one still a draft, by name, not by position: a caller rendering one
+// result per component cannot assume every result belongs to the next
+// component in comps, once a resume can skip one already published.
+func TestRunLockedResumesOnlyTheComponentWhoseReleaseIsStillADraft(t *testing.T) {
+	t.Parallel()
+	pr := forge.PullRequest{Number: 9, Title: "chore: release v0.3.0 (a, b)", Labels: []string{"release: tagged"}, Merged: true}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		ReleaseDrafts: map[string]bool{"a/v0.3.0": false, "b/v0.3.0": true},
+	}
+	comps := []release.Component{
+		{Name: "a", Branch: "release-me/main", TagPrefix: "a/v", Multi: true},
+		{Name: "b", Branch: "release-me/main", TagPrefix: "b/v", Multi: true},
+	}
+
+	results, err := release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, discardLogger())
+	if err != nil {
+		t.Fatalf("RunLocked() error = %v", err)
+	}
+	if len(results) != 1 || results[0].Name != "b" || results[0].Tag != "b/v0.3.0" {
+		t.Fatalf("RunLocked() = %+v, want only component b resumed", results)
+	}
+	if len(f.CreatedTags) != 0 || len(f.CreatedReleases) != 0 || len(f.SetLabelsCalls) != 0 {
+		t.Fatalf("resume wrote something: tags=%+v releases=%+v labels=%+v", f.CreatedTags, f.CreatedReleases, f.SetLabelsCalls)
 	}
 }

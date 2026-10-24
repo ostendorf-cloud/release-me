@@ -91,6 +91,65 @@ func TestDoReleaseStillFinishesAnAlreadyTaggedPullRequest(t *testing.T) {
 	}
 }
 
+// TestDoReleaseResumesAnOrphanedDraftOnARerunOfTheWholePipeline reproduces
+// issue #47's second blocker end to end, at the level release.yaml itself
+// drives: a first run tags, drafts and swaps the label exactly as today,
+// then the asset attach or publish step that was meant to run right after
+// it, in the same workflow job, fails: GitHub still shows the release as a
+// draft, release-me's own run already exited 0, so the pull request is
+// left carrying Tagged, not Pending. A rerun of the whole pipeline, the
+// obvious operator reaction, calls doRelease again exactly as release.yaml
+// would; before this fix it found no pending pull request, emitted no
+// released-tag marker and skipped the asset step a second time, orphaning
+// the draft forever. It must instead find the still-draft release by its
+// Tagged pull request and reprint the marker, without creating a second
+// tag, a second release or swapping the label again.
+func TestDoReleaseResumesAnOrphanedDraftOnARerunOfTheWholePipeline(t *testing.T) {
+	dir, _ := newPRRepo(t)
+	commitEntry(t, dir, "chore: initial commit")
+
+	pr := forge.PullRequest{Number: 9, Title: "chore(main): release v0.1.0", Labels: []string{"release: pending"}, Merged: true}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: mainBranch, State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		MergeCommits: map[int]string{9: "deadbeef"},
+		PRLabels:     map[int][]string{9: {"release: pending"}},
+	}
+	var stdout bytes.Buffer
+
+	// The first run: release-me tags, drafts and swaps the label, exactly
+	// as release.yaml's own step does today. The asset attach and publish
+	// step that is meant to run right after it is not part of this test:
+	// it is a shell step, not release-me's own code, and it is the one
+	// that fails, leaving the release a draft.
+	if err := doRelease(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
+		t.Fatalf("doRelease() first run error = %v", err)
+	}
+	if len(f.CreatedTags) != 1 || len(f.CreatedReleases) != 1 || len(f.SetLabelsCalls) != 1 {
+		t.Fatalf("first run: tags=%+v releases=%+v labels=%+v", f.CreatedTags, f.CreatedReleases, f.SetLabelsCalls)
+	}
+
+	// The pull request now carries the swapped label, read back from the
+	// forge exactly as release.yaml's next run would see it; the release
+	// stays a draft, since the asset step never published it.
+	f.ListResponses[0].PullRequests[0].Labels = []string{"release: tagged"}
+	stdout.Reset()
+
+	if err := doRelease(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
+		t.Fatalf("doRelease() rerun error = %v", err)
+	}
+	if len(f.CreatedTags) != 1 || len(f.CreatedReleases) != 1 {
+		t.Fatalf("rerun recreated the tag or the release: tags=%+v releases=%+v", f.CreatedTags, f.CreatedReleases)
+	}
+	if len(f.SetLabelsCalls) != 1 {
+		t.Fatalf("rerun swapped the label again: %+v", f.SetLabelsCalls)
+	}
+	if !strings.Contains(stdout.String(), "released-tag: v0.1.0") {
+		t.Fatalf("stdout = %q, want the rerun to find and finish the still-draft release", stdout.String())
+	}
+}
+
 func TestDoReleasePrintsNothingToReleaseWithoutAMergedPendingPullRequest(t *testing.T) {
 	dir, _ := newPRRepo(t)
 	commitEntry(t, dir, "chore: initial commit")

@@ -50,6 +50,18 @@ webhook-triggered workflow.
   [published]` trigger unchanged, since publishing a draft fires `published`.
 - No `Forge.PublishRelease` method was added: nothing in release-me's own Go commands needs to
   un-draft a release, only the workflow does, once assets are attached, through `gh`.
+- The pull request's label still swaps from pending to tagged immediately after
+  `CreateRelease` succeeds, the same point as before this ADR: that swap is release-me's own
+  signal that a pull request already has a tag and a draft release, the one issue #45's fix
+  relies on, not a signal that the release is finished. `Run` and `RunLocked` additionally scan
+  merged pull requests already carrying the tagged label, through a new
+  `Forge.IsReleaseDraft`, and resume any whose release is still a draft by reprinting its
+  released-tag marker, without calling `CreateTag` or `CreateRelease` again. `IsReleaseDraft`
+  needs its own lookup, listing releases and matching the tag by hand, for the same reason
+  attaching assets does: a draft release 404s on "get a release by tag". This keeps the label
+  swap, and every existing test built around its timing, exactly where it already was, while
+  letting a rerun after a failed asset attach or publish step still find and finish the
+  release, driven by the release's own draft status on GitHub rather than by this run's output.
 
 ## Consequences
 
@@ -66,8 +78,12 @@ webhook-triggered workflow.
   immutable releases off; this ADR does not change the generic action or CLI contract beyond
   "a release starts as a draft", which they must still account for.
 - If a CI run fails between tagging and publishing, the release stays a draft until the next
-  CI run resumes it: release-me's `CreateRelease` already tolerates `ErrReleaseExists` on
-  retry, so a rerun can still find and finish publishing it.
+  CI run resumes it: not, as first drafted, because `CreateRelease` tolerates `ErrReleaseExists`
+  on retry, since by then the pull request's label has already swapped away from pending and a
+  rerun would never reach that call again. It resumes instead because `Run` and `RunLocked`
+  also look at merged pull requests already carrying the tagged label and check their release's
+  draft status directly, as the Decision section above describes; a rerun of the whole pipeline,
+  not only of release-me's own step, still finds and finishes a release orphaned this way.
 
 ## Alternatives
 

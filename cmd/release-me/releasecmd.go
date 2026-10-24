@@ -124,12 +124,11 @@ func doReleaseLocked(
 
 	multi := len(resolved) > 1
 	any := false
-	for i, r := range results {
+	for _, r := range results {
 		any = true
-		name := comps[i%len(comps)].Name
-		printLine(stdout, name, multi, r.Message)
+		printLine(stdout, r.Name, multi, r.Message)
 		if r.MajorTagMessage != "" {
-			printLine(stdout, name, multi, r.MajorTagMessage)
+			printLine(stdout, r.Name, multi, r.MajorTagMessage)
 		}
 		printReleasedTag(stdout, dryRun, r.Tag)
 	}

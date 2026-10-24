@@ -629,6 +629,78 @@ func TestCreateReleaseTellsAGenuineDuplicateApartFromAnImmutableRelease(t *testi
 	}
 }
 
+func TestIsReleaseDraft(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		tag       string
+		handler   http.HandlerFunc
+		want      bool
+		wantErrIs error
+		wantErr   bool
+	}{
+		{
+			name: "reports true for a draft release, which get-by-tag alone would 404 on",
+			tag:  "v0.1.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": true}]`)
+			},
+			want: true,
+		},
+		{
+			name: "reports false for an already published release",
+			tag:  "v0.1.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": false}]`)
+			},
+			want: false,
+		},
+		{
+			name: "returns ErrReleaseNotFound when no release matches the tag",
+			tag:  "v0.9.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": true}]`)
+			},
+			wantErrIs: forge.ErrReleaseNotFound,
+		},
+		{
+			name: "wraps a server error",
+			tag:  "v0.1.0",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v3/repos/owner/repo/releases", tc.handler)
+			f := newTestForge(t, mux)
+
+			got, err := f.IsReleaseDraft(context.Background(), "owner", "repo", tc.tag)
+			switch {
+			case tc.wantErrIs != nil:
+				if !errors.Is(err, tc.wantErrIs) {
+					t.Fatalf("IsReleaseDraft() error = %v, want %v", err, tc.wantErrIs)
+				}
+			case tc.wantErr:
+				if err == nil {
+					t.Fatal("IsReleaseDraft() error = nil, want an error")
+				}
+			default:
+				if err != nil {
+					t.Fatalf("IsReleaseDraft() error = %v", err)
+				}
+				if got != tc.want {
+					t.Fatalf("IsReleaseDraft() = %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestMergeCommitReturnsTheMergeCommitSHA(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()

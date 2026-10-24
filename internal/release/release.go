@@ -118,25 +118,75 @@ func RunLocked(
 
 	var results []Result
 	for _, pr := range prs {
-		if !pr.Merged || !slices.Contains(pr.Labels, labels.Pending) {
+		if !pr.Merged {
 			continue
 		}
-		logger.Debug("locked release pull request merged", "number", pr.Number, "title", pr.Title)
 
+		if slices.Contains(pr.Labels, labels.Pending) {
+			logger.Debug("locked release pull request merged", "number", pr.Number, "title", pr.Title)
+
+			versionStr, _, ok := VersionFromLockedTitle(pr.Title)
+			if !ok {
+				return nil, fmt.Errorf("release: locked family: pull request #%d: title %q does not name a version", pr.Number, pr.Title)
+			}
+			ver, ok := version.ParseTag("v" + versionStr)
+			if !ok {
+				return nil, fmt.Errorf("release: locked family: pull request #%d: version %q does not parse", pr.Number, versionStr)
+			}
+
+			res, err := releaseLockedFamily(ctx, f, owner, repoName, pr, versionStr, ver, comps, labels, dryRun)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, res...)
+			continue
+		}
+
+		if dryRun || !slices.Contains(pr.Labels, labels.Tagged) {
+			continue
+		}
 		versionStr, _, ok := VersionFromLockedTitle(pr.Title)
 		if !ok {
-			return nil, fmt.Errorf("release: locked family: pull request #%d: title %q does not name a version", pr.Number, pr.Title)
+			continue
 		}
-		ver, ok := version.ParseTag("v" + versionStr)
-		if !ok {
-			return nil, fmt.Errorf("release: locked family: pull request #%d: version %q does not parse", pr.Number, versionStr)
-		}
-
-		res, err := releaseLockedFamily(ctx, f, owner, repoName, pr, versionStr, ver, comps, labels, dryRun)
+		res, err := resumeLockedFamily(ctx, f, owner, repoName, pr, versionStr, comps)
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, res...)
+	}
+	return results, nil
+}
+
+// resumeLockedFamily reprints the released-tag marker for every component
+// of pr whose release is still a draft: pr already carries the Tagged
+// label, so an earlier run tagged and drafted every component's release
+// and swapped the label, but the asset attach or publish step that was
+// meant to follow, in that same or a later workflow run, never finished for
+// at least one of them. Finding that out needs no local git state and
+// writes nothing: CreateTag and CreateRelease already ran, tolerating
+// either one already existing, so calling them again would risk creating a
+// second, duplicate draft for the same tag instead of finishing the first.
+func resumeLockedFamily(
+	ctx context.Context, f forge.Forge, owner, repoName string, pr forge.PullRequest, versionStr string, comps []Component,
+) ([]Result, error) {
+	var results []Result
+	for _, comp := range comps {
+		tag := comp.TagPrefix + versionStr
+		draft, err := f.IsReleaseDraft(ctx, owner, repoName, tag)
+		if err != nil {
+			if errors.Is(err, forge.ErrReleaseNotFound) {
+				continue
+			}
+			return nil, fmt.Errorf("release: locked family: component %s: pull request #%d: resume %s: %w", comp.Name, pr.Number, tag, err)
+		}
+		if !draft {
+			continue
+		}
+		results = append(results, Result{
+			PullRequestNumber: pr.Number, Name: comp.Name, Version: versionStr, Tag: tag,
+			Message: fmt.Sprintf("resuming unpublished release %s", tag),
+		})
 	}
 	return results, nil
 }
@@ -152,7 +202,10 @@ func releaseLockedFamily(
 		results := make([]Result, 0, len(comps))
 		for _, comp := range comps {
 			tag := comp.TagPrefix + versionStr
-			result := Result{PullRequestNumber: pr.Number, Version: versionStr, Tag: tag, Message: fmt.Sprintf("would tag and release %s", tag)}
+			result := Result{
+				PullRequestNumber: pr.Number, Name: comp.Name, Version: versionStr, Tag: tag,
+				Message: fmt.Sprintf("would tag and release %s", tag),
+			}
 			mtag, mmsg, err := applyMajorTag(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, versionStr, "", comp.MajorTag, dryRun)
 			if err != nil {
 				return nil, err
@@ -199,7 +252,7 @@ func releaseLockedFamily(
 			return nil, err
 		}
 		results = append(results, Result{
-			PullRequestNumber: pr.Number, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
+			PullRequestNumber: pr.Number, Name: comp.Name, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
 			Message: message, MajorTag: mtag, MajorTagMessage: mmsg,
 		})
 	}
@@ -267,10 +320,16 @@ func (l Labels) typeLabel(preType string) string {
 // Result is the outcome for one merged release pull request.
 type Result struct {
 	PullRequestNumber int
-	Version           string
-	Tag               string
-	Message           string
-	Skipped           bool
+	// Name is the component the result belongs to: a locked family
+	// releases several components from the one pull request, so a
+	// caller rendering one line per result needs this to label each,
+	// rather than assuming results and comps stay in step index for
+	// index, which a resumed release does not guarantee.
+	Name    string
+	Version string
+	Tag     string
+	Message string
+	Skipped bool
 	// MajorTag is the major tag name major-tag moved or created, empty
 	// when major-tag is off for the component or the version released is
 	// a pre-release.
@@ -347,32 +406,84 @@ func Run(
 
 	var results []Result
 	for _, pr := range prs {
-		if !pr.Merged || !slices.Contains(pr.Labels, labels.Pending) {
+		if !pr.Merged {
 			continue
 		}
-		logger.Debug("release pull request merged", "component", comp.Name, "number", pr.Number, "title", pr.Title)
 
-		versionStr, ok := VersionFromTitle(pr.Title, comp.Name)
-		if !ok {
-			return nil, fmt.Errorf("release: component %s: pull request #%d: title %q does not name a version", comp.Name, pr.Number, pr.Title)
-		}
-		ver, ok := version.ParseTag("v" + versionStr)
-		if !ok {
-			return nil, fmt.Errorf("release: component %s: pull request #%d: version %q does not parse", comp.Name, pr.Number, versionStr)
-		}
-		tag := comp.TagPrefix + versionStr
-		name := tag
-		if comp.Multi {
-			name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
+		if slices.Contains(pr.Labels, labels.Pending) {
+			logger.Debug("release pull request merged", "component", comp.Name, "number", pr.Number, "title", pr.Title)
+
+			versionStr, ok := VersionFromTitle(pr.Title, comp.Name)
+			if !ok {
+				return nil, fmt.Errorf("release: component %s: pull request #%d: title %q does not name a version", comp.Name, pr.Number, pr.Title)
+			}
+			ver, ok := version.ParseTag("v" + versionStr)
+			if !ok {
+				return nil, fmt.Errorf("release: component %s: pull request #%d: version %q does not parse", comp.Name, pr.Number, versionStr)
+			}
+			tag := comp.TagPrefix + versionStr
+			name := tag
+			if comp.Multi {
+				name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
+			}
+
+			result, err := releaseOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr, tag, name, ver, labels, dryRun, comp.MajorTag)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, result)
+			continue
 		}
 
-		result, err := releaseOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr, tag, name, ver, labels, dryRun, comp.MajorTag)
+		if dryRun || !slices.Contains(pr.Labels, labels.Tagged) {
+			continue
+		}
+		result, resumed, err := resumeOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, result)
+		if resumed {
+			results = append(results, result)
+		}
 	}
 	return results, nil
+}
+
+// resumeOne reprints the released-tag marker for pr's release when it is
+// still a draft: pr already carries the Tagged label, so an earlier run
+// tagged and drafted the release and swapped the label, but the asset
+// attach or publish step that was meant to follow, in that same or a later
+// workflow run, never finished. ok is false when there is nothing to
+// resume: the release is already published, or (defensively, since the
+// Tagged label implies CreateRelease already succeeded once) does not
+// exist at all. This writes nothing: CreateTag and CreateRelease already
+// ran, tolerating either one already existing, so calling them again would
+// risk creating a second, duplicate draft for the same tag instead of
+// finishing the first.
+func resumeOne(
+	ctx context.Context, f forge.Forge, owner, repoName, componentName, tagPrefix string, pr forge.PullRequest,
+) (result Result, ok bool, err error) {
+	versionStr, titleOK := VersionFromTitle(pr.Title, componentName)
+	if !titleOK {
+		return Result{}, false, nil
+	}
+	tag := tagPrefix + versionStr
+
+	draft, err := f.IsReleaseDraft(ctx, owner, repoName, tag)
+	if err != nil {
+		if errors.Is(err, forge.ErrReleaseNotFound) {
+			return Result{}, false, nil
+		}
+		return Result{}, false, fmt.Errorf("release: component %s: pull request #%d: resume %s: %w", componentName, pr.Number, tag, err)
+	}
+	if !draft {
+		return Result{}, false, nil
+	}
+
+	return Result{
+		PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag,
+		Message: fmt.Sprintf("resuming unpublished release %s", tag),
+	}, true, nil
 }
 
 func releaseOne(
@@ -381,7 +492,10 @@ func releaseOne(
 ) (Result, error) {
 	versionStr := ver.String()
 	if dryRun {
-		result := Result{PullRequestNumber: pr.Number, Version: versionStr, Tag: tag, Message: fmt.Sprintf("would tag and release %s", tag)}
+		result := Result{
+			PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag,
+			Message: fmt.Sprintf("would tag and release %s", tag),
+		}
 		mtag, mmsg, err := applyMajorTag(ctx, f, owner, repoName, componentName, tagPrefix, versionStr, "", majorTagEnabled, dryRun)
 		if err != nil {
 			return Result{}, err
@@ -437,7 +551,7 @@ func releaseOne(
 	}
 
 	return Result{
-		PullRequestNumber: pr.Number, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
+		PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
 		Message: message, MajorTag: mtag, MajorTagMessage: mmsg,
 	}, nil
 }

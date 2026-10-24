@@ -127,6 +127,14 @@ type Fake struct {
 	// ever used by a now-deleted immutable release.
 	CreateReleaseErrs map[string]error
 
+	// ReleaseDrafts is the draft status IsReleaseDraft reports, by tag
+	// name: true for a draft, false for a published release. A
+	// successful CreateRelease call sets its tag here to true, the same
+	// as the real forge, which always drafts. A tag absent from this map
+	// has no release at all, as far as IsReleaseDraft is concerned, and
+	// is reported as forge.ErrReleaseNotFound.
+	ReleaseDrafts map[string]bool
+
 	// NextNumber is the pull request number CreatePullRequest assigns next.
 	NextNumber int
 
@@ -251,7 +259,20 @@ func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body str
 		return forge.ErrReleaseExists
 	}
 	f.CreatedReleases = append(f.CreatedReleases, CreateReleaseCall{Owner: owner, Repo: repo, Tag: tag, Name: name, Body: body, Prerelease: prerelease})
+	if f.ReleaseDrafts == nil {
+		f.ReleaseDrafts = map[string]bool{}
+	}
+	f.ReleaseDrafts[tag] = true
 	return nil
+}
+
+// IsReleaseDraft implements forge.Forge.
+func (f *Fake) IsReleaseDraft(_ context.Context, _, _, tag string) (bool, error) {
+	draft, ok := f.ReleaseDrafts[tag]
+	if !ok {
+		return false, forge.ErrReleaseNotFound
+	}
+	return draft, nil
 }
 
 // MergeCommit implements forge.Forge.

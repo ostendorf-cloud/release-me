@@ -246,6 +246,32 @@ func releaseAlreadyExists(err error) bool {
 	return false
 }
 
+// IsReleaseDraft implements forge.Forge. It lists the repository's releases
+// and matches tag by hand, rather than GitHub's "get a release by tag name"
+// endpoint: that endpoint excludes drafts, confirmed live against this
+// repository, so it would read a still-draft release as not found. Listing
+// releases does include drafts, for a caller authenticated with push
+// access, the same access release-me already needs to create one.
+func (f *Forge) IsReleaseDraft(ctx context.Context, owner, repo, tag string) (bool, error) {
+	opts := &gogithub.ListOptions{PerPage: 100}
+	for {
+		releases, resp, err := f.client.Repositories.ListReleases(ctx, owner, repo, opts)
+		if err != nil {
+			return false, fmt.Errorf("github: list releases for %s/%s: %w", owner, repo, err)
+		}
+		for _, r := range releases {
+			if r.GetTagName() == tag {
+				return r.GetDraft(), nil
+			}
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return false, forge.ErrReleaseNotFound
+}
+
 // MergeCommit implements forge.Forge.
 func (f *Forge) MergeCommit(ctx context.Context, owner, repo string, number int) (string, error) {
 	pr, _, err := f.client.PullRequests.Get(ctx, owner, repo, number)
