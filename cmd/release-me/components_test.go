@@ -98,7 +98,7 @@ func TestDoPRAttributesPullRequestsToTheComponentsTheyTouch(t *testing.T) {
 
 	writeConfig(t, dir, "components:\n  frontend:\n    path: frontend\n  backend:\n    path: backend\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	f.Responses = map[int]forgetest.Response{
 		2: {PullRequest: forge.PullRequest{Title: "feat: wire the frontend to the backend", URL: "https://example.invalid/pull/2"}},
 		3: {PullRequest: forge.PullRequest{Title: "feat: update the release notes", URL: "https://example.invalid/pull/3"}},
@@ -396,7 +396,7 @@ func TestDoPRWritesAComponentsConfiguredChangelog(t *testing.T) {
 	mergePullRequest(t, dir, 2, "layer-fix", map[string]string{"packages/duxt/sections.ts": "export {}\n"})
 	writeConfig(t, dir, "components:\n  duxt:\n    path: packages/duxt\n    changelog: CHANGELOG.md\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	f.Responses = map[int]forgetest.Response{
 		2: {PullRequest: forge.PullRequest{Title: "fix: hide sections an edition does not have"}},
 	}
@@ -428,7 +428,7 @@ func TestDoPRCreatesTheDirectoryOfAConfiguredChangelog(t *testing.T) {
 	mergePullRequest(t, dir, 2, "layer-fix", map[string]string{"packages/duxt/sections.ts": "export {}\n"})
 	writeConfig(t, dir, "components:\n  duxt:\n    path: packages/duxt\n    changelog: docs/release/CHANGELOG.md\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	f.Responses = map[int]forgetest.Response{
 		2: {PullRequest: forge.PullRequest{Title: "fix: hide sections an edition does not have"}},
 	}

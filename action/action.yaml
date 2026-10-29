@@ -34,21 +34,20 @@ inputs:
     default: ""
   author-name:
     description: >-
-      Git author and committer name for the release commit. Wins over app-slug. Defaults to
-      the tool's own configured or default identity.
+      Deprecated, no longer applied. The release commit is created through the GitHub API
+      under the token's own identity, so GitHub signs it.
     required: false
     default: ""
   author-email:
     description: >-
-      Git author and committer email for the release commit. Wins over app-slug. Defaults to
-      the tool's own configured or default identity.
+      Deprecated, no longer applied. The release commit is created through the GitHub API
+      under the token's own identity, so GitHub signs it.
     required: false
     default: ""
   app-slug:
     description: >-
-      GitHub App slug whose bot account, "<slug>[bot]", the release commit is attributed to
-      when author-name or author-email is not set. Its id is resolved through the API with
-      download-token.
+      Deprecated, no longer applied. A GitHub App token already makes the app's bot account,
+      "<slug>[bot]", author the release commit, which GitHub creates and signs itself.
     required: false
     default: ""
 

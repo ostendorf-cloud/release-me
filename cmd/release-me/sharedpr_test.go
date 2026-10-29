@@ -75,7 +75,7 @@ func newSharedRepo(t *testing.T) (dir, origin string, cfg config.Config) {
 func TestSharedReleasePullRequestCarriesEveryChangedComponentAtItsOwnVersion(t *testing.T) {
 	dir, origin, cfg := newSharedRepo(t)
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -186,7 +186,7 @@ func TestSharedReleasePullRequestInLinkedVersioningSharesTheFamilyVersion(t *tes
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -235,7 +235,7 @@ func TestSharedReleasePullRequestAppliesAVersionOverridePerComponent(t *testing.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, origin, cfg := newSharedRepo(t)
-			f := newFake()
+			f := newPRFake(origin)
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 				t.Fatalf("doPR() first run error = %v", err)
@@ -266,7 +266,7 @@ func TestSharedReleasePullRequestAppliesAVersionOverridePerComponent(t *testing.
 
 func TestSharedReleasePullRequestTurnsEveryComponentIntoAPreRelease(t *testing.T) {
 	dir, origin, cfg := newSharedRepo(t)
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -394,7 +394,7 @@ func TestDoCommentReleaseAsTargetsAComponentOfASharedReleasePullRequest(t *testi
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, origin, cfg := newSharedRepo(t)
-			f := newFake()
+			f := newPRFake(origin)
 			var first bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 				t.Fatalf("doPR() first run error = %v", err)
@@ -533,7 +533,7 @@ func TestSharedReleasePullRequestRefusesATitlePastTheForgeLimitBeforeWritingAnyt
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 
 	var stdout bytes.Buffer
 	err = doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout)

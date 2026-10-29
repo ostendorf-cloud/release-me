@@ -175,10 +175,10 @@ type Labels struct {
 	Rc      string
 }
 
-// Author is the "author" key: the git identity pr commits the release
-// branch as. A GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME or
-// GIT_COMMITTER_EMAIL already set in the process environment wins over
-// these values.
+// Author is the "author" key, still accepted so an existing configuration
+// keeps loading, but no longer applied: pr creates the release commit
+// through the forge, which signs it only when no author or committer is
+// passed, so the commit carries the token's own identity instead.
 type Author struct {
 	Name  string
 	Email string

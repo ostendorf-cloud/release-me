@@ -309,10 +309,10 @@ func TestOutputsRecordNothingInDryRun(t *testing.T) {
 }
 
 func TestOutputsReportAnUpToDateReleasePullRequest(t *testing.T) {
-	dir, _ := newPRRepo(t)
+	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)

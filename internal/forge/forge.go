@@ -28,6 +28,13 @@ var ErrReleaseExists = errors.New("release already exists")
 // that has no release at all.
 var ErrReleaseNotFound = errors.New("release not found")
 
+// ErrBranchMoved is returned when CommitBranch finds the branch somewhere
+// other than the caller expected: not on BranchCommit.ExpectedHead, or,
+// with no ExpectedHead, on a commit the new one does not descend from.
+// The branch is left where it is then, the same as a rejected "git push
+// --force-with-lease" or a rejected non-fast-forward push.
+var ErrBranchMoved = errors.New("branch moved")
+
 // ErrUnauthorized is returned when the forge rejects the request's
 // credentials, as opposed to any other failure.
 var ErrUnauthorized = errors.New("unauthorized")
@@ -47,6 +54,33 @@ type PullRequest struct {
 	URL     string
 	Merged  bool
 	HeadSHA string
+}
+
+// CommitFile is one file a commit made through CommitBranch writes: its
+// path from the repository root, its full new content and whether it is
+// executable. Every path of the parent's tree no CommitFile names stays
+// exactly as it is.
+type CommitFile struct {
+	Path       string
+	Content    []byte
+	Executable bool
+}
+
+// BranchCommit is one commit CommitBranch creates and points Branch at.
+//
+// Parent is the commit the new one builds on, its tree the base Files
+// apply to; it must already exist on the forge. ExpectedHead is the
+// commit Branch must currently point at for CommitBranch to replace it
+// whatever its history, the lease "git push --force-with-lease" takes.
+// Left empty, Branch is created when it does not exist yet and otherwise
+// moved only when the new commit descends from its current tip, the rule
+// a plain "git push" follows.
+type BranchCommit struct {
+	Branch       string
+	Parent       string
+	Message      string
+	Files        []CommitFile
+	ExpectedHead string
 }
 
 // Forge reads and writes pull request, label, tag and release data on a
@@ -130,6 +164,17 @@ type Forge interface {
 	// release pull request's own comment thread, not a threaded reply to
 	// any one existing comment.
 	CreateComment(ctx context.Context, owner, repo string, number int, body string) error
+
+	// CommitBranch creates c as a commit on the forge itself, never
+	// through a local "git commit" and push, points c.Branch at it and
+	// returns its SHA. The forge writes the commit under the token's own
+	// identity, so a forge that signs the commits it creates, GitHub for
+	// an app or a user token, signs this one, and a ruleset requiring
+	// signed commits accepts it. No author or committer is passed: a
+	// custom one makes GitHub leave the commit unsigned.
+	// ErrBranchMoved is returned when the branch is not where
+	// c.ExpectedHead, or the plain push rule, expects it.
+	CommitBranch(ctx context.Context, owner, repo string, c BranchCommit) (string, error)
 
 	// CompareURL returns the web address of the forge's compare view
 	// between the refs base and head, the tag a release is computed from

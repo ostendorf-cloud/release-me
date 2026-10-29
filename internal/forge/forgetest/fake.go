@@ -7,6 +7,7 @@ package forgetest
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 
@@ -78,6 +79,13 @@ type CreateCommentCall struct {
 	Owner, Repo string
 	Number      int
 	Body        string
+}
+
+// CommitBranchCall records one call to CommitBranch, whether or not it
+// succeeded.
+type CommitBranchCall struct {
+	Owner, Repo string
+	Commit      forge.BranchCommit
 }
 
 // Fake is a forge.Forge backed by fixed, pre-configured responses. It
@@ -163,6 +171,21 @@ type Fake struct {
 	MovedTags           []MoveTagCall
 	CreatedReleases     []CreateReleaseCall
 	CreatedComments     []CreateCommentCall
+	CommitBranchCalls   []CommitBranchCall
+
+	// GitDir, when set, is a git directory, typically a bare repository
+	// standing in for the forge's own, that CommitBranch writes each
+	// commit and branch move into for real, through git plumbing, so a
+	// test can read the branch back the way "git fetch" would. The parent
+	// commit must be reachable from it, for example through the objects
+	// of the repository under test listed in its
+	// objects/info/alternates. Left empty, CommitBranch records the call
+	// and returns a SHA derived from the call count, touching nothing.
+	GitDir string
+
+	// CommitBranchErr, when set, is returned by CommitBranch after
+	// recording the call, writing nothing.
+	CommitBranchErr error
 
 	// CreateCommentErr, when set, is returned by CreateComment instead of
 	// recording a call.
@@ -336,6 +359,22 @@ func (f *Fake) CreateComment(_ context.Context, owner, repo string, number int, 
 	}
 	f.CreatedComments = append(f.CreatedComments, CreateCommentCall{Owner: owner, Repo: repo, Number: number, Body: body})
 	return nil
+}
+
+// CommitBranch implements forge.Forge. With GitDir set it builds the
+// commit there, on c.Parent's tree, and moves the branch with the same
+// rules the GitHub implementation applies: replaced when it is at
+// c.ExpectedHead, otherwise created or fast-forwarded, forge.ErrBranchMoved
+// in every other case.
+func (f *Fake) CommitBranch(ctx context.Context, owner, repo string, c forge.BranchCommit) (string, error) {
+	f.CommitBranchCalls = append(f.CommitBranchCalls, CommitBranchCall{Owner: owner, Repo: repo, Commit: c})
+	if f.CommitBranchErr != nil {
+		return "", f.CommitBranchErr
+	}
+	if f.GitDir == "" {
+		return fmt.Sprintf("%040x", len(f.CommitBranchCalls)), nil
+	}
+	return commitInto(ctx, f.GitDir, c)
 }
 
 // CompareURL implements forge.Forge, in the shape GitHub's compare view

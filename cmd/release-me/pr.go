@@ -295,7 +295,7 @@ func doPRComponent(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, existing, comp.Branch, date, title); err != nil {
+		if err := plan.write(ctx, f, owner, repoName, existing, comp.Branch, date, title); err != nil {
 			return fmt.Errorf("release-me: component %s: %w", comp.Name, err)
 		}
 
@@ -504,7 +504,7 @@ func publishSharedPR(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, existing, branch, date, title); err != nil {
+		if err := plan.write(ctx, f, owner, repoName, existing, branch, date, title); err != nil {
 			return fmt.Errorf("release-me: %s: %w", who, err)
 		}
 
@@ -892,56 +892,80 @@ func headingReadsBack(version, compareURL string) bool {
 	return ok
 }
 
-// write commits the changelog update and the bumped files onto branch and
-// pushes it, through the temporary worktree planned in p. A fresh branch,
-// with no existing pull request to lease against, is pushed without
-// force; otherwise the lease is the existing pull request's head SHA from
-// the forge, not a locally fetched ref, so a concurrent fetch can never
-// defeat it. The commit carries cfg's configured author and committer,
-// never written into any git config, only passed to that one subprocess.
+// write commits the changelog update and the bumped files onto branch
+// through the forge's API, f.CommitBranch, never through a local commit
+// and push: the forge signs a commit it creates itself, so a ruleset
+// requiring signed commits accepts the release pull request, which a
+// local commit made with a token that has no signing key never satisfies.
+// The commit's parent is the commit the temporary worktree planned in p is
+// checked out at, dir's HEAD, the same one a local commit there would get,
+// and it carries exactly the content a local commit would: every
+// changelog with its section prepended and every bumped file. A fresh
+// branch, with no existing pull request to lease against, is created, or
+// moved only as a fast-forward; otherwise the lease is the existing pull
+// request's head SHA from the forge. The forge attributes the commit to
+// the token's own identity: cfg's author is not passed, since GitHub
+// leaves a commit with a custom author or committer unsigned.
 func (p *releasePlan) write(
-	ctx context.Context, cfg config.Config, existing *forge.PullRequest, branch string, date time.Time, commitMessage string,
+	ctx context.Context, f forge.Forge, owner, repoName string, existing *forge.PullRequest, branch string, date time.Time, commitMessage string,
 ) error {
-	if err := gitRun(ctx, p.tmp, "checkout", "--quiet", "-B", branch); err != nil {
-		return fmt.Errorf("release-me: checkout %s: %w", branch, err)
+	parent, err := gitOutput(ctx, p.tmp, "rev-parse", "HEAD")
+	if err != nil {
+		return fmt.Errorf("release-me: release branch %s: resolve parent commit: %w", branch, err)
 	}
 
+	contents := make(map[string]string, len(p.changelogs)+len(p.desiredFiles))
+	var order []string
+	set := func(path, content string) {
+		if _, seen := contents[path]; !seen {
+			order = append(order, path)
+		}
+		contents[path] = content
+	}
 	for _, c := range p.changelogs {
 		section := changelog.RenderHeading(c.version, date, c.compareURL) + "\n\n" + c.entriesBody + "\n"
-		fullChangelogPath := filepath.Join(p.tmp, c.path)
-		// A configured changelog may name a directory that does not exist
-		// yet; os.WriteFile creates the file only.
-		if err := os.MkdirAll(filepath.Dir(fullChangelogPath), 0o755); err != nil {
-			return fmt.Errorf("release-me: write %s: %w", c.path, err)
-		}
-		if err := os.WriteFile(fullChangelogPath, []byte(changelog.Prepend(c.baseline, section)), 0o644); err != nil {
-			return fmt.Errorf("release-me: write %s: %w", c.path, err)
-		}
+		set(c.path, changelog.Prepend(c.baseline, section))
 	}
-	for path, content := range p.desiredFiles {
-		if err := os.WriteFile(filepath.Join(p.tmp, path), []byte(content), 0o644); err != nil {
-			return fmt.Errorf("release-me: write %s: %w", path, err)
-		}
+	paths := make([]string, 0, len(p.desiredFiles))
+	for path := range p.desiredFiles {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	for _, path := range paths {
+		set(path, p.desiredFiles[path])
 	}
 
-	if err := gitRun(ctx, p.tmp, "add", "-A"); err != nil {
-		return fmt.Errorf("release-me: stage release branch: %w", err)
-	}
-	if _, err := gitOutputEnv(ctx, p.tmp, commitEnv(cfg), "commit", "--quiet", "-m", commitMessage); err != nil {
-		return fmt.Errorf("release-me: commit release branch: %w", err)
+	files := make([]forge.CommitFile, 0, len(order))
+	for _, path := range order {
+		executable, err := executableAt(ctx, p.tmp, path)
+		if err != nil {
+			return fmt.Errorf("release-me: release branch %s: %w", branch, err)
+		}
+		files = append(files, forge.CommitFile{Path: path, Content: []byte(contents[path]), Executable: executable})
 	}
 
-	pushArgs := []string{"push", "--quiet", "origin", "HEAD:refs/heads/" + branch}
-	if existing != nil && existing.HeadSHA != "" {
-		pushArgs = []string{
-			"push", "--force-with-lease=refs/heads/" + branch + ":" + existing.HeadSHA,
-			"--quiet", "origin", "HEAD:refs/heads/" + branch,
-		}
+	commit := forge.BranchCommit{Branch: branch, Parent: parent, Message: commitMessage, Files: files}
+	if existing != nil {
+		commit.ExpectedHead = existing.HeadSHA
 	}
-	if err := gitRun(ctx, p.tmp, pushArgs...); err != nil {
-		return fmt.Errorf("release-me: push %s: %w", branch, err)
+	if _, err := f.CommitBranch(ctx, owner, repoName, commit); err != nil {
+		if existing != nil {
+			return fmt.Errorf("release-me: commit release branch %s for pull request #%d: %w", branch, existing.Number, err)
+		}
+		return fmt.Errorf("release-me: commit release branch %s: %w", branch, err)
 	}
 	return nil
+}
+
+// executableAt reports whether path is tracked as an executable file at
+// HEAD of the worktree dir, so the commit keeps its mode; a path HEAD does
+// not track, a changelog created by this release, is not.
+func executableAt(ctx context.Context, dir, path string) (bool, error) {
+	out, err := gitOutput(ctx, dir, "ls-tree", "HEAD", "--", path)
+	if err != nil {
+		return false, fmt.Errorf("read the mode of %s: %w", path, err)
+	}
+	return strings.HasPrefix(out, "100755 "), nil
 }
 
 // cleanup removes the temporary worktree. It is safe to call more than
@@ -982,44 +1006,6 @@ func gitOutputEnv(ctx context.Context, dir string, env []string, args ...string)
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
 	return strings.TrimSpace(stdout.String()), nil
-}
-
-// commitEnv returns the environment for the commit subprocess: the
-// process environment, extended with GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,
-// GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL from cfg.Author wherever the
-// process environment does not already carry one of them. The identity
-// never reaches git config, only this one subprocess's environment.
-func commitEnv(cfg config.Config) []string {
-	env := os.Environ()
-	for key, value := range map[string]string{
-		"GIT_AUTHOR_NAME":     cfg.Author.Name,
-		"GIT_AUTHOR_EMAIL":    cfg.Author.Email,
-		"GIT_COMMITTER_NAME":  cfg.Author.Name,
-		"GIT_COMMITTER_EMAIL": cfg.Author.Email,
-	} {
-		if _, ok := os.LookupEnv(key); !ok {
-			env = append(env, key+"="+value)
-		}
-	}
-	return env
-}
-
-// resolvedAuthorName and resolvedAuthorEmail report the git author name
-// and email the commit call would use: GIT_AUTHOR_NAME and
-// GIT_AUTHOR_EMAIL from the process environment when set, cfg.Author
-// otherwise, the same precedence commitEnv applies.
-func resolvedAuthorName(cfg config.Config) string {
-	if v, ok := os.LookupEnv("GIT_AUTHOR_NAME"); ok {
-		return v
-	}
-	return cfg.Author.Name
-}
-
-func resolvedAuthorEmail(cfg config.Config) string {
-	if v, ok := os.LookupEnv("GIT_AUTHOR_EMAIL"); ok {
-		return v
-	}
-	return cfg.Author.Email
 }
 
 // gitShowFile returns the exact, untrimmed content of path at ref in dir.

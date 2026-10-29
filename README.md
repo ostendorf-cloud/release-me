@@ -28,8 +28,8 @@ As a GitHub Action, pinned to a commit digest, the convention every action in th
 organisation follows. `release-me run` opens and updates pull requests and creates tags and
 releases, so the job needs `contents: write` and `pull-requests: write`; `secrets.GITHUB_TOKEN`
 cannot trigger the checks on the release pull request it opens, a repository or GitHub App
-token can. A GitHub App token also lets the action attribute the release commit to the app's
-own bot account, through `app-slug`:
+token can. The release commit is created through the GitHub API with that token, so with a
+GitHub App token it is the app's own bot account that authors it, and GitHub signs it:
 
 ```yaml
 permissions:
@@ -45,7 +45,6 @@ steps:
   - uses: ostendorf-cloud/release-me/action@<commit sha>  # v0.1.1
     with:
       token: ${{ steps.app-token.outputs.token }}
-      app-slug: ${{ steps.app-token.outputs.app-slug }}
 ```
 
 The action downloads the archive and checksums file matching its own version for the
@@ -53,11 +52,9 @@ runner's os and arch, verifies the checksum, then runs `release-me run`. Inputs:
 (required), `component`, `dry-run`, `verbose`, `download-token` for the download step on a
 private fork, defaulting to the calling workflow's own token, `version` to pin a different
 release than the one the action resolves on its own, or `source` to build from the checkout
-with `go build` instead, and `author-name`, `author-email`, `app-slug` to attribute the
-release commit. An explicit `author-name` or `author-email` wins for that field; with
-`app-slug` set, the action resolves the app's bot account, `<slug>[bot]`, and its id through
-the API with `download-token`, and attributes the commit to it. Nothing set leaves the tool's
-own configured or default identity in place. `source` only builds this repository's own code:
+with `go build` instead. `author-name`, `author-email` and `app-slug` are still accepted but
+no longer change the release commit, see [Signed release commits](#signed-release-commits).
+`source` only builds this repository's own code:
 it is `go build`'s working directory for `uses: ./action` from inside this repository, not the
 caller's checkout for `uses: ostendorf-cloud/release-me/action@ref`.
 
@@ -243,10 +240,14 @@ settles after that one push. Should the heading this tool would write not read b
 heading is left out of the comparison instead, so `pr` never pushes the same content on every
 run. Equal content
 changes nothing, not even the pull request body, and nothing is pushed. A change pushes the
-branch and sets the heading to today's date; the push carries a `--force-with-lease` whose
-expected value is the existing pull request's head SHA from the forge, not a locally fetched
-ref, so nothing can quietly defeat it. A fresh branch, with no existing pull request to lease
-against, pushes without force.
+branch, through the forge's API (see [Signed release commits](#signed-release-commits)), and
+sets the heading to today's date. The new commit is always built on the default branch's tip,
+and replaces the existing branch only while it is still at the existing pull request's head
+SHA from the forge, the lease `--force-with-lease` takes; a branch found anywhere else is left
+alone and `pr` fails, naming the branch and the pull request. GitHub's ref update takes no
+expected value, so that check is a read of the branch right before the forced update. A fresh
+branch, with no existing pull request to lease against, is created, or moved only as a
+fast-forward, the rule a push without force follows.
 Editing only the notes block of an open pull request updates its body, with no push: the content
 that would land on the branch did not change.
 
@@ -263,6 +264,27 @@ every entry is a hidden type, the changelog carries one explicit line,
 reaches the changelog file or the GitHub release. A shared release pull request's title and
 body name every component it releases: see
 [Shared release pull request](#shared-release-pull-request).
+
+### Signed release commits
+
+`pr` never commits locally and pushes. It creates the release branch's commit through the
+forge's API, on GitHub the Git Data API: a blob per changed file, a tree on top of the default
+branch's tip, a commit with that one parent, then the branch created or moved onto it. GitHub
+signs a commit it creates for an app or a user token, so the release pull request satisfies a
+ruleset or branch protection that requires signed commits, which a local commit made with a
+token that has no signing key never does.
+
+GitHub signs that commit only when the request names no author and no committer, so none is
+passed: the commit is attributed to the token's own identity, the app's `<slug>[bot]` account
+for a GitHub App token, the user for a personal access token, `github-actions[bot]` for
+`secrets.GITHUB_TOKEN`. The `author` configuration key, the `author-name`, `author-email` and
+`app-slug` action inputs and the `GIT_AUTHOR_*` and `GIT_COMMITTER_*` environment variables no
+longer change the release commit. They are still accepted, so an existing configuration or
+workflow keeps working unchanged.
+
+The commit's parent must already exist on GitHub: `pr` builds on the checkout's `HEAD`, the
+default branch's tip in a workflow triggered by a push to it. A local run on top of unpushed
+commits fails, naming the branch and the parent it could not read.
 
 ### Pre-releases
 
@@ -742,9 +764,6 @@ labels:
   alpha: "release: alpha"
   beta: "release: beta"
   rc: "release: rc"
-author:
-  name: release-me
-  email: release-me[bot]@users.noreply.github.com
 files:
   - path: cmd/cli/version.go
     updater: marker
@@ -760,8 +779,9 @@ files:
   default `other`. `feat`, `fix`, `perf` and `revert` are refused, unparseable text never
   bumps the version.
 - `token-env`: the environment variable holding the GitHub token, default `GITHUB_TOKEN`. It
-  governs API calls only; `pr`'s push to the release branch authenticates through the git
-  credentials the checkout's `origin` remote already carries, the same as any other push.
+  governs every API call, the release commit `pr` creates included. Reading the release
+  branch back, to compare it, goes through the git credentials the checkout's `origin` remote
+  already carries.
 - `changelog`: the changelog file path, default `CHANGELOG.md`. `pr` prepends the new version's
   section to it, creating the file when it does not exist yet.
 - `changelog-source`: which commits become changelog entries, default `first-parent`. See
@@ -775,11 +795,10 @@ files:
   none of the three labels. See [Pre-releases](#pre-releases). `check` reports any of the
   enabled labels missing by name, it never creates one. `labels.pending` and `labels.tagged`
   cannot be empty.
-- `author.name` and `author.email`: the git identity `pr` commits the release branch as,
-  default `release-me` and `release-me[bot]@users.noreply.github.com`. Passed to the commit
-  through the git subprocess's environment, never written into git config. A
-  `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` or `GIT_COMMITTER_EMAIL` already
-  set in the environment wins over these values. `check --verbose` logs the resolved author.
+- `author.name` and `author.email`: accepted, default `release-me` and
+  `release-me[bot]@users.noreply.github.com`, but no longer applied. The forge creates the
+  release commit under the token's own identity and signs it, which it does only when no author
+  is passed, see [Signed release commits](#signed-release-commits).
 - `files`: files `pr` bumps to the next version, each a `path`, an optional `updater`, default
   `marker`, and a `key` where the updater needs one. Every updater keeps the rest of the file
   byte for byte: order, comments, indentation. A file that does not exist, or a `key` not found

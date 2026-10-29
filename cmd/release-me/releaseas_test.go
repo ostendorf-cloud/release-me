@@ -316,7 +316,7 @@ func TestDoPRLetsTheReleaseAsCommentOverrideWinOverAFooter(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command\n\nRelease-As: 2.0.0")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -351,7 +351,7 @@ func TestDoPRBuildsAPreReleaseOnTheFootersVersion(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command\n\nRelease-As: 2.0.0")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)

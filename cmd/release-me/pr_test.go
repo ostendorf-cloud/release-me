@@ -28,23 +28,30 @@ const mainBranch = "release-me/main"
 
 // newPRRepo creates a git repository with a local identity and an "origin"
 // remote whose push URL, through git's pushInsteadOf configuration, is
-// rewritten to a local bare repository, so a real "git push" succeeds
+// rewritten to a local bare repository standing in for the forge's own,
+// so the "git fetch" pr compares the release branch through reads it
 // without touching the network. The fetch URL that history.Remote parses
-// stays the configured GitHub one. It returns the repository directory and
-// the bare repository directory.
+// stays the configured GitHub one. The bare repository borrows the
+// repository's objects through objects/info/alternates, the way the
+// forge already holds every commit pushed to the default branch, so a
+// fake forge from newPRFake can build the release commit on top of HEAD.
+// It returns the repository directory and the bare repository directory.
 func newPRRepo(t *testing.T) (dir, origin string) {
 	t.Helper()
-	origin = t.TempDir()
-	runGit(t, origin, "init", "-q", "--bare", "-b", "main")
-
-	dir = t.TempDir()
-	runGit(t, dir, "init", "-q", "-b", "main")
+	dir, origin = newPRRepoWithoutIdentity(t)
 	runGit(t, dir, "config", "user.name", "release-me tests")
 	runGit(t, dir, "config", "user.email", "release-me-tests@example.com")
 	runGit(t, dir, "config", "commit.gpgsign", "false")
-	runGit(t, dir, "remote", "add", "origin", "git@github.com:owner/repo.git")
-	runGit(t, dir, "config", "url."+origin+".pushInsteadOf", "git@github.com:owner/repo.git")
 	return dir, origin
+}
+
+// newPRFake is newFake writing every release branch commit into origin,
+// the bare repository newPRRepo returns, so a test reads the branch back
+// from there and a rerun compares against it.
+func newPRFake(origin string) *forgetest.Fake {
+	f := newFake()
+	f.GitDir = origin
+	return f
 }
 
 // cloneBranch clones branch of origin into a new temporary directory with
@@ -61,8 +68,8 @@ func cloneBranch(t *testing.T, origin, branch string) string {
 }
 
 // newPRRepoWithoutIdentity is newPRRepo without a configured git identity
-// anywhere, local or global: the commit call under test must supply its
-// own, never rely on one already configured.
+// anywhere in the repository: pr must never need one, since the forge, not
+// a local commit, writes the release branch.
 func newPRRepoWithoutIdentity(t *testing.T) (dir, origin string) {
 	t.Helper()
 	origin = t.TempDir()
@@ -72,6 +79,10 @@ func newPRRepoWithoutIdentity(t *testing.T) (dir, origin string) {
 	runGit(t, dir, "init", "-q", "-b", "main")
 	runGit(t, dir, "remote", "add", "origin", "git@github.com:owner/repo.git")
 	runGit(t, dir, "config", "url."+origin+".pushInsteadOf", "git@github.com:owner/repo.git")
+	alternates := filepath.Join(origin, "objects", "info", "alternates")
+	if err := os.WriteFile(alternates, []byte(filepath.Join(dir, ".git", "objects")+"\n"), 0o644); err != nil {
+		t.Fatalf("write %s: %v", alternates, err)
+	}
 	return dir, origin
 }
 
@@ -154,7 +165,7 @@ func TestDoPRCreatesTheReleasePullRequest(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
@@ -181,62 +192,212 @@ func TestDoPRCreatesTheReleasePullRequest(t *testing.T) {
 	}
 }
 
-// TestDoPRCommitsTheReleaseBranchWithTheDefaultAuthorWhenNoIdentityExists
-// reproduces a runner with no git identity at all: HOME points at an empty
-// directory and GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM are both /dev/null,
-// so neither a global nor a system configuration can supply one, and the
-// repository itself carries none either. The commit on the release branch
-// must still succeed, carrying the default author.
-func TestDoPRCommitsTheReleaseBranchWithTheDefaultAuthorWhenNoIdentityExists(t *testing.T) {
-	dir, origin := newPRRepoWithoutIdentity(t)
-	commitWithIdentity(t, dir, "feat: add the next command")
-
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
-
-	f := newFake()
-	var stdout bytes.Buffer
-
-	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
-		t.Fatalf("doPR() error = %v", err)
+// TestDoPRCommitsTheReleaseBranchThroughTheForgeAsTheTokensIdentity covers
+// the signed commit requirement: a ruleset requiring signed commits
+// rejects a release commit made locally with a token that has no signing
+// key, so the commit goes through the forge, which signs what it creates
+// only when no author or committer is passed. Whatever identity the
+// configuration, the environment or the repository would supply, the
+// commit therefore carries the forge's own, and no local commit is made,
+// even on a runner with no git identity at all.
+func TestDoPRCommitsTheReleaseBranchThroughTheForgeAsTheTokensIdentity(t *testing.T) {
+	cases := []struct {
+		name string
+		env  map[string]string
+		cfg  func(*config.Config)
+	}{
+		{
+			name: "no identity anywhere",
+		},
+		{
+			name: "an identity in the environment",
+			env: map[string]string{
+				"GIT_AUTHOR_NAME": "CI Runner", "GIT_AUTHOR_EMAIL": "ci@example.com",
+				"GIT_COMMITTER_NAME": "CI Runner", "GIT_COMMITTER_EMAIL": "ci@example.com",
+			},
+		},
+		{
+			name: "a configured author",
+			cfg: func(c *config.Config) {
+				c.Author = config.Author{Name: "Release Bot", Email: "release-bot@example.com"}
+			},
+		},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, origin := newPRRepoWithoutIdentity(t)
+			commitWithIdentity(t, dir, "feat: add the next command")
+			head := gitOut(t, dir, "rev-parse", "HEAD")
 
-	if !bareRefExists(t, origin, "refs/heads/"+mainBranch) {
-		t.Fatal("no commit landed on the release branch")
-	}
-	want := "release-me <release-me[bot]@users.noreply.github.com>"
-	if got := bareBranchAuthor(t, origin); got != want {
-		t.Fatalf("author = %q, want %q", got, want)
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+			t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
+			cfg := config.Default()
+			if tc.cfg != nil {
+				tc.cfg(&cfg)
+			}
+
+			f := newPRFake(origin)
+			var stdout bytes.Buffer
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
+				t.Fatalf("doPR() error = %v", err)
+			}
+
+			if len(f.CommitBranchCalls) != 1 {
+				t.Fatalf("CommitBranchCalls = %+v, want one", f.CommitBranchCalls)
+			}
+			call := f.CommitBranchCalls[0]
+			if call.Owner != "owner" || call.Repo != "repo" || call.Commit.Branch != mainBranch || call.Commit.Parent != head {
+				t.Fatalf("call = %+v, want owner/repo, branch %s, parent %s", call, mainBranch, head)
+			}
+			if call.Commit.ExpectedHead != "" {
+				t.Fatalf("ExpectedHead = %q, want none for a fresh branch", call.Commit.ExpectedHead)
+			}
+			if got := bareBranchAuthor(t, origin); got != forgetest.FakeAuthor {
+				t.Fatalf("author = %q, want the forge's own %q", got, forgetest.FakeAuthor)
+			}
+			if got := gitOut(t, dir, "rev-parse", "HEAD"); got != head {
+				t.Fatalf("local HEAD moved to %s, want it left at %s", got, head)
+			}
+		})
 	}
 }
 
-// TestDoPRLetsAnEnvironmentIdentityWinOverTheConfiguredAuthor exercises the
-// precedence rule: GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME
-// and GIT_COMMITTER_EMAIL already set in the process environment win over
-// the configured author, even though no other identity exists.
-func TestDoPRLetsAnEnvironmentIdentityWinOverTheConfiguredAuthor(t *testing.T) {
-	dir, origin := newPRRepoWithoutIdentity(t)
-	commitWithIdentity(t, dir, "feat: add the next command")
+// TestDoPRCommitsExactlyTheReleaseContent pins what the forge commit
+// carries: the changelog with the new section prepended and every bumped
+// file, in full, an executable file keeping its mode, the commit message
+// the pull request title.
+func TestDoPRCommitsExactlyTheReleaseContent(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	writeAndCommit(t, dir, "CHANGELOG.md", "# Changelog\n\n## v0.0.9 (2026-01-02)\n\n### Bug Fixes\n\n- an old fix\n", "chore: seed the changelog")
+	writeAndCommit(t, dir, "install.sh", "#!/bin/sh\nVERSION=0.0.9 # release-me: version\n", "chore: add the installer")
+	runGit(t, dir, "update-index", "--chmod=+x", "install.sh")
+	runGit(t, dir, "commit", "-q", "-m", "chore: make the installer executable")
+	runGit(t, dir, "tag", "v0.0.9")
+	commitEntry(t, dir, "feat: add the next command")
 
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
-	t.Setenv("GIT_AUTHOR_NAME", "CI Runner")
-	t.Setenv("GIT_AUTHOR_EMAIL", "ci@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "CI Runner")
-	t.Setenv("GIT_COMMITTER_EMAIL", "ci@example.com")
+	cfg := config.Default()
+	cfg.Files = []config.File{{Path: "install.sh", Updater: "marker"}}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
-
-	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
+	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
 	}
 
-	want := "CI Runner <ci@example.com>"
-	if got := bareBranchAuthor(t, origin); got != want {
-		t.Fatalf("author = %q, want %q", got, want)
+	if len(f.CommitBranchCalls) != 1 {
+		t.Fatalf("CommitBranchCalls = %+v, want one", f.CommitBranchCalls)
+	}
+	commit := f.CommitBranchCalls[0].Commit
+	if commit.Message != "chore(main): release v0.1.0" {
+		t.Fatalf("message = %q", commit.Message)
+	}
+	files := map[string]forge.CommitFile{}
+	for _, file := range commit.Files {
+		files[file.Path] = file
+	}
+	if len(files) != 2 {
+		t.Fatalf("files = %+v, want CHANGELOG.md and install.sh", commit.Files)
+	}
+	gotChangelog := string(files["CHANGELOG.md"].Content)
+	if !strings.HasPrefix(gotChangelog, "# Changelog\n\n## [v0.1.0](") ||
+		!strings.Contains(gotChangelog, "- add the next command") ||
+		!strings.HasSuffix(gotChangelog, "## v0.0.9 (2026-01-02)\n\n### Bug Fixes\n\n- an old fix\n") {
+		t.Fatalf("CHANGELOG.md = %q", gotChangelog)
+	}
+	if got, want := string(files["install.sh"].Content), "#!/bin/sh\nVERSION=0.1.0 # release-me: version\n"; got != want {
+		t.Fatalf("install.sh = %q, want %q", got, want)
+	}
+	if !files["install.sh"].Executable || files["CHANGELOG.md"].Executable {
+		t.Fatalf("executable bits = install.sh %v, CHANGELOG.md %v, want true, false",
+			files["install.sh"].Executable, files["CHANGELOG.md"].Executable)
+	}
+	if got := showBareBranchFile(t, origin, "CHANGELOG.md"); got != gotChangelog {
+		t.Fatalf("CHANGELOG.md on the branch = %q, want the committed %q", got, gotChangelog)
+	}
+	if got := strings.Fields(gitOut(t, origin, "ls-tree", mainBranch, "--", "install.sh"))[0]; got != "100755" {
+		t.Fatalf("install.sh mode on the branch = %s, want 100755", got)
+	}
+}
+
+// TestDoPRLeasesAnUpdateOnThePullRequestsHeadAndNamesItOnFailure covers an
+// existing release branch: the new commit is rebuilt on the default
+// branch's HEAD, never on the old tip, replacing the branch only while it
+// is still at the head SHA the forge reports for the pull request. When
+// the forge refuses, the error names the branch and the pull request.
+func TestDoPRLeasesAnUpdateOnThePullRequestsHeadAndNamesItOnFailure(t *testing.T) {
+	cases := []struct {
+		name       string
+		headSHA    func(t *testing.T, origin string) string
+		wantErrIs  error
+		wantMoved  bool
+		wantErrHas []string
+	}{
+		{
+			name:      "the branch is still at the pull request's head",
+			headSHA:   bareBranchSHA,
+			wantMoved: true,
+		},
+		{
+			name:       "the branch moved since the forge reported the head",
+			headSHA:    func(*testing.T, string) string { return strings.Repeat("a", 40) },
+			wantErrIs:  forge.ErrBranchMoved,
+			wantErrHas: []string{"release branch " + mainBranch, "pull request #7"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, origin := newPRRepo(t)
+			commitEntry(t, dir, "feat: add the next command")
+
+			f := newPRFake(origin)
+			var stdout bytes.Buffer
+			if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
+				t.Fatalf("first doPR() error = %v", err)
+			}
+			before := bareBranchSHA(t, origin)
+			body := f.CreatedPullRequests[0].Body
+
+			commitEntry(t, dir, "feat: add the changelog command")
+			head := gitOut(t, dir, "rev-parse", "HEAD")
+			expected := tc.headSHA(t, origin)
+			f.ListResponses = []forgetest.ListResponse{{
+				Head: mainBranch, State: "open",
+				PullRequests: []forge.PullRequest{{Number: 7, Body: body, Labels: []string{"release: pending"}, HeadSHA: expected}},
+			}}
+
+			err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout)
+			if tc.wantErrIs != nil {
+				if !errors.Is(err, tc.wantErrIs) {
+					t.Fatalf("doPR() error = %v, want %v", err, tc.wantErrIs)
+				}
+				for _, want := range tc.wantErrHas {
+					if !strings.Contains(err.Error(), want) {
+						t.Fatalf("doPR() error = %q, want it to name %q", err, want)
+					}
+				}
+			} else if err != nil {
+				t.Fatalf("doPR() error = %v", err)
+			}
+
+			last := f.CommitBranchCalls[len(f.CommitBranchCalls)-1].Commit
+			if last.Parent != head || last.ExpectedHead != expected {
+				t.Fatalf("commit = parent %s, expected head %s, want parent %s, expected head %s",
+					last.Parent, last.ExpectedHead, head, expected)
+			}
+			after := bareBranchSHA(t, origin)
+			if moved := after != before; moved != tc.wantMoved {
+				t.Fatalf("branch moved = %v, want %v", moved, tc.wantMoved)
+			}
+			if tc.wantMoved {
+				if parent := gitOut(t, origin, "rev-parse", mainBranch+"^"); parent != head {
+					t.Fatalf("branch tip's parent = %s, want the default branch's HEAD %s", parent, head)
+				}
+			}
+		})
 	}
 }
 
@@ -244,7 +405,7 @@ func TestDoPRUpdatesWhenNewEntriesArriveSinceTheLastRun(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -283,7 +444,7 @@ func TestDoPRKeepsTheNotesBlockAcrossAnUpdate(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -323,7 +484,7 @@ func TestDoPRAppliesAVersionOverrideAndKeepsItAcrossAnUpdate(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -373,7 +534,7 @@ func TestDoPRIgnoresAVersionOverrideNotGreaterThanTheLastTag(t *testing.T) {
 	runGit(t, dir, "tag", "v5.0.0")
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -413,7 +574,7 @@ func TestDoPRIgnoresAnUnparsableVersionOverride(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -478,7 +639,7 @@ func TestDoPRChangesNothingWhenAlreadyUpToDate(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -549,7 +710,7 @@ func TestDoPRAddsTheGuideToAnExistingPullRequestWithoutAPush(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -591,7 +752,7 @@ func TestDoPRDryRunWritesNothing(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), true, &stdout); err != nil {
@@ -634,7 +795,7 @@ func TestDoPRBumpsAConfiguredMarkerFileOnTheReleaseBranch(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Files = []config.File{{Path: "version.go", Updater: "marker"}}
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
@@ -655,7 +816,7 @@ func TestDoPRBumpsATypedUpdaterFileOnTheReleaseBranch(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Files = []config.File{{Path: "Chart.yaml", Updater: "helm"}}
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
@@ -711,7 +872,7 @@ func TestDoPRDetectsAFilesConfigChangeEvenWithTheSameTitleAndBody(t *testing.T) 
 	writeAndCommit(t, dir, "version.go", "package main\n\nconst Version = \"0.0.0\" // release-me: version\n", "chore: add the version file")
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -750,7 +911,7 @@ func TestDoPRRendersAnExplicitLineWhenEveryEntryIsHidden(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.HiddenTypes = []string{"feat"}
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
@@ -820,7 +981,7 @@ func TestDoPRRejectsAMissingLabelBeforeWritingAnything(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	f.RepoLabels = []string{"release: pending"} // "release: tagged" is missing
 
 	err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, io.Discard)
@@ -839,7 +1000,7 @@ func TestDoPRKeepsAHumanAddedLabelOnUpdate(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -879,7 +1040,7 @@ func TestDoPRFollowsThePreReleaseLabelThroughATypeChangeBackToStableAndToRC(t *t
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var out bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &out); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
@@ -942,7 +1103,7 @@ func TestDoPRRejectsTwoPreReleaseLabelsAtOnce(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var out bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &out); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
@@ -979,7 +1140,7 @@ func TestDoPRPushesTheReleaseBranchOnEveryPreReleaseLabelTransition(t *testing.T
 	commitEntry(t, dir, "feat: add the next command")
 
 	cfg := config.Default()
-	f := newFake()
+	f := newPRFake(origin)
 	var out bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
@@ -1080,7 +1241,7 @@ func TestDoPRPushesOnlyOnceForAnInitialVersionWithBuildMetadata(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.InitialVersion = "1.2.3+build.5"
-	f := newFake()
+	f := newPRFake(origin)
 
 	t.Setenv("GIT_AUTHOR_DATE", "2026-01-01T00:00:00+00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2026-01-01T00:00:00+00:00")
@@ -1128,7 +1289,7 @@ func TestDoPRPushesNothingWhenRerunWithThePreReleaseLabelStillOn(t *testing.T) {
 	commitEntry(t, dir, "feat: add the next command")
 
 	cfg := config.Default()
-	f := newFake()
+	f := newPRFake(origin)
 	var out bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
@@ -1182,6 +1343,19 @@ func writeAndCommit(t *testing.T, dir, path, content, message string) {
 	}
 	runGit(t, dir, "add", path)
 	runGit(t, dir, "commit", "-q", "-m", message)
+}
+
+// gitOut runs git in dir, a work tree or a bare repository alike, and
+// returns its trimmed stdout, failing the test when it fails.
+func gitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.CommandContext(t.Context(), "git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %s: %v", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func equalStrings(got, want []string) bool {

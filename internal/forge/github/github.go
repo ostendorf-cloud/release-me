@@ -7,6 +7,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -197,6 +198,108 @@ func (f *Forge) MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 	_, _, err := f.client.Git.UpdateRef(ctx, owner, repo, "refs/tags/"+tag, gogithub.UpdateRef{SHA: sha, Force: &force})
 	if err != nil {
 		return fmt.Errorf("github: move tag %s: %w", tag, err)
+	}
+	return nil
+}
+
+// CommitBranch implements forge.Forge through the Git Data REST API: a
+// blob per file, a tree on top of the parent's, a commit with that one
+// parent, then the branch ref created or moved onto it. The commit is
+// sent without author or committer, so GitHub fills both from the token
+// and signs the commit itself, which it does only when neither is set.
+//
+// GraphQL's createCommitOnBranch would sign too, but it only appends to a
+// branch's current tip: it cannot rebuild a release branch from the
+// default branch's tip, which every push to an existing release branch
+// does. GitHub's REST ref update takes no expected value, so the lease on
+// c.ExpectedHead is a read of the ref right before the forced update; the
+// window between the two is the one a concurrent writer could slip into.
+func (f *Forge) CommitBranch(ctx context.Context, owner, repo string, c forge.BranchCommit) (string, error) {
+	parent, _, err := f.client.Git.GetCommit(ctx, owner, repo, c.Parent)
+	if err != nil {
+		return "", fmt.Errorf("github: branch %s: read parent commit %s: %w", c.Branch, c.Parent, err)
+	}
+
+	entries := make([]*gogithub.TreeEntry, 0, len(c.Files))
+	for _, file := range c.Files {
+		blob, _, err := f.client.Git.CreateBlob(ctx, owner, repo, gogithub.Blob{
+			Content:  base64.StdEncoding.EncodeToString(file.Content),
+			Encoding: new("base64"),
+		})
+		if err != nil {
+			return "", fmt.Errorf("github: branch %s: create blob for %s: %w", c.Branch, file.Path, err)
+		}
+		mode := "100644"
+		if file.Executable {
+			mode = "100755"
+		}
+		entries = append(entries, &gogithub.TreeEntry{
+			Path: new(file.Path),
+			Mode: new(mode),
+			Type: new("blob"),
+			SHA:  blob.SHA,
+		})
+	}
+
+	tree, _, err := f.client.Git.CreateTree(ctx, owner, repo, parent.GetTree().GetSHA(), entries)
+	if err != nil {
+		return "", fmt.Errorf("github: branch %s: create tree: %w", c.Branch, err)
+	}
+
+	commit, _, err := f.client.Git.CreateCommit(ctx, owner, repo, gogithub.Commit{
+		Message: new(c.Message),
+		Tree:    &gogithub.Tree{SHA: tree.SHA},
+		Parents: []*gogithub.Commit{{SHA: new(c.Parent)}},
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("github: branch %s: create commit: %w", c.Branch, err)
+	}
+
+	sha := commit.GetSHA()
+	if err := f.moveBranch(ctx, owner, repo, c, sha); err != nil {
+		return "", err
+	}
+	return sha, nil
+}
+
+// moveBranch points c.Branch at sha: replacing it outright when its
+// current tip is c.ExpectedHead, or, with no ExpectedHead, creating it or
+// fast-forwarding it, GitHub rejecting any other move.
+func (f *Forge) moveBranch(ctx context.Context, owner, repo string, c forge.BranchCommit, sha string) error {
+	ref := "refs/heads/" + c.Branch
+
+	if c.ExpectedHead == "" {
+		_, resp, err := f.client.Git.CreateRef(ctx, owner, repo, gogithub.CreateRef{Ref: ref, SHA: sha})
+		if err == nil {
+			return nil
+		}
+		if resp == nil || resp.StatusCode != http.StatusUnprocessableEntity {
+			return fmt.Errorf("github: create branch %s: %w", c.Branch, err)
+		}
+		// The branch already exists: move it the way a plain push would,
+		// fast-forward only.
+		_, resp, err = f.client.Git.UpdateRef(ctx, owner, repo, ref, gogithub.UpdateRef{SHA: sha, Force: new(false)})
+		if err != nil {
+			if resp != nil && resp.StatusCode == http.StatusUnprocessableEntity {
+				return fmt.Errorf("github: update branch %s: not a fast-forward: %w", c.Branch, forge.ErrBranchMoved)
+			}
+			return fmt.Errorf("github: update branch %s: %w", c.Branch, err)
+		}
+		return nil
+	}
+
+	current, resp, err := f.client.Git.GetRef(ctx, owner, repo, ref)
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return fmt.Errorf("github: update branch %s: it no longer exists, expected %s: %w", c.Branch, c.ExpectedHead, forge.ErrBranchMoved)
+		}
+		return fmt.Errorf("github: read branch %s: %w", c.Branch, err)
+	}
+	if got := current.GetObject().GetSHA(); got != c.ExpectedHead {
+		return fmt.Errorf("github: update branch %s: it is at %s, expected %s: %w", c.Branch, got, c.ExpectedHead, forge.ErrBranchMoved)
+	}
+	if _, _, err := f.client.Git.UpdateRef(ctx, owner, repo, ref, gogithub.UpdateRef{SHA: sha, Force: new(true)}); err != nil {
+		return fmt.Errorf("github: update branch %s: %w", c.Branch, err)
 	}
 	return nil
 }
