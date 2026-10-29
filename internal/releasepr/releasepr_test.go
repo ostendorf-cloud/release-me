@@ -92,7 +92,7 @@ func TestBodyRendersTheVersionGuideNotesAndChangelog(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := releasepr.Body("1.2.3", "v1.2.3", testLabels, tc.notes, "", tc.section)
+			got := releasepr.Body("1.2.3", "v1.2.3", &testLabels, tc.notes, "", tc.section)
 			if got != tc.want {
 				t.Fatalf("Body() = %q, want %q", got, tc.want)
 			}
@@ -113,7 +113,7 @@ func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 	}
 	section := "## v0.4.0 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 
-	got := releasepr.Body("0.4.0", "frontend/v0.4.0", labels, "", "", section)
+	got := releasepr.Body("0.4.0", "frontend/v0.4.0", &labels, "", "", section)
 
 	for _, want := range []string{
 		"tags `frontend/v0.4.0`",
@@ -131,7 +131,7 @@ func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 // the same way a human reading the collapsed section expects.
 func TestBodyRendersTheGuideExactlyOnce(t *testing.T) {
 	t.Parallel()
-	got := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "", "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n")
+	got := releasepr.Body("1.2.3", "v1.2.3", &testLabels, "", "", "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n")
 
 	if n := strings.Count(got, "How this release works"); n != 1 {
 		t.Fatalf("Body() contains the guide %d times, want exactly 1:\n%s", n, got)
@@ -179,7 +179,7 @@ func TestBodyAndExtractionsRoundTrip(t *testing.T) {
 	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 	notes := "Upgrade note: run the migration first."
 
-	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, notes, "", section)
+	body := releasepr.Body("1.2.3", "v1.2.3", &testLabels, notes, "", section)
 
 	gotNotes, ok := releasepr.ExtractNotes(body)
 	if !ok || gotNotes != notes {
@@ -211,7 +211,7 @@ func TestReleaseBodyWithoutNotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			section := tc.heading + "\n\n### Features\n\n- add the thing\n"
-			body := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "", section)
+			body := releasepr.Body("1.2.3", "v1.2.3", &testLabels, "", "", section)
 
 			want := tc.heading + "\n\n### Features\n\n- add the thing"
 			if got := releasepr.ReleaseBody(body); got != want {
@@ -228,7 +228,7 @@ func TestReleaseBodyWithoutNotes(t *testing.T) {
 func TestReleaseBodyDoesNotIncludeTheGuide(t *testing.T) {
 	t.Parallel()
 	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
-	body := releasepr.Body("1.2.3", "v1.2.3", testLabels, "Upgrade note.", "", section)
+	body := releasepr.Body("1.2.3", "v1.2.3", &testLabels, "Upgrade note.", "", section)
 
 	got := releasepr.ReleaseBody(body)
 	if strings.Contains(got, "How this release works") || strings.Contains(got, "<details>") {
@@ -268,7 +268,7 @@ func TestExtractDate(t *testing.T) {
 		{
 			name: "reads the heading date",
 			body: releasepr.Body(
-				"1.2.3", "v1.2.3", testLabels, "", "", "## v1.2.3 (2026-03-14)\n\n### Features\n\n- add the thing\n",
+				"1.2.3", "v1.2.3", &testLabels, "", "", "## v1.2.3 (2026-03-14)\n\n### Features\n\n- add the thing\n",
 			),
 			wantOK: true,
 			want:   "2026-03-14",
@@ -276,7 +276,7 @@ func TestExtractDate(t *testing.T) {
 		{
 			name: "reads the heading date of a heading linked to the compare view",
 			body: releasepr.Body(
-				"1.2.3", "v1.2.3", testLabels, "", "",
+				"1.2.3", "v1.2.3", &testLabels, "", "",
 				"## [v1.2.3](https://github.com/ostendorf-cloud/release-me/compare/v1.2.2...v1.2.3) (2026-03-14)\n\n"+
 					"### Features\n\n- add the thing\n",
 			),
@@ -286,7 +286,7 @@ func TestExtractDate(t *testing.T) {
 		{
 			name: "reads the first component's heading date of a shared release pull request",
 			body: releasepr.SharedBody(
-				[]releasepr.Release{{Name: "api", Version: "1.3.0", Tag: "api/v1.3.0"}}, testLabels, true, "", "",
+				[]releasepr.Release{{Name: "api", Version: "1.3.0", Tag: "api/v1.3.0"}}, &testLabels, true, "", "",
 				"#### api\n\n## [v1.3.0](https://github.com/ostendorf-cloud/release-me/compare/api/v1.2.0...api/v1.3.0) (2026-03-14)\n\n"+
 					"### Features\n\n- add the thing\n",
 			),
@@ -296,7 +296,7 @@ func TestExtractDate(t *testing.T) {
 		{
 			name: "reads the heading date of a pre-release version",
 			body: releasepr.Body(
-				"1.2.3-rc.1", "v1.2.3-rc.1", testLabels, "", "", "## v1.2.3-rc.1 (2026-03-14)\n\n### Features\n\n- add the thing\n",
+				"1.2.3-rc.1", "v1.2.3-rc.1", &testLabels, "", "", "## v1.2.3-rc.1 (2026-03-14)\n\n### Features\n\n- add the thing\n",
 			),
 			wantOK: true,
 			want:   "2026-03-14",
@@ -345,7 +345,7 @@ func TestBodyNamesOnlyTheEnabledPreReleaseLabels(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := releasepr.Body("0.4.0", "v0.4.0", tc.labels, "", "", section)
+			got := releasepr.Body("0.4.0", "v0.4.0", &tc.labels, "", "", section)
 			if tc.want != "" && !strings.Contains(got, tc.want) {
 				t.Fatalf("Body() = %q, want it to contain %q", got, tc.want)
 			}
@@ -360,7 +360,7 @@ func TestBodyRendersTheVersionOverrideBlock(t *testing.T) {
 	t.Parallel()
 	section := "## v2.0.0 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 
-	got := releasepr.Body("2.0.0", "v2.0.0", testLabels, "", "2.0.0", section)
+	got := releasepr.Body("2.0.0", "v2.0.0", &testLabels, "", "2.0.0", section)
 
 	want := "```release-me-version\n2.0.0\n```"
 	if !strings.Contains(got, want) {
@@ -372,7 +372,7 @@ func TestBodyRendersNoVersionOverrideBlockWhenEmpty(t *testing.T) {
 	t.Parallel()
 	section := "## v1.2.3 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 
-	got := releasepr.Body("1.2.3", "v1.2.3", testLabels, "", "", section)
+	got := releasepr.Body("1.2.3", "v1.2.3", &testLabels, "", "", section)
 
 	if strings.Contains(got, "```release-me-version") {
 		t.Fatalf("Body() = %q, want no release-me-version block", got)
@@ -526,7 +526,7 @@ func TestSharedBodyNamesEveryComponentVersionAndTag(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			body := releasepr.SharedBody(releases, testLabels, tc.perComponentVersion, "", "", section)
+			body := releasepr.SharedBody(releases, &testLabels, tc.perComponentVersion, "", "", section)
 			for _, want := range []string{
 				"Release api v1.3.0, web v0.4.1\n",
 				"tags `api/v1.3.0, web/v0.4.1`",

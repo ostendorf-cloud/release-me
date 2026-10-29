@@ -256,9 +256,11 @@ the `pending` label is added back if it is ever missing, never set by replacing 
 The pull request title is `chore(<name>): release vX.Y.Z`, `chore(main): release vX.Y.Z` for
 the implicit `main` component. Its body starts with `Release vX.Y.Z`, then a collapsed
 `<details><summary>How this release works</summary>` guide naming the tag merging creates and
-the configured labels for pre-releases and tagging, then the notes block (below) when one is
-present, then the full changelog for the version inside a collapsed `<details>` section. When
-every entry is a hidden type, the changelog carries one explicit line,
+the configured labels for pre-releases and tagging, left out with
+[`release-pull-request-guide: false`](#release-pull-request-guide), then the version
+override block and the notes block (below) when present, then the full changelog for the
+version inside a collapsed `<details>` section. When every entry is a hidden type, the
+changelog carries one explicit line,
 `- Version bump without user facing changes.`, instead of an empty heading. The guide never
 reaches the changelog file or the GitHub release. A shared release pull request's title and
 body name every component it releases: see
@@ -388,8 +390,11 @@ Run the migration before upgrading.
 ```
 ````
 
-Add it by hand once the pull request is open. `pr` keeps it verbatim on every later update, and
-`release` carries it into the GitHub release, above the changelog.
+Add it by hand once the pull request is open, anywhere in the body, or through a
+[`release-notes` comment](#comment-commands). `pr` keeps it verbatim on every later update, and
+`release` carries it into the GitHub release, above the changelog. A shared release pull
+request's notes reach every component's release. Every other edit to the body, outside the
+notes block and the `release-me-version` block, is overwritten by the next `pr` run.
 
 ### Override block
 
@@ -439,7 +444,8 @@ version forward but never backward. On a shared release pull request with
 component first, `release-as api 2.0.0`, checked against that component's last tag; with no
 component named it applies to the one component the pull request releases and is refused as
 ambiguous when it releases several. A component the pull request does not release is refused
-too. Which components it releases is read from the body's `#### <name>` headings, the comment
+too. Which components it releases is read from the body's component headings or `<details>`
+summaries, in whichever [layout](#release-pull-request-layout) the body carries, the comment
 command's source of truth: a heading added or deleted by hand changes what the command accepts,
 and the recompute that follows still applies an override only to a component the pull request
 actually releases. Everywhere else there is one version to force, and naming a component is refused.
@@ -629,7 +635,9 @@ release pull request, the shape every example above already is, unless
 
 `locked` bumps every component to the same new version and releases all of them together,
 changed or not: one release pull request, branch `release-me/main`, with one changelog section
-per component, each updating its own `CHANGELOG.md`. Its title names the version and every
+per component, each updating its own `CHANGELOG.md`. The body carries the family's version
+heading once, then every component's sections, laid out by
+[the layout key](#release-pull-request-layout). Its title names the version and every
 component it covers, `chore: release vX.Y.Z (a, b, c)`. On merge, every component is tagged
 `<name>/vX.Y.Z` with the same version and released the same way an independent component is.
 `locked` always releases the whole family, so `--component` naming one of them is a usage
@@ -698,11 +706,14 @@ release-please's grouped pull request names the packages in its body. GitHub cap
 with 20-character names: `pr` refuses a longer title before it pushes or writes anything,
 naming its length and the components, since `release` could not read it back after the merge.
 Release more often, so fewer components carry changes at once, or switch to `per-component`.
-The body starts with
-`Release api v1.3.0, web v0.3.1`, the guide names every tag merging creates, and the changelog
-has one `#### <name>` section per component, each with that component's own heading and compare
-link. On merge, `release` reads the components and versions back from the title and tags each
-one on the merge commit, creates one GitHub release per component from the notes block and that
+The body starts with `Release api v1.3.0, web v0.3.1`, the guide names every tag merging
+creates, and the changelog has one section per component, each with that component's own
+heading and compare link, laid out by [the layout key](#release-pull-request-layout): a
+`## <name>` heading per component by default, a collapsed `<details>` block per component like
+release-please's with `details`, or the earlier `#### <name>` heading with `compact`. The layout
+is read back from the body, so changing the key while the pull request is open is safe. On
+merge, `release` reads the components and versions back from the title and tags each one on the
+merge commit, creates one GitHub release per component from the notes block and that
 component's own section, moves each component's major tag where `major-tag` applies, and swaps
 the labels once for the whole pull request.
 
@@ -726,6 +737,104 @@ the pull request merges, so merge the switch only after `release` has tagged eve
 per-component pull request merged before it, or tag a missed one by hand. Switching back
 to `per-component` does not read `release-me/main` any more: merge or close the shared pull
 request first.
+
+### Release pull request layout
+
+The top-level `release-pull-request-layout` key chooses how the changelog in the body of a
+release pull request carrying several components lays out each component, default `headings`.
+It applies to every such body, the [shared release pull request](#shared-release-pull-request)
+and the one a `locked` family shares; a pull request releasing one component has no component
+layout. Only the pull request body changes: every `CHANGELOG.md` and every GitHub release keep
+the heading levels they always had, and each component's release body is the same whichever
+layout the pull request was rendered in. `locked` keeps its one combined, unlinked version
+heading above every component in all three layouts, each component's slice then carrying only
+its sections.
+
+- `headings` gives each component a level two heading of its own, its section shifted one level
+  down below it:
+
+  ```markdown
+  ## api
+
+  ### [v1.3.0](https://github.com/owner/repo/compare/api/v1.2.0...api/v1.3.0) (2026-03-14)
+
+  #### Features
+
+  - add the export endpoint
+  ```
+
+- `details` collapses each component into a block of its own, summarised with its name and
+  version, the shape release-please renders. The section inside keeps its `CHANGELOG.md`
+  levels, a level two version heading and level three sections, since the summary already names
+  the component:
+
+  ```markdown
+  <details><summary>api v1.3.0</summary>
+
+  ## [v1.3.0](https://github.com/owner/repo/compare/api/v1.2.0...api/v1.3.0) (2026-03-14)
+
+  ### Features
+
+  - add the export endpoint
+
+  </details>
+  ```
+
+- `compact` is the layout before the key existed: a level four heading per component, its
+  section at its `CHANGELOG.md` levels, so the version heading renders larger than the name:
+
+  ```markdown
+  #### api
+
+  ## [v1.3.0](https://github.com/owner/repo/compare/api/v1.2.0...api/v1.3.0) (2026-03-14)
+
+  ### Features
+
+  - add the export endpoint
+  ```
+
+Any other value is a configuration error. Every command reads the layout back from the body
+itself, never from the key: a pull request opened before the key changed still releases every
+component it carries, and a `release-as <component>` comment still finds them. The next `pr`
+run rewrites the body in the new layout without pushing the release branch. A `<details>`
+block whose summary reads `<name> vX.Y.Z` marks `details`, a level two heading that is not a
+version heading marks `headings`, anything else is `compact`; the release notes and version
+override blocks are never read for components.
+
+### Release pull request guide
+
+Every release pull request body, per component, shared or locked, opens with a collapsed
+`<details><summary>How this release works</summary>` guide below its version line. The
+top-level `release-pull-request-guide` key turns it off for every one of them, default `true`:
+
+```yaml
+release-pull-request-guide: false
+```
+
+The guide is a reminder for whoever reviews the pull request, never something release-me reads:
+the notes block, the `release-me-version` block, the components of a shared or locked body in
+every layout, the changelog date and the release bodies all read back the same with the guide
+or without it, and both comment commands work on either. Changing the key while a release pull
+request is open is safe: the next `pr` run adds or drops the guide through a body update alone,
+without pushing the release branch, the notes block and a version override kept.
+
+A team that turns the guide off finds everything it says documented here:
+
+- What merging does, the tag, the release, the label swap and the moving major tag:
+  [release](#release).
+- Release notes, the `release-me-notes` block: [Notes block](#notes-block).
+- Forcing the next version, the `release-me-version` block and the `release-as` comment, per
+  component on a shared pull request with `independent` versions:
+  [Comment commands](#comment-commands), the
+  [Release-As footer](#release-as-footer) for doing it from a commit, and
+  [Shared release pull request](#shared-release-pull-request).
+- Pre-releases through the `alpha`, `beta` and `rc` labels: [Pre-releases](#pre-releases).
+- Hiding or rewriting a merged pull request's entry, the `release-me` block in its body:
+  [Override block](#override-block).
+- What a push to the default branch updates and which edits survive it: [pr](#pr) and the
+  [Notes block](#notes-block).
+
+`migrate` leaves the key out, so a migrated repository keeps the guide.
 
 ## Configuration
 
@@ -823,6 +932,11 @@ files:
 - `release-pull-request`: `per-component`, the default for `independent` and `linked`, or
   `shared`, always the case for `locked`, which rejects `per-component`. See
   [Shared release pull request](#shared-release-pull-request).
+- `release-pull-request-layout`: `headings` (default), `details` or `compact`, how a release
+  pull request carrying several components lays out each one. See
+  [Release pull request layout](#release-pull-request-layout).
+- `release-pull-request-guide`: `true` (default) or `false`. See
+  [Release pull request guide](#release-pull-request-guide).
 - `draft-until-assets-attach`: drafts every release instead of publishing it immediately,
   default `false`. There is no per-component override: it applies to the whole repository.
   Only a repository with GitHub's immutable releases setting turned on needs `true`; it

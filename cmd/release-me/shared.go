@@ -76,8 +76,8 @@ type sharedMember struct {
 // "release-pull-request: shared", branch "release-me/main": every component
 // with something to release this run, each at its own version in
 // VersioningIndependent and at the family's in VersioningLinked, with its
-// own CHANGELOG.md section, its own file updates and its own "#### <name>"
-// slice of the combined body. A component with nothing to release is left
+// own CHANGELOG.md section, its own file updates and its own slice of the
+// combined body, laid out by release-pull-request-layout. A component with nothing to release is left
 // out, the same as it gets no pull request of its own per component.
 func doPRShared(
 	ctx context.Context, dir string, cfg config.Config, owner, repoName, base string,
@@ -187,14 +187,17 @@ func doPRShared(
 	// gets, linked to its own compare view: the pull request has no one
 	// version for a combined heading, and each component's GitHub release
 	// renders its slice exactly the way a release of its own would.
-	parts := make([]string, 0, len(members))
+	parts := make([]releasepr.ComponentChangelog, 0, len(members))
 	releases := make([]releasepr.Release, 0, len(members))
 	for i, m := range members {
 		c := changelogs[i]
-		parts = append(parts, fmt.Sprintf("#### %s\n\n%s\n\n%s", m.comp.Name, changelog.RenderHeading(c.version, date, c.compareURL), c.entriesBody))
+		parts = append(parts, releasepr.ComponentChangelog{
+			Name: m.comp.Name, Version: m.versionStr,
+			Section: changelog.RenderHeading(c.version, date, c.compareURL) + "\n\n" + c.entriesBody,
+		})
 		releases = append(releases, releasepr.Release{Name: m.comp.Name, Version: m.versionStr, Tag: m.comp.TagPrefix + m.versionStr})
 	}
-	section := strings.Join(parts, "\n\n") + "\n"
+	section := releasepr.RenderComponents(releasepr.Layout(cfg.ReleasePullRequestLayout), parts) + "\n"
 
 	body := releasepr.SharedBody(releases, guideLabels(cfg), perComponentVersion, notes, versionOverride, section)
 	names := make([]string, 0, len(members))
@@ -391,7 +394,11 @@ func reportSupersededPRs(
 }
 
 // guideLabels returns the label names a release pull request body's guide
-// renders.
-func guideLabels(cfg config.Config) releasepr.GuideLabels {
-	return releasepr.GuideLabels{Tagged: cfg.Labels.Tagged, Alpha: cfg.Labels.Alpha, Beta: cfg.Labels.Beta, Rc: cfg.Labels.Rc}
+// renders, or nil with "release-pull-request-guide: false", which leaves
+// the guide out of every release pull request body.
+func guideLabels(cfg config.Config) *releasepr.GuideLabels {
+	if !cfg.ReleasePullRequestGuide {
+		return nil
+	}
+	return &releasepr.GuideLabels{Tagged: cfg.Labels.Tagged, Alpha: cfg.Labels.Alpha, Beta: cfg.Labels.Beta, Rc: cfg.Labels.Rc}
 }

@@ -252,13 +252,7 @@ func doPRComponent(
 	section := changelog.RenderHeading(versionStr, date, link) + "\n\n" + entriesBody + "\n"
 
 	title := releasepr.Title(comp.Name, versionStr)
-	guideLabels := releasepr.GuideLabels{
-		Tagged: cfg.Labels.Tagged,
-		Alpha:  cfg.Labels.Alpha,
-		Beta:   cfg.Labels.Beta,
-		Rc:     cfg.Labels.Rc,
-	}
-	body := releasepr.Body(versionStr, tag, guideLabels, notes, versionOverride, section)
+	body := releasepr.Body(versionStr, tag, guideLabels(cfg), notes, versionOverride, section)
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body:
@@ -405,7 +399,7 @@ func doPRLocked(
 	}
 
 	changelogs := make([]changelogUpdate, 0, len(members))
-	bodyParts := make([]string, 0, len(members))
+	bodyParts := make([]releasepr.ComponentChangelog, 0, len(members))
 	var files []fileUpdate
 	for _, m := range members {
 		var entries []changelog.Entry
@@ -420,7 +414,7 @@ func doPRLocked(
 			path: m.comp.ChangelogPath, version: versionStr, entriesBody: entriesBody,
 			compareURL: compareURL(f, owner, repoName, releases[m.comp.Name].fromTag, m.comp.TagPrefix+versionStr),
 		})
-		bodyParts = append(bodyParts, fmt.Sprintf("#### %s\n\n%s", m.comp.Name, entriesBody))
+		bodyParts = append(bodyParts, releasepr.ComponentChangelog{Name: m.comp.Name, Version: versionStr, Section: entriesBody})
 		files = append(files, filesAt(m.comp.Files, versionStr)...)
 	}
 
@@ -443,7 +437,8 @@ func doPRLocked(
 	// The combined heading stays unlinked: every component carries a tag
 	// of its own, so there is no one compare view for the family. Each
 	// component's own CHANGELOG.md heading links its own.
-	section := changelog.RenderHeading(versionStr, date, "") + "\n\n" + strings.Join(bodyParts, "\n\n") + "\n"
+	section := changelog.RenderHeading(versionStr, date, "") + "\n\n" +
+		releasepr.RenderComponents(releasepr.Layout(cfg.ReleasePullRequestLayout), bodyParts) + "\n"
 
 	tags := make([]string, 0, len(members))
 	for _, m := range members {
@@ -451,13 +446,7 @@ func doPRLocked(
 	}
 
 	title := tagrelease.LockedTitle(versionStr, names)
-	guideLabels := releasepr.GuideLabels{
-		Tagged: cfg.Labels.Tagged,
-		Alpha:  cfg.Labels.Alpha,
-		Beta:   cfg.Labels.Beta,
-		Rc:     cfg.Labels.Rc,
-	}
-	body := releasepr.Body(versionStr, strings.Join(tags, ", "), guideLabels, notes, versionOverride, section)
+	body := releasepr.Body(versionStr, strings.Join(tags, ", "), guideLabels(cfg), notes, versionOverride, section)
 
 	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, "locked family", names, existing, plan, date, title, body, dryRun, stdout)
 }

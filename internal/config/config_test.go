@@ -102,10 +102,12 @@ func TestLoadReadsConfiguredKeys(t *testing.T) {
 					Pending: config.DefaultPendingLabel, Tagged: config.DefaultTaggedLabel,
 					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
 				},
-				Author:             config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
-				Versioning:         config.DefaultVersioning,
-				ReleasePullRequest: config.ReleasePullRequestPerComponent,
-				CommentMention:     config.DefaultCommentMention,
+				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
+				Versioning:               config.DefaultVersioning,
+				ReleasePullRequest:       config.ReleasePullRequestPerComponent,
+				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
+				ReleasePullRequestGuide:  true,
+				CommentMention:           config.DefaultCommentMention,
 			},
 		},
 		{
@@ -128,6 +130,8 @@ author:
   email: renovate@example.com
 major-tag: true
 release-pull-request: shared
+release-pull-request-layout: details
+release-pull-request-guide: false
 draft-until-assets-attach: true
 files:
   - path: cmd/cli/version.go
@@ -149,12 +153,13 @@ files:
 					Pending: "needs-release", Tagged: "released",
 					Alpha: "needs-alpha", Beta: "needs-beta", Rc: "needs-rc",
 				},
-				Author:                 config.Author{Name: "renovate", Email: "renovate@example.com"},
-				MajorTag:               true,
-				Versioning:             config.DefaultVersioning,
-				ReleasePullRequest:     config.ReleasePullRequestShared,
-				DraftUntilAssetsAttach: true,
-				CommentMention:         config.DefaultCommentMention,
+				Author:                   config.Author{Name: "renovate", Email: "renovate@example.com"},
+				MajorTag:                 true,
+				Versioning:               config.DefaultVersioning,
+				ReleasePullRequest:       config.ReleasePullRequestShared,
+				ReleasePullRequestLayout: config.LayoutDetails,
+				DraftUntilAssetsAttach:   true,
+				CommentMention:           config.DefaultCommentMention,
 				Files: []config.File{
 					{Path: "cmd/cli/version.go", Updater: "marker"},
 					{Path: "deploy/values.yaml", Updater: "marker"},
@@ -176,10 +181,12 @@ files:
 					Pending: config.DefaultPendingLabel, Tagged: config.DefaultTaggedLabel,
 					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
 				},
-				Author:             config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
-				Versioning:         config.DefaultVersioning,
-				ReleasePullRequest: config.ReleasePullRequestPerComponent,
-				CommentMention:     config.DefaultCommentMention,
+				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
+				Versioning:               config.DefaultVersioning,
+				ReleasePullRequest:       config.ReleasePullRequestPerComponent,
+				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
+				ReleasePullRequestGuide:  true,
+				CommentMention:           config.DefaultCommentMention,
 			},
 		},
 		{
@@ -196,10 +203,12 @@ files:
 					Pending: "needs-release", Tagged: config.DefaultTaggedLabel,
 					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
 				},
-				Author:             config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
-				Versioning:         config.DefaultVersioning,
-				ReleasePullRequest: config.ReleasePullRequestPerComponent,
-				CommentMention:     config.DefaultCommentMention,
+				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
+				Versioning:               config.DefaultVersioning,
+				ReleasePullRequest:       config.ReleasePullRequestPerComponent,
+				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
+				ReleasePullRequestGuide:  true,
+				CommentMention:           config.DefaultCommentMention,
 			},
 		},
 		{
@@ -216,10 +225,12 @@ files:
 					Pending: config.DefaultPendingLabel, Tagged: config.DefaultTaggedLabel,
 					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
 				},
-				Author:             config.Author{Name: "renovate", Email: config.DefaultAuthorEmail},
-				Versioning:         config.DefaultVersioning,
-				ReleasePullRequest: config.ReleasePullRequestPerComponent,
-				CommentMention:     config.DefaultCommentMention,
+				Author:                   config.Author{Name: "renovate", Email: config.DefaultAuthorEmail},
+				Versioning:               config.DefaultVersioning,
+				ReleasePullRequest:       config.ReleasePullRequestPerComponent,
+				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
+				ReleasePullRequestGuide:  true,
+				CommentMention:           config.DefaultCommentMention,
 			},
 		},
 	}
@@ -559,6 +570,54 @@ func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
 	}
 }
 
+func TestDefaultRendersTheReleasePullRequestGuide(t *testing.T) {
+	t.Parallel()
+	if got := config.Default().ReleasePullRequestGuide; !got {
+		t.Fatalf("ReleasePullRequestGuide = %v, want true", got)
+	}
+}
+
+func TestLoadReadsReleasePullRequestGuide(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{name: "left out defaults to true", content: "initial-version: 0.1.0\n", want: true},
+		{name: "explicit true keeps the guide", content: "release-pull-request-guide: true\n", want: true},
+		{name: "explicit false leaves the guide out", content: "release-pull-request-guide: false\n", want: false},
+		{
+			name:    "false applies to a locked family as well",
+			content: "versioning: locked\nrelease-pull-request-guide: false\ncomponents:\n  api:\n    path: services/api\n",
+			want:    false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeFile(t, tc.content)
+
+			got, err := config.Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got.ReleasePullRequestGuide != tc.want {
+				t.Fatalf("ReleasePullRequestGuide = %v, want %v", got.ReleasePullRequestGuide, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsAReleasePullRequestGuideThatIsNotABoolean(t *testing.T) {
+	t.Parallel()
+	path := writeFile(t, "release-pull-request-guide: sometimes\n")
+
+	if _, err := config.Load(path); err == nil {
+		t.Fatal("Load() error = nil, want an error")
+	}
+}
+
 func TestResolveSharesOneBranchAcrossEveryComponentWhenLocked(t *testing.T) {
 	t.Parallel()
 	path := writeFile(t, `versioning: locked
@@ -664,6 +723,54 @@ func TestLoadRejectsAnInvalidReleasePullRequest(t *testing.T) {
 			_, err := config.Load(writeFile(t, tc.content))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Load() error = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadReadsReleasePullRequestLayout(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		content string
+		want    config.ReleasePullRequestLayout
+	}{
+		{name: "defaults to headings", content: "", want: config.LayoutHeadings},
+		{name: "defaults to headings in locked", content: "versioning: locked\n", want: config.LayoutHeadings},
+		{name: "reads headings", content: "release-pull-request-layout: headings\n", want: config.LayoutHeadings},
+		{name: "reads details", content: "release-pull-request-layout: details\n", want: config.LayoutDetails},
+		{name: "reads compact", content: "release-pull-request-layout: compact\n", want: config.LayoutCompact},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := config.Load(writeFile(t, tc.content))
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got.ReleasePullRequestLayout != tc.want {
+				t.Fatalf("ReleasePullRequestLayout = %q, want %q", got.ReleasePullRequestLayout, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsAnUnknownReleasePullRequestLayout(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{name: "an unknown value", content: "release-pull-request-layout: tabs\n"},
+		{name: "a value in the wrong case", content: "release-pull-request-layout: Headings\n"},
+		{name: "an empty value", content: "release-pull-request-layout: \"\"\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := config.Load(writeFile(t, tc.content))
+			if err == nil || !strings.Contains(err.Error(), "is not headings, details or compact") {
+				t.Fatalf("Load() error = %v, want an unknown layout refused", err)
 			}
 		})
 	}
