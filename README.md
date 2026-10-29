@@ -25,8 +25,9 @@ mise use ubi:ostendorf-cloud/release-me
 ```
 
 As a GitHub Action, pinned to a commit digest, the convention every action in this
-organisation follows. `release-me run` opens and updates pull requests and creates tags and
-releases, so the job needs `contents: write` and `pull-requests: write`; `secrets.GITHUB_TOKEN`
+organisation follows. `release-me run` opens and updates pull requests, creates tags and
+releases and deletes a released release branch, so the job needs `contents: write` and
+`pull-requests: write`; `secrets.GITHUB_TOKEN`
 cannot trigger the checks on the release pull request it opens, a repository or GitHub App
 token can. A GitHub App token also lets the action attribute the release commit to the app's
 own bot account, through `app-slug`:
@@ -316,6 +317,18 @@ tag, `vX` for the implicit `main` component or its tag prefix followed by `X` fo
 one, onto the same commit. A tag that does not exist yet is created; one that does is moved,
 never left behind. A pre-release, once that lands, never moves it. `--dry-run` reports whether
 the major tag would be created or moved, writing nothing.
+
+With `delete-release-branch`, default `true`, `release` then deletes the release branch, the
+one GitHub offers to delete after the merge, printing `deleted release branch <branch>`. Only
+once every tag and release of the pull requests merged from it succeeded, for every component
+of a shared or locked pull request, and only while the branch still points at the head the
+pull request merged with and no open pull request uses it: a branch `pr` already pushed the
+next release onto stays. A branch already gone, deleted by GitHub's own setting to delete head
+branches on merge, is not an error. A failed delete, a protected branch say, is a warning and
+never fails the run, since the tags and releases exist by then; the branch stays for a human.
+`pr` pushes the branch afresh for the next release. Deleting needs `contents: write`, the
+permission tagging already needs. `--dry-run` prints `would delete release branch <branch>`
+and deletes nothing.
 
 ### run
 
@@ -723,7 +736,10 @@ and `release` still tags one that is merged instead, so it never stays pending. 
 looks for one while the component's own `release-me/<name>` branch exists on the remote, one
 `git ls-remote` per run. A repository that deletes head branches on merge loses that branch as
 the pull request merges, so merge the switch only after `release` has tagged every
-per-component pull request merged before it, or tag a missed one by hand. Switching back
+per-component pull request merged before it, or tag a missed one by hand.
+`delete-release-branch` never does that to the sweep: it deletes a per-component branch only
+after `release` tagged its pull request, and with `draft-until-assets-attach: true` leaves a
+swept one in place, so the sweep can still resume its unpublished draft. Switching back
 to `per-component` does not read `release-me/main` any more: merge or close the shared pull
 request first.
 
@@ -834,6 +850,10 @@ files:
 - `comment-mention`: the mention prefix a comment on the release pull request names to issue a
   `release-as` or `release-notes` command, default `@release-me`. See
   [Comment commands](#comment-commands). Cannot be empty.
+- `delete-release-branch`: deletes a release branch once `release` has tagged and released the
+  pull request merged from it, default `true`; `false` leaves it for a human or GitHub's own
+  setting to delete head branches on merge. There is no per-component override. See `release`
+  above.
 - `components`: maps a name to a `path` and optional overrides of `initial-version`,
   `bump-minor-pre-major`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
   `changelog`. A key

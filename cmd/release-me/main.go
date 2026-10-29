@@ -22,7 +22,7 @@ Commands:
   next        next version per component, nothing written
   changelog   changelog entries for the next version, nothing written
   pr          create or update the release pull requests
-  release     tag, release, labels and major tag for merged release pull requests
+  release     tag, release, labels, major tag and branch deletion for merged release pull requests
   run         pr then release, the CI entry point
   check       config, labels and token valid
   comment     apply a release-as or release-notes comment command

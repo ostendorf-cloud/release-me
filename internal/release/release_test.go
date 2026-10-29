@@ -356,6 +356,87 @@ func TestRunResumesAnAlreadyTaggedPullRequestWhoseReleaseIsStillADraft(t *testin
 	}
 }
 
+func TestEveryResultCarriesTheHeadCommitOfThePullRequestItTagged(t *testing.T) {
+	t.Parallel()
+	const head = "4f2c9a1e8b7d6c5f4e3d2c1b0a9f8e7d6c5b4a39"
+	comps := []release.Component{
+		{Name: "api", Branch: "release-me/main", TagPrefix: "api/v", Multi: true},
+		{Name: "web", Branch: "release-me/main", TagPrefix: "web/v", Multi: true},
+	}
+	cases := []struct {
+		name   string
+		title  string
+		labels []string
+		drafts map[string]bool
+		dryRun bool
+		run    func(f *forgetest.Fake, dryRun bool) ([]release.Result, error)
+		want   []string
+	}{
+		{
+			name: "per component", title: "chore(main): release v0.2.0", labels: []string{"release: pending"},
+			run: func(f *forgetest.Fake, dryRun bool) ([]release.Result, error) {
+				return release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, dryRun, discardLogger())
+			},
+			want: []string{head},
+		},
+		{
+			name: "per component, dry run", title: "chore(main): release v0.2.0", labels: []string{"release: pending"}, dryRun: true,
+			run: func(f *forgetest.Fake, dryRun bool) ([]release.Result, error) {
+				return release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, false, dryRun, discardLogger())
+			},
+			want: []string{head},
+		},
+		{
+			name: "locked family", title: "chore: release v1.4.0 (api, web)", labels: []string{"release: pending"},
+			run: func(f *forgetest.Fake, dryRun bool) ([]release.Result, error) {
+				return release.RunLocked(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, dryRun, discardLogger())
+			},
+			want: []string{head, head},
+		},
+		{
+			name: "shared release pull request", title: "chore: release api v1.4.0, web v0.3.1", labels: []string{"release: pending"},
+			run: func(f *forgetest.Fake, dryRun bool) ([]release.Result, error) {
+				return release.RunShared(context.Background(), f, "owner", "repo", "release-me/main", comps, testLabels, false, dryRun, discardLogger())
+			},
+			want: []string{head, head},
+		},
+		{
+			name: "a resumed draft an earlier run tagged carries none", title: "chore(main): release v0.2.0",
+			labels: []string{"release: tagged"}, drafts: map[string]bool{"v0.2.0": true},
+			run: func(f *forgetest.Fake, dryRun bool) ([]release.Result, error) {
+				return release.Run(context.Background(), f, "owner", "repo", mainComponent, testLabels, true, dryRun, discardLogger())
+			},
+			want: []string{""},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pr := forge.PullRequest{Number: 9, Title: tc.title, Labels: tc.labels, Merged: true, HeadSHA: head}
+			f := &forgetest.Fake{
+				ListResponses: []forgetest.ListResponse{
+					{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+				},
+				MergeCommits:  map[int]string{9: "deadbeef"},
+				PRLabels:      map[int][]string{9: tc.labels},
+				ReleaseDrafts: tc.drafts,
+			}
+
+			results, err := tc.run(f, tc.dryRun)
+			if err != nil {
+				t.Fatalf("run error = %v", err)
+			}
+			var got []string
+			for _, r := range results {
+				got = append(got, r.HeadSHA)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("HeadSHA per result = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestRunDoesNotResumeAnAlreadyTaggedPullRequestOnceItsReleaseIsPublished(t *testing.T) {
 	t.Parallel()
 	pr := forge.PullRequest{Number: 9, Title: "chore(main): release v0.2.0", Labels: []string{"release: tagged"}, Merged: true}

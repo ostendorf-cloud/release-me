@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	gogithub "github.com/google/go-github/v93/github"
@@ -760,6 +761,60 @@ func TestMergeCommitReturnsTheMergeCommitSHA(t *testing.T) {
 	}
 	if got != "deadbeef" {
 		t.Fatalf("MergeCommit() = %q, want %q", got, "deadbeef")
+	}
+}
+
+func TestDeleteBranch(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		status  int
+		body    string
+		wantErr bool
+	}{
+		{name: "deletes the branch reference", status: http.StatusNoContent},
+		{
+			name: "treats a reference that does not exist as already deleted", status: http.StatusUnprocessableEntity,
+			body: `{"message": "Reference does not exist", "documentation_url": "https://docs.github.com/rest/git/refs#delete-a-reference"}`,
+		},
+		{name: "treats a missing reference on a 404 as already deleted", status: http.StatusNotFound, body: `{"message": "Not Found"}`},
+		{
+			name: "reports a protected branch", status: http.StatusUnprocessableEntity,
+			body:    `{"message": "Cannot delete this protected branch"}`,
+			wantErr: true,
+		},
+		{name: "reports a missing permission", status: http.StatusForbidden, body: `{"message": "Resource not accessible by integration"}`, wantErr: true},
+		{name: "wraps a server error", status: http.StatusInternalServerError, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mux := http.NewServeMux()
+			var method string
+			mux.HandleFunc("/api/v3/repos/owner/repo/git/refs/heads/release-me/api", func(w http.ResponseWriter, r *http.Request) {
+				method = r.Method
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			})
+			f := newTestForge(t, mux)
+
+			err := f.DeleteBranch(context.Background(), "owner", "repo", "release-me/api")
+			if method != http.MethodDelete {
+				t.Fatalf("method = %q, want DELETE", method)
+			}
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("DeleteBranch() error = nil, want an error")
+				}
+				if !strings.Contains(err.Error(), "release-me/api") {
+					t.Fatalf("DeleteBranch() error = %q, want it to name the branch", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DeleteBranch() error = %v", err)
+			}
+		})
 	}
 }
 

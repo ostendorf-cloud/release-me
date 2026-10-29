@@ -322,7 +322,7 @@ func releaseShared(
 			tag := comp.TagPrefix + versionStr
 			result := Result{
 				PullRequestNumber: pr.Number, Name: comp.Name, Version: versionStr, Tag: tag,
-				Message: fmt.Sprintf("would tag and release %s", tag),
+				Message: fmt.Sprintf("would tag and release %s", tag), HeadSHA: pr.HeadSHA,
 			}
 			mtag, mmsg, err := applyMajorTag(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, versionStr, "", comp.MajorTag, dryRun)
 			if err != nil {
@@ -400,7 +400,7 @@ func releaseShared(
 		}
 		results = append(results, Result{
 			PullRequestNumber: pr.Number, Name: comp.Name, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
-			Message: message, MajorTag: mtag, MajorTagMessage: mmsg,
+			Message: message, MajorTag: mtag, MajorTagMessage: mmsg, HeadSHA: pr.HeadSHA,
 		})
 	}
 
@@ -478,6 +478,12 @@ type Result struct {
 	// MajorTagMessage reports what happened to the major tag, including
 	// why it was skipped; empty when major-tag is off for the component.
 	MajorTagMessage string
+	// HeadSHA is the head commit the pull request merged with, the one
+	// this run tagged and released, or would in a dry run: the caller
+	// deleting the release branch afterwards checks the branch still
+	// points there. Empty for a resumed release, which an earlier run
+	// tagged, and when the forge reported no head commit.
+	HeadSHA string
 }
 
 // MajorTagName returns the major tag name for tagPrefix and releasedVersion,
@@ -647,7 +653,7 @@ func releaseOne(
 	if dryRun {
 		result := Result{
 			PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag,
-			Message: fmt.Sprintf("would tag and release %s", tag),
+			Message: fmt.Sprintf("would tag and release %s", tag), HeadSHA: pr.HeadSHA,
 		}
 		mtag, mmsg, err := applyMajorTag(ctx, f, owner, repoName, componentName, tagPrefix, versionStr, "", majorTagEnabled, dryRun)
 		if err != nil {
@@ -734,7 +740,7 @@ func releaseOne(
 
 	return Result{
 		PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
-		Message: message, MajorTag: mtag, MajorTagMessage: mmsg,
+		Message: message, MajorTag: mtag, MajorTagMessage: mmsg, HeadSHA: pr.HeadSHA,
 	}, nil
 }
 

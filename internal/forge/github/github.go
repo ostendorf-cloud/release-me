@@ -249,6 +249,31 @@ func releaseAlreadyExists(err error) bool {
 	return false
 }
 
+// DeleteBranch implements forge.Forge, through DELETE
+// /repos/{owner}/{repo}/git/refs/heads/{branch}, which needs the same
+// "contents: write" a tag already does. GitHub answers a ref that does not
+// exist with 422 "Reference does not exist", and some GitHub Enterprise
+// Server versions with 404: both mean already deleted. A 422 for any other
+// reason, such as a protected branch, is an error.
+func (f *Forge) DeleteBranch(ctx context.Context, owner, repo, branch string) error {
+	resp, err := f.client.Git.DeleteRef(ctx, owner, repo, "refs/heads/"+branch)
+	if err != nil {
+		if resp != nil && (resp.StatusCode == http.StatusNotFound ||
+			resp.StatusCode == http.StatusUnprocessableEntity && referenceDoesNotExist(err)) {
+			return nil
+		}
+		return fmt.Errorf("github: delete branch %s: %w", branch, err)
+	}
+	return nil
+}
+
+// referenceDoesNotExist reports whether err is GitHub's answer to deleting
+// a ref that is not there, as opposed to one it refuses to delete.
+func referenceDoesNotExist(err error) bool {
+	var errResp *gogithub.ErrorResponse
+	return errors.As(err, &errResp) && strings.Contains(strings.ToLower(errResp.Message), "reference does not exist")
+}
+
 // IsReleaseDraft implements forge.Forge. It lists the repository's releases
 // and matches tag by hand, rather than GitHub's "get a release by tag name"
 // endpoint: that endpoint excludes drafts, confirmed live against this

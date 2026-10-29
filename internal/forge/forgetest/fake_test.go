@@ -200,6 +200,34 @@ func TestFakeRepositoryLabelsReturnsTheConfiguredError(t *testing.T) {
 	}
 }
 
+func TestFakeDeleteBranchRecordsTheCallOrReturnsTheConfiguredError(t *testing.T) {
+	t.Parallel()
+	refused := errors.New("cannot delete this protected branch")
+	cases := []struct {
+		name    string
+		err     error
+		want    []forgetest.DeleteBranchCall
+		wantErr error
+	}{
+		{name: "records the deleted branch", want: []forgetest.DeleteBranchCall{{Owner: "owner", Repo: "repo", Branch: "release-me/api"}}},
+		{name: "returns the configured error and records nothing", err: refused, wantErr: refused},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := &forgetest.Fake{DeleteBranchErr: tc.err}
+
+			err := f.DeleteBranch(context.Background(), "owner", "repo", "release-me/api")
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("DeleteBranch() error = %v, want %v", err, tc.wantErr)
+			}
+			if !reflect.DeepEqual(f.DeletedBranches, tc.want) {
+				t.Fatalf("DeletedBranches = %+v, want %+v", f.DeletedBranches, tc.want)
+			}
+		})
+	}
+}
+
 func TestFakeSetLabelsRecordsTheCall(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}

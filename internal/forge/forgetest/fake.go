@@ -80,6 +80,11 @@ type CreateCommentCall struct {
 	Body        string
 }
 
+// DeleteBranchCall records one call to DeleteBranch.
+type DeleteBranchCall struct {
+	Owner, Repo, Branch string
+}
+
 // Fake is a forge.Forge backed by fixed, pre-configured responses. It
 // records every write call, so tests can assert on them.
 type Fake struct {
@@ -163,6 +168,11 @@ type Fake struct {
 	MovedTags           []MoveTagCall
 	CreatedReleases     []CreateReleaseCall
 	CreatedComments     []CreateCommentCall
+	DeletedBranches     []DeleteBranchCall
+
+	// DeleteBranchErr, when set, is returned by DeleteBranch instead of
+	// recording a call, simulating a refusal such as a protected branch.
+	DeleteBranchErr error
 
 	// CreateCommentErr, when set, is returned by CreateComment instead of
 	// recording a call.
@@ -327,6 +337,16 @@ func (f *Fake) IsReleaseDraft(_ context.Context, _, _, tag string) (bool, error)
 // MergeCommit implements forge.Forge.
 func (f *Fake) MergeCommit(_ context.Context, _, _ string, number int) (string, error) {
 	return f.MergeCommits[number], nil
+}
+
+// DeleteBranch implements forge.Forge. It records the call and leaves
+// every git remote alone: a test reads DeletedBranches.
+func (f *Fake) DeleteBranch(_ context.Context, owner, repo, branch string) error {
+	if f.DeleteBranchErr != nil {
+		return f.DeleteBranchErr
+	}
+	f.DeletedBranches = append(f.DeletedBranches, DeleteBranchCall{Owner: owner, Repo: repo, Branch: branch})
+	return nil
 }
 
 // CreateComment implements forge.Forge.

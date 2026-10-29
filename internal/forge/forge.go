@@ -126,6 +126,14 @@ type Forge interface {
 	// merged as.
 	MergeCommit(ctx context.Context, owner, repo string, number int) (string, error)
 
+	// DeleteBranch deletes the branch named branch, such as a release
+	// branch whose pull request is merged and released. A branch that does
+	// not exist, deleted already by a human or by the forge's own setting
+	// to delete head branches on merge, is not an error: what the caller
+	// wants is already the case. Any other refusal, a protected branch
+	// among them, is.
+	DeleteBranch(ctx context.Context, owner, repo, branch string) error
+
 	// CreateComment posts body as a new comment on pull request number: a
 	// release pull request's own comment thread, not a threaded reply to
 	// any one existing comment.
