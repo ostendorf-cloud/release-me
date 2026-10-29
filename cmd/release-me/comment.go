@@ -184,10 +184,12 @@ func doComment(
 // component it releases when none is named; naming none while it releases
 // several is refused as ambiguous. refusal, when not "", is the reason the
 // command is refused, and nothing is written. Which components the pull
-// request releases is read from its body's "#### <name>" headings, the
-// comment path's source of truth: a heading added or deleted by hand
-// changes what the command accepts, and the recompute that follows still
-// applies an override only to a component it actually releases.
+// request releases is read from its body's component headings or details
+// summaries, in whichever layout the body carries, not the one
+// release-me.yaml sets now: the comment path's source of truth, so a
+// heading added or deleted by hand changes what the command accepts, and
+// the recompute that follows still applies an override only to a
+// component it actually releases.
 func releaseAsTarget(cfg config.Config, pr forge.PullRequest, component string) (target, refusal string) {
 	if !sharedOutsideLocked(cfg) || cfg.Versioning != config.VersioningIndependent {
 		if component == "" {

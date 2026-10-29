@@ -114,6 +114,34 @@ const (
 	ReleasePullRequestShared ReleasePullRequest = "shared"
 )
 
+// ReleasePullRequestLayout names how the body of a release pull request
+// carrying several components, shared or locked, lays out each component's
+// changelog.
+type ReleasePullRequestLayout string
+
+// The values release-me.yaml's top-level "release-pull-request-layout" key
+// accepts.
+const (
+	// LayoutHeadings renders "## <name>" per component, its changelog
+	// section shifted one heading level down below it. The default.
+	LayoutHeadings ReleasePullRequestLayout = "headings"
+	// LayoutDetails renders one collapsed "<details>" block per component,
+	// summarised "<name> vX.Y.Z", the way release-please does.
+	LayoutDetails ReleasePullRequestLayout = "details"
+	// LayoutCompact renders "#### <name>" per component, its changelog
+	// section at the levels its CHANGELOG.md carries: the layout before the
+	// key existed.
+	LayoutCompact ReleasePullRequestLayout = "compact"
+)
+
+// DefaultReleasePullRequestLayout is the layout applied when the key is
+// left out of release-me.yaml.
+const DefaultReleasePullRequestLayout = LayoutHeadings
+
+var validLayout = map[ReleasePullRequestLayout]bool{
+	LayoutHeadings: true, LayoutDetails: true, LayoutCompact: true,
+}
+
 // DefaultHiddenTypes is the hidden-types list applied when the key is left
 // out of release-me.yaml. DefaultFallbackType is hidden by default.
 var DefaultHiddenTypes = []string{"chore", "docs", "ci", "style", "refactor", "test", "build", DefaultFallbackType}
@@ -215,6 +243,13 @@ type Config struct {
 	// ReleasePullRequestPerComponent otherwise. A repository without
 	// "components" has one component, so the key changes nothing there.
 	ReleasePullRequest ReleasePullRequest
+	// ReleasePullRequestLayout is the top-level
+	// "release-pull-request-layout" key: how a release pull request body
+	// carrying several components, shared or locked, lays out each one's
+	// changelog, default DefaultReleasePullRequestLayout. Only the body
+	// changes: every CHANGELOG.md and every release body read back from it
+	// stays the same whichever layout is set.
+	ReleasePullRequestLayout ReleasePullRequestLayout
 	// DraftUntilAssetsAttach is the top-level "draft-until-assets-attach"
 	// key, default false: when true, release creates every release as a
 	// draft instead of publishing it immediately, and resumes publishing
@@ -410,21 +445,22 @@ type rawAuthor struct {
 // raw mirrors Config with pointer fields, so Load can tell a key left out of
 // the file apart from one set to its zero value.
 type raw struct {
-	InitialVersion         *string    `yaml:"initial-version"`
-	BumpMinorPreMajor      *bool      `yaml:"bump-minor-pre-major"`
-	HiddenTypes            *[]string  `yaml:"hidden-types"`
-	FallbackType           *string    `yaml:"fallback-type"`
-	TokenEnv               *string    `yaml:"token-env"`
-	Files                  *[]rawFile `yaml:"files"`
-	Changelog              *string    `yaml:"changelog"`
-	ChangelogSource        *string    `yaml:"changelog-source"`
-	Labels                 *rawLabels `yaml:"labels"`
-	Author                 *rawAuthor `yaml:"author"`
-	MajorTag               *bool      `yaml:"major-tag"`
-	Versioning             *string    `yaml:"versioning"`
-	ReleasePullRequest     *string    `yaml:"release-pull-request"`
-	DraftUntilAssetsAttach *bool      `yaml:"draft-until-assets-attach"`
-	CommentMention         *string    `yaml:"comment-mention"`
+	InitialVersion           *string    `yaml:"initial-version"`
+	BumpMinorPreMajor        *bool      `yaml:"bump-minor-pre-major"`
+	HiddenTypes              *[]string  `yaml:"hidden-types"`
+	FallbackType             *string    `yaml:"fallback-type"`
+	TokenEnv                 *string    `yaml:"token-env"`
+	Files                    *[]rawFile `yaml:"files"`
+	Changelog                *string    `yaml:"changelog"`
+	ChangelogSource          *string    `yaml:"changelog-source"`
+	Labels                   *rawLabels `yaml:"labels"`
+	Author                   *rawAuthor `yaml:"author"`
+	MajorTag                 *bool      `yaml:"major-tag"`
+	Versioning               *string    `yaml:"versioning"`
+	ReleasePullRequest       *string    `yaml:"release-pull-request"`
+	ReleasePullRequestLayout *string    `yaml:"release-pull-request-layout"`
+	DraftUntilAssetsAttach   *bool      `yaml:"draft-until-assets-attach"`
+	CommentMention           *string    `yaml:"comment-mention"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -460,10 +496,11 @@ func Default() Config {
 			Pending: DefaultPendingLabel, Tagged: DefaultTaggedLabel,
 			Alpha: DefaultAlphaLabel, Beta: DefaultBetaLabel, Rc: DefaultRcLabel,
 		},
-		Author:             Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
-		Versioning:         DefaultVersioning,
-		ReleasePullRequest: ReleasePullRequestPerComponent,
-		CommentMention:     DefaultCommentMention,
+		Author:                   Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
+		Versioning:               DefaultVersioning,
+		ReleasePullRequest:       ReleasePullRequestPerComponent,
+		ReleasePullRequestLayout: DefaultReleasePullRequestLayout,
+		CommentMention:           DefaultCommentMention,
 	}
 }
 
@@ -607,6 +644,15 @@ func Load(path string) (cfg Config, err error) {
 			)
 		}
 		cfg.ReleasePullRequest = value
+	}
+	if r.ReleasePullRequestLayout != nil {
+		cfg.ReleasePullRequestLayout = ReleasePullRequestLayout(*r.ReleasePullRequestLayout)
+		if !validLayout[cfg.ReleasePullRequestLayout] {
+			return Config{}, fmt.Errorf(
+				"config: parse %s: release-pull-request-layout %q is not headings, details or compact",
+				path, *r.ReleasePullRequestLayout,
+			)
+		}
 	}
 	if r.DraftUntilAssetsAttach != nil {
 		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach

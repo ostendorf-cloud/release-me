@@ -97,9 +97,9 @@ func TestSharedReleasePullRequestCarriesEveryChangedComponentAtItsOwnVersion(t *
 	for _, want := range []string{
 		"Release api v1.3.0, web v0.3.1\n",
 		"tags `api/v1.3.0, web/v0.3.1`",
-		"#### api\n\n## [v1.3.0](https://github.com/owner/repo/compare/api/v1.2.0...api/v1.3.0) (",
+		"## api\n\n### [v1.3.0](https://github.com/owner/repo/compare/api/v1.2.0...api/v1.3.0) (",
 		"- export orders as CSV",
-		"#### web\n\n## [v0.3.1](https://github.com/owner/repo/compare/web/v0.3.0...web/v0.3.1) (",
+		"## web\n\n### [v0.3.1](https://github.com/owner/repo/compare/web/v0.3.0...web/v0.3.1) (",
 		"- keep the session on reload",
 		"`release-as <component> X.Y.Z`",
 	} {
@@ -107,7 +107,7 @@ func TestSharedReleasePullRequestCarriesEveryChangedComponentAtItsOwnVersion(t *
 			t.Errorf("body = %q, want it to contain %q", created.Body, want)
 		}
 	}
-	if strings.Contains(created.Body, "#### docs") {
+	if strings.Contains(created.Body, "## docs") {
 		t.Errorf("body = %q, want no section for docs, which has nothing to release", created.Body)
 	}
 	if !strings.Contains(stdout.String(), "docs: nothing to release") {

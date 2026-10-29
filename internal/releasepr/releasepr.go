@@ -62,7 +62,8 @@ type Release struct {
 // versions are independent of each other, so the guide asks for one
 // "<component> X.Y.Z" line per component in the release-me-version block,
 // instead of one version for all of them. changelogSection carries one
-// "#### <name>" slice per component, as ComponentSection reads it back.
+// slice per component, rendered by RenderComponents in any layout, as
+// ComponentSection reads it back.
 func SharedBody(releases []Release, labels GuideLabels, perComponentVersion bool, notes, versionOverride, changelogSection string) string {
 	parts := make([]string, 0, len(releases))
 	tags := make([]string, 0, len(releases))
@@ -261,39 +262,29 @@ func SetComponentVersionOverride(body, name, version string) string {
 	return setFencedBlock(body, "release-me-version", versionBlock, strings.Join(lines, "\n"))
 }
 
-// componentHeading matches one component's heading inside the combined
-// changelog of a release pull request every component shares, "#### <name>"
-// on its own line. The fourth level keeps it apart from the
-// "### Features"-shaped section headings changelog.Sections renders inside
-// each component's own slice.
-var componentHeading = regexp.MustCompile(`(?m)^#### (.+)$`)
-
 // ComponentSection returns name's own slice of changelogText, the combined
 // changelog of a release pull request every component shares, locked or
-// not: the text between its "#### <name>" heading and the next one, or the
-// end. "" when name carries no heading.
+// not, in any layout: the section its own CHANGELOG.md carries, at the
+// same heading levels, see ParseComponents. "" when name is not one of
+// the components.
 func ComponentSection(changelogText, name string) string {
-	locs := componentHeading.FindAllStringSubmatchIndex(changelogText, -1)
-	for i, loc := range locs {
-		if changelogText[loc[2]:loc[3]] != name {
-			continue
+	_, components := ParseComponents(changelogText)
+	for _, c := range components {
+		if c.Name == name {
+			return c.Section
 		}
-		end := len(changelogText)
-		if i+1 < len(locs) {
-			end = locs[i+1][0]
-		}
-		return strings.TrimSpace(changelogText[loc[1]:end])
 	}
 	return ""
 }
 
-// ComponentNames returns the name of every "#### <name>" heading in
-// changelogText, the combined changelog of a shared release pull request,
-// in order: the components that pull request releases.
+// ComponentNames returns the name of every component in changelogText, the
+// combined changelog of a shared release pull request, in order and in any
+// layout: the components that pull request releases.
 func ComponentNames(changelogText string) []string {
+	_, components := ParseComponents(changelogText)
 	var names []string
-	for _, m := range componentHeading.FindAllStringSubmatch(changelogText, -1) {
-		names = append(names, m[1])
+	for _, c := range components {
+		names = append(names, c.Name)
 	}
 	return names
 }
@@ -335,30 +326,74 @@ func escapeFence(content string) string {
 	return fenceLine.ReplaceAllString(content, " $0")
 }
 
-// changelogDetails matches the collapsed changelog block of a release pull
-// request body.
-var changelogDetails = regexp.MustCompile(`(?s)<details>\s*<summary>Changelog</summary>\s*\n*(.*?)\n*</details>`)
+// changelogOpen matches the opening of the collapsed changelog block of a
+// release pull request body.
+var changelogOpen = regexp.MustCompile(`<details>\s*<summary>Changelog</summary>`)
 
 // ExtractChangelog returns the changelog Markdown from inside the
 // <details> block of a release pull request body, with the wrapper
-// removed. It returns "" when body carries no such block.
+// removed. It returns "" when body carries no such block. An opening
+// inside a release-me-notes or release-me-version block is not the
+// changelog's, and the block ends at the "</details>" line that closes
+// it, not at the first one: a LayoutDetails changelog nests one details
+// block per component.
 func ExtractChangelog(body string) string {
-	m := changelogDetails.FindStringSubmatch(body)
-	if m == nil {
-		return ""
+	fenced := append(notesBlock.FindAllStringIndex(body, -1), versionBlock.FindAllStringIndex(body, -1)...)
+	for _, loc := range changelogOpen.FindAllStringIndex(body, -1) {
+		if insideAny(loc[0], fenced) {
+			continue
+		}
+		return untilClosingDetails(body[loc[1]:])
 	}
-	return strings.TrimSpace(m[1])
+	return ""
+}
+
+// insideAny reports whether offset falls inside one of ranges.
+func insideAny(offset int, ranges [][]int) bool {
+	for _, r := range ranges {
+		if offset >= r[0] && offset < r[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// untilClosingDetails returns rest, trimmed, up to the line that closes
+// the details block rest is the inside of, counting every nested block a
+// line opens, or "" when no line closes it. Only a line opening with the
+// tag counts: a changelog entry line opens with "-".
+func untilClosingDetails(rest string) string {
+	lines := strings.Split(rest, "\n")
+	depth := 0
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "</details>"):
+			if depth == 0 {
+				return strings.TrimSpace(strings.Join(lines[:i], "\n"))
+			}
+			depth--
+		case strings.HasPrefix(trimmed, "<details"):
+			depth++
+		}
+	}
+	return ""
 }
 
 // ExtractDate returns the date rendered in the first changelog heading
 // inside the <details> block of a release pull request body, read by
 // changelog.ParseHeading, with a compare link or without: the heading the
-// block opens with, or, for a shared release pull request whose block
-// opens with a "#### <name>" component heading, the first component's own.
-// ok is false when body carries no such block, or no heading with a
-// parseable date.
+// block opens with, a locked family's combined one, or, for a shared
+// release pull request, the first component's own, in any layout. ok is
+// false when body carries no such block, or no heading with a parseable
+// date.
 func ExtractDate(body string) (date time.Time, ok bool) {
-	for _, line := range strings.Split(ExtractChangelog(body), "\n") {
+	preamble, components := ParseComponents(ExtractChangelog(body))
+	texts := []string{preamble}
+	for _, c := range components {
+		texts = append(texts, c.Section)
+	}
+	for _, line := range strings.Split(strings.Join(texts, "\n"), "\n") {
 		if !strings.HasPrefix(line, "## ") {
 			continue
 		}
