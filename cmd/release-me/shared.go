@@ -172,6 +172,7 @@ func doPRShared(
 		changelogs = append(changelogs, changelogUpdate{
 			path: m.comp.ChangelogPath, version: m.versionStr, entriesBody: entriesBody,
 			compareURL: compareURL(f, owner, repoName, m.fromTag, m.comp.TagPrefix+m.versionStr),
+			skip:       m.comp.SkipChangelog,
 		})
 		files = append(files, filesAt(m.comp.Files, m.versionStr)...)
 	}
