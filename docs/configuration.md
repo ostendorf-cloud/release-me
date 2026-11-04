@@ -390,12 +390,14 @@ The mention prefix a comment on the release pull request names to issue a `relea
 The package managers whose manifests link components to each other, default none:
 
 - `node`, an npm, pnpm or yarn workspace, read from each component's `<path>/package.json`;
-- `cargo`, a Cargo workspace, read from each component's `<path>/Cargo.toml`.
+- `cargo`, a Cargo workspace, read from each component's `<path>/Cargo.toml`;
+- `maven`, a Maven multi-module build, read from each component's `<path>/pom.xml`.
 
 A component without that manifest is no member of the workspace. Without a component at path
-`.`, the manifest at the repository root, such as a virtual Cargo workspace's `Cargo.toml`, is
-read too: its dependencies on a released component move,
-`[workspace.dependencies]` included, but it releases nothing itself.
+`.`, the manifest at the repository root, such as a virtual Cargo workspace's `Cargo.toml` or a
+Maven aggregator `pom.xml`, is read too: its dependencies on a released component move,
+`[workspace.dependencies]` or `<dependencyManagement>` included, but it releases nothing
+itself.
 
 ```yaml
 release-pull-request: shared
@@ -431,6 +433,14 @@ requirement, `acme-core = "1.2.0"`, inside a one-line inline table,
 `[dependencies.acme-core]` table, keeping its operator; `1.2`, a partial version, becomes the
 full new one. A dependency without a version, `{ workspace = true }` or a bare `path`, stays as
 written and still releases the dependent. A dependency spread over several lines is not read.
+
+For `maven`, a module is named `<groupId>:<artifactId>`, its `groupId` inherited from its
+`<parent>` where it sets none. It links through its `<parent>`, its `<dependencies>` and its
+`<dependencyManagement>`, a `${project.groupId}` read as its own group; a build plugin's
+dependencies do not link. The `<version>` text moves, in a profile's dependencies too, and
+every other byte stays. A version given through a property, `${core.version}`, or as a range,
+`[1.0,2.0)`, stays as written and still releases the dependent. A module's own `<version>` is
+not moved by `workspaces`, only by its `files`.
 
 Lockfiles, `package-lock.json`, `pnpm-lock.yaml` or `Cargo.lock`, are not updated.
 
