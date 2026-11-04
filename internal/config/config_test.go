@@ -1123,3 +1123,69 @@ func TestLoadAcceptsSeveralPreReleaseTypesTurnedOff(t *testing.T) {
 		t.Fatalf("Load() error = %v, want nil", err)
 	}
 }
+
+func TestLoadReadsPreReleaseTypesInConfigOrderAfterAlphaBetaAndRc(t *testing.T) {
+	t.Parallel()
+	path := writeFile(t, `labels:
+  beta: false
+prerelease-types:
+  next: "release: next"
+  preview: "release: preview"
+  nightly-build: "release: nightly"
+`)
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []config.PreReleaseType{
+		{Type: "alpha", Label: config.DefaultAlphaLabel},
+		{Type: "rc", Label: config.DefaultRcLabel},
+		{Type: "next", Label: "release: next"},
+		{Type: "preview", Label: "release: preview"},
+		{Type: "nightly-build", Label: "release: nightly"},
+	}
+	if got := cfg.Labels.PreReleaseKinds(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("PreReleaseKinds() = %+v, want %+v", got, want)
+	}
+}
+
+func TestLoadRejectsAnInvalidPreReleaseType(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "rejects a type configured under labels", content: "prerelease-types:\n  rc: \"release: candidate\"\n", want: `type "rc" is reserved`},
+		{name: "rejects a type with a dot", content: "prerelease-types:\n  pre.view: \"release: preview\"\n", want: "is not one pre-release identifier"},
+		{name: "rejects a type of digits only", content: "prerelease-types:\n  \"2024\": \"release: 2024\"\n", want: "is not one pre-release identifier"},
+		{name: "rejects an empty label", content: "prerelease-types:\n  next: \"\"\n", want: "must be a non-empty string"},
+		{name: "rejects a label set to false", content: "prerelease-types:\n  next: false\n", want: "must be a non-empty string"},
+		{name: "rejects a list", content: "prerelease-types:\n  - next\n", want: "must be a mapping of type to label"},
+		{
+			name:    "rejects a label another type already uses",
+			content: "prerelease-types:\n  next: \"release: rc\"\n",
+			want:    `labels.rc and prerelease-types.next are both "release: rc"`,
+		},
+		{
+			name:    "rejects one label for two prerelease types",
+			content: "prerelease-types:\n  next: \"release: pre\"\n  preview: \"release: pre\"\n",
+			want:    `prerelease-types.next and prerelease-types.preview are both "release: pre"`,
+		},
+		{
+			name:    "rejects a label equal to the pending label",
+			content: "prerelease-types:\n  next: \"release: pending\"\n",
+			want:    `labels.pending and prerelease-types.next are both "release: pending"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := config.Load(writeFile(t, tc.content))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Load() error = %v, want one containing %q", err, tc.want)
+			}
+		})
+	}
+}
