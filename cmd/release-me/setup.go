@@ -44,5 +44,5 @@ func setup(ctx context.Context, stderr io.Writer, verbose bool) (root string, cf
 	if err != nil {
 		return "", config.Config{}, nil, logger, fmt.Errorf("release-me: forge: %w", err)
 	}
-	return root, cfg, ghForge, logger, nil
+	return root, cfg, withChangelogHost(cfg, ghForge), logger, nil
 }
