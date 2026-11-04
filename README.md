@@ -159,6 +159,8 @@ files:
 | `release-pull-request` | One release pull request per component or one shared by every component. | `per-component` | No |
 | `release-pull-request-layout` | How a release pull request with several components lays out each one: `headings`, `details` or `compact`. | `headings` | No |
 | `release-pull-request-guide` | Whether every release pull request body opens with the collapsed "How this release works" guide. | `true` | No |
+| `release-pull-request-header` | Free text above every release pull request body. | none | No |
+| `release-pull-request-footer` | Free text below every release pull request body. | none | No |
 | `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
 | `components` | Maps a name to a path and optional per-component overrides. | none, one implicit `main` component | No |

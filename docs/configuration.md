@@ -313,6 +313,36 @@ A team that turns the guide off finds everything it says documented here:
 
 `migrate` leaves the key out, so a migrated repository keeps the guide.
 
+## `release-pull-request-header`
+
+Free text every release pull request body carries, per component, shared or locked: the header
+above the version line, and its counterpart
+[`release-pull-request-footer`](#release-pull-request-footer) below the changelog. Both default
+to none.
+
+```yaml
+release-pull-request-header: |
+  Reviewed by the release team before every merge.
+release-pull-request-footer: "Questions go to #releases."
+```
+
+Nothing reads either back, so they never change what a release does. A line in either that
+opens a fence, three or more backticks at the start of the line, is indented by one space, the
+way the [notes block](overrides.md#notes-block) escapes its content: a `release-me-notes`,
+`release-me-version` or `release-me` block pasted into a header renders as a code block and is
+never read as notes, a version override or an entry override. A text carrying
+`<details><summary>Changelog</summary>`, the opening the changelog is read from, or a line
+opening a `<!-- release-me-` comment, which release-me reserves for what it records in a body,
+is a configuration error. Every other `<details>` block is fine. Changing either while a release
+pull request is open updates its body on the next `pr` run without pushing the release branch,
+the notes block and a version override kept. Neither reaches the changelog file or the GitHub
+release.
+
+## `release-pull-request-footer`
+
+Free text below the changelog of every release pull request body, default none. It follows the
+same rules as [`release-pull-request-header`](#release-pull-request-header).
+
 ## `draft-until-assets-attach`
 
 Drafts every release instead of publishing it immediately, default `false`. There is no
