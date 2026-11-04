@@ -291,7 +291,7 @@ func TestEveryLayoutReadsBackTheSameComponentsAndDateFromAPullRequestBody(t *tes
 					t.Errorf("ComponentSection(%s) =\n%s\nwant\n%s", c.Name, got, c.Section)
 				}
 			}
-			date, ok := releasepr.ExtractDate(body)
+			date, ok := releasepr.ExtractDate(body, "")
 			if !ok || !date.Equal(time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC)) {
 				t.Fatalf("ExtractDate() = (%v, %v), want 2026-10-29", date, ok)
 			}
@@ -306,7 +306,7 @@ func TestEveryLayoutReadsBackALockedFamilysDate(t *testing.T) {
 			t.Parallel()
 			section := lockedHeading + "\n\n" + releasepr.RenderComponents(layout, lockedComponents) + "\n"
 			body := releasepr.Body("0.3.0", "api/v0.3.0, web/v0.3.0", testGuide, "", "", section)
-			date, ok := releasepr.ExtractDate(body)
+			date, ok := releasepr.ExtractDate(body, "")
 			if !ok || !date.Equal(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)) {
 				t.Fatalf("ExtractDate() = (%v, %v), want 2026-01-02", date, ok)
 			}

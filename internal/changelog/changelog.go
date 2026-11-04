@@ -41,6 +41,9 @@ type Options struct {
 	// SentenceCase upper cases the first letter of every entry's
 	// description, see sentenceCase for the words it leaves alone.
 	SentenceCase bool
+	// DateFormat is the strftime expression Render's heading renders its
+	// date in, "" for DefaultDateFormat. See FormatDate.
+	DateFormat string
 }
 
 type section struct {
@@ -123,7 +126,7 @@ func Render(version string, date time.Time, compareURL string, entries []Entry, 
 	}
 
 	var out strings.Builder
-	out.WriteString(RenderHeading(version, date, compareURL))
+	out.WriteString(RenderHeading(version, date, compareURL, opts.DateFormat))
 	out.WriteString("\n\n")
 	out.WriteString(body)
 	out.WriteString("\n")
@@ -131,16 +134,17 @@ func Render(version string, date time.Time, compareURL string, entries []Entry, 
 }
 
 // RenderHeading renders one version section's heading line, with no
-// trailing newline: "## vX.Y.Z (YYYY-MM-DD)", the version wrapped in a
-// link to compareURL, "## [vX.Y.Z](<compareURL>) (YYYY-MM-DD)", when
-// compareURL is not "". The caller passes "" when there is nothing to
-// compare against, a component's first release.
-func RenderHeading(version string, date time.Time, compareURL string) string {
+// trailing newline: "## vX.Y.Z (<date>)", the version wrapped in a link to
+// compareURL, "## [vX.Y.Z](<compareURL>) (<date>)", when compareURL is not
+// "". The caller passes "" when there is nothing to compare against, a
+// component's first release. The date renders in dateFormat, see
+// FormatDate, "" for DefaultDateFormat, "YYYY-MM-DD".
+func RenderHeading(version string, date time.Time, compareURL, dateFormat string) string {
 	text := "v" + version
 	if compareURL != "" {
 		text = "[" + text + "](" + compareURL + ")"
 	}
-	return fmt.Sprintf("## %s (%s)", text, date.Format("2006-01-02"))
+	return fmt.Sprintf("## %s (%s)", text, FormatDate(date, dateFormat))
 }
 
 // renderEntry renders one visible entry's own line, followed by one

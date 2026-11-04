@@ -172,7 +172,7 @@ func TestRenderHeading(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := changelog.RenderHeading(tc.version, fixtureDate, tc.compareURL); got != tc.want {
+			if got := changelog.RenderHeading(tc.version, fixtureDate, tc.compareURL, ""); got != tc.want {
 				t.Fatalf("RenderHeading() = %q, want %q", got, tc.want)
 			}
 		})

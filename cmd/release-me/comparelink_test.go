@@ -82,7 +82,7 @@ func TestDoPRLinksTheChangelogHeadingToTheCompareViewFromTheLastStableTag(t *tes
 			if got := headingCompareURL(t, "the release body", releasepr.ReleaseBody(body)); got != tc.want {
 				t.Fatalf("release body compare link = %q, want %q", got, tc.want)
 			}
-			if _, ok := releasepr.ExtractDate(body); !ok {
+			if _, ok := releasepr.ExtractDate(body, ""); !ok {
 				t.Fatalf("ExtractDate() ok = false, want the date read back from %q", body)
 			}
 		})

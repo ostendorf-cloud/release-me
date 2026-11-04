@@ -189,7 +189,7 @@ func doPRShared(
 	}
 	date := time.Now()
 	if existing != nil && !plan.changed {
-		if d, ok := releasepr.ExtractDate(existing.Body); ok {
+		if d, ok := releasepr.ExtractDate(existing.Body, cfg.ChangelogStyle.DateFormat); ok {
 			date = d
 		}
 	}
@@ -204,7 +204,7 @@ func doPRShared(
 		c := changelogs[i]
 		parts = append(parts, releasepr.ComponentChangelog{
 			Name: m.comp.Name, Version: m.versionStr,
-			Section: changelog.RenderHeading(c.version, date, c.compareURL) + "\n\n" + c.entriesBody,
+			Section: changelog.RenderHeading(c.version, date, c.compareURL, cfg.ChangelogStyle.DateFormat) + "\n\n" + c.entriesBody,
 		})
 		releases = append(releases, releasepr.Release{Name: m.comp.Name, Version: m.versionStr, Tag: m.comp.TagPrefix + m.versionStr})
 	}

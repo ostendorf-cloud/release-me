@@ -4,6 +4,7 @@
 package config_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ostendorf-cloud/release-me/internal/config"
@@ -22,6 +23,7 @@ func TestLoadReadsTheChangelogStyleKeys(t *testing.T) {
 			content: "changelog-sentence-case: true\n",
 			want:    config.ChangelogStyle{SentenceCase: true},
 		},
+		{name: "changelog-date-format", content: "changelog-date-format: \"%d.%m.%Y\"\n", want: config.ChangelogStyle{DateFormat: "%d.%m.%Y"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -39,7 +41,7 @@ func TestLoadReadsTheChangelogStyleKeys(t *testing.T) {
 
 func TestResolveGivesEveryComponentTheTopLevelChangelogStyle(t *testing.T) {
 	t.Parallel()
-	path := writeFile(t, "changelog-sentence-case: true\ncomponents:\n  api:\n    path: api\n  web:\n    path: web\n")
+	path := writeFile(t, "changelog-sentence-case: true\nchangelog-date-format: \"%d.%m.%Y\"\ncomponents:\n  api:\n    path: api\n  web:\n    path: web\n")
 
 	cfg, err := config.Load(path)
 	if err != nil {
@@ -54,8 +56,28 @@ func TestResolveGivesEveryComponentTheTopLevelChangelogStyle(t *testing.T) {
 
 func TestLoadRejectsAChangelogStyleKeyInsideAComponent(t *testing.T) {
 	t.Parallel()
-	_, err := config.Load(writeFile(t, "components:\n  api:\n    path: api\n    changelog-sentence-case: true\n"))
-	if err == nil {
-		t.Fatal("Load() error = nil, want the unknown component key refused")
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{name: "changelog-sentence-case", content: "components:\n  api:\n    path: api\n    changelog-sentence-case: true\n"},
+		{name: "changelog-date-format", content: "components:\n  api:\n    path: api\n    changelog-date-format: \"%Y\"\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := config.Load(writeFile(t, tc.content))
+			if err == nil {
+				t.Fatal("Load() error = nil, want the unknown component key refused")
+			}
+		})
+	}
+}
+
+func TestLoadRejectsAnUnknownChangelogDateFormatDirective(t *testing.T) {
+	t.Parallel()
+	_, err := config.Load(writeFile(t, "changelog-date-format: \"%Y-%m-%d %H:%M\"\n"))
+	if err == nil || !strings.Contains(err.Error(), `changelog-date-format "%Y-%m-%d %H:%M" uses an unknown directive`) {
+		t.Fatalf("Load() error = %v, want the unknown directive named", err)
 	}
 }
