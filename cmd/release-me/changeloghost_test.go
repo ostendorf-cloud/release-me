@@ -15,9 +15,9 @@ import (
 	"github.com/ostendorf-cloud/release-me/internal/forge/forgetest"
 )
 
-// withPullRequests returns newFake with responses configured for every
+// withHostedPullRequests returns newFake with responses configured for every
 // pull request in prs, keyed by number.
-func withPullRequests(prs ...forge.PullRequest) *forgetest.Fake {
+func withHostedPullRequests(prs ...forge.PullRequest) *forgetest.Fake {
 	f := newFake()
 	f.Responses = map[int]forgetest.Response{}
 	for _, pr := range prs {
@@ -37,7 +37,7 @@ func TestDoPRPointsEveryChangelogLinkAtTheChangelogHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := withPullRequests(forge.PullRequest{
+	f := withHostedPullRequests(forge.PullRequest{
 		Number: 12, Title: "fix: handle the empty case", URL: "https://github.com/owner/repo/pull/12",
 	})
 	if err := doPR(t.Context(), dir, cfg, "", withChangelogHost(cfg, f), discardLogger(), false, io.Discard); err != nil {
