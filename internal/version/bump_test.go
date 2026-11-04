@@ -186,6 +186,90 @@ func TestNextReportsNoRelease(t *testing.T) {
 	}
 }
 
+func TestNextAppliesTheReleaseAsKeyBeforeEveryFooter(t *testing.T) {
+	t.Parallel()
+	last := version.Semver{Major: 1, Minor: 2, Patch: 3}
+	cases := []struct {
+		name         string
+		lastOK       bool
+		changes      []version.Change
+		releaseAs    string
+		want         version.Result
+		wantReleased bool
+		wantRefused  []version.Refusal
+	}{
+		{
+			name:         "wins over a higher footer and the computed bump",
+			lastOK:       true,
+			changes:      []version.Change{{Type: "feat"}, {ReleaseAs: "3.0.0"}},
+			releaseAs:    "2.0.0",
+			want:         version.Result{Version: "2.0.0", Bump: version.BumpForced, Reason: version.ReasonReleaseAsKey},
+			wantReleased: true,
+		},
+		{
+			name:         "releases without a change that bumps",
+			lastOK:       true,
+			changes:      []version.Change{{Type: "chore"}},
+			releaseAs:    "v1.3.0",
+			want:         version.Result{Version: "1.3.0", Bump: version.BumpForced, Reason: version.ReasonReleaseAsKey},
+			wantReleased: true,
+		},
+		{
+			name:         "wins over the initial version",
+			changes:      []version.Change{{Type: "feat"}},
+			releaseAs:    "1.0.0",
+			want:         version.Result{Version: "1.0.0", Bump: version.BumpForced, Reason: version.ReasonReleaseAsKey},
+			wantReleased: true,
+		},
+		{
+			name:         "falls back to a footer once it is released",
+			lastOK:       true,
+			changes:      []version.Change{{Type: "fix"}, {ReleaseAs: "2.0.0"}},
+			releaseAs:    "1.2.3",
+			want:         version.Result{Version: "2.0.0", Bump: version.BumpForced, Reason: version.ReasonReleaseAsFooter},
+			wantReleased: true,
+			wantRefused: []version.Refusal{{
+				Value: "1.2.3", Source: version.ReasonReleaseAsKey,
+				Reason: "is not greater than the last released version 1.2.3, remove it from release-me.yaml",
+			}},
+		},
+		{
+			name:         "falls back to the computed bump once it is released",
+			lastOK:       true,
+			changes:      []version.Change{{Type: "fix"}},
+			releaseAs:    "1.0.0",
+			want:         version.Result{Version: "1.2.4", Bump: version.BumpPatch, Reason: "fix"},
+			wantReleased: true,
+			wantRefused: []version.Refusal{{
+				Value: "1.0.0", Source: version.ReasonReleaseAsKey,
+				Reason: "is not greater than the last released version 1.2.3, remove it from release-me.yaml",
+			}},
+		},
+		{
+			name:      "releases nothing once it is released and nothing bumps",
+			lastOK:    true,
+			changes:   []version.Change{{Type: "docs"}},
+			releaseAs: "1.2.3",
+			wantRefused: []version.Refusal{{
+				Value: "1.2.3", Source: version.ReasonReleaseAsKey,
+				Reason: "is not greater than the last released version 1.2.3, remove it from release-me.yaml",
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, released, refused := version.Next(last, tc.lastOK, tc.changes, version.Rules{InitialVersion: "0.1.0", ReleaseAs: tc.releaseAs})
+			if got != tc.want || released != tc.wantReleased {
+				t.Fatalf("Next() = %+v, %v, want %+v, %v", got, released, tc.want, tc.wantReleased)
+			}
+			if !slices.Equal(refused, tc.wantRefused) {
+				t.Fatalf("Next() refused = %+v, want %+v", refused, tc.wantRefused)
+			}
+		})
+	}
+}
+
 func TestChangedReportsWhetherAnyChangeBumpsTheVersion(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

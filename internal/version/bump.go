@@ -43,7 +43,17 @@ type Rules struct {
 	// one below 1.0.0. A minor bump BumpMinorPreMajor lowered a breaking
 	// change to stays minor: a breaking change never ships as a patch.
 	BumpPatchForMinorPreMajor bool
+	// ReleaseAs is the configured "release-as" key, "" when it is left
+	// out: a version that wins over every "Release-As" footer and the
+	// computed bump while ParseForced accepts it against the last version.
+	ReleaseAs string
 }
+
+// The reasons a forced Result names, and the Source of a Refusal.
+const (
+	ReasonReleaseAsKey    = "release-as key"
+	ReasonReleaseAsFooter = "Release-As footer"
+)
 
 // Result is the computed next version.
 type Result struct {
@@ -59,15 +69,25 @@ type Result struct {
 // released is false when there is nothing to release: either no changes at
 // all, or no change of a type that bumps the version.
 //
-// A usable "Release-As" footer among changes, see ReleaseAs, wins outright
-// over the computed bump and the initial version, and releases even when
-// no change bumps the version. refused lists every footer value ReleaseAs
-// could not use, whatever Next returns otherwise: Next never logs, so the
-// caller reports them, once per computation.
+// rules.ReleaseAs, when ParseForced accepts it against last, a pre-release
+// refused, wins outright over every footer, the computed bump and the
+// initial version, and releases even when no change bumps the version.
+// Without it, a usable "Release-As" footer among changes, see ReleaseAs,
+// wins the same way. refused lists the rules.ReleaseAs value and every footer
+// value it could not use, whatever Next returns otherwise: Next never logs,
+// so the caller reports them, once per computation.
 func Next(last Semver, lastOK bool, changes []Change, rules Rules) (result Result, released bool, refused []Refusal) {
 	forced, ok, refused := ReleaseAs(last, lastOK, changes)
+	if rules.ReleaseAs != "" {
+		v, err := ParseForced(rules.ReleaseAs, last, lastOK, false)
+		if err == nil {
+			return Result{Version: v.String(), Bump: BumpForced, Reason: ReasonReleaseAsKey}, true, refused
+		}
+		keyRefusal := Refusal{Value: rules.ReleaseAs, Reason: err.Error() + ", remove it from release-me.yaml", Source: ReasonReleaseAsKey}
+		refused = append([]Refusal{keyRefusal}, refused...)
+	}
 	if ok {
-		return Result{Version: forced.String(), Bump: BumpForced, Reason: "Release-As footer"}, true, refused
+		return Result{Version: forced.String(), Bump: BumpForced, Reason: ReasonReleaseAsFooter}, true, refused
 	}
 
 	bump, reason := highestBump(changes)
@@ -156,11 +176,13 @@ func severity(b Bump) int {
 	}
 }
 
-// Refusal is one "Release-As" footer value ReleaseAs could not use, with
-// the reason in one line.
+// Refusal is one forced version Next or ReleaseAs could not use, with the
+// reason in one line and its Source, ReasonReleaseAsFooter or
+// ReasonReleaseAsKey.
 type Refusal struct {
 	Value  string
 	Reason string
+	Source string
 }
 
 // The reasons ParseForced refuses a value for, in the one-line form a log
@@ -222,7 +244,7 @@ func ReleaseAs(last Semver, lastOK bool, changes []Change) (forced Semver, ok bo
 			if errors.Is(err, ErrPreRelease) {
 				reason += ", set one with a pre-release label instead"
 			}
-			refused = append(refused, Refusal{Value: c.ReleaseAs, Reason: reason})
+			refused = append(refused, Refusal{Value: c.ReleaseAs, Reason: reason, Source: ReasonReleaseAsFooter})
 		case !ok || forced.Less(v):
 			forced, ok = v, true
 		}
