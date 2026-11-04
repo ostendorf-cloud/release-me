@@ -85,6 +85,16 @@ func TestDoCheckReportsEveryMissingItem(t *testing.T) {
 			want:       []string{`label "release: rc" does not exist on the repository`},
 		},
 		{
+			name: "reports a missing label of a configured prerelease type",
+			cfg: config.Config{Labels: config.Labels{
+				Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
+				PreReleaseTypes: []config.PreReleaseType{{Type: "next", Label: "release: next"}},
+			}},
+			token:      "a-token",
+			repoLabels: []string{"release: pending", "release: tagged"},
+			want:       []string{`label "release: next" does not exist on the repository`},
+		},
+		{
 			name:       "reports every missing label",
 			cfg:        config.Config{Labels: testLabels},
 			token:      "a-token",

@@ -126,6 +126,21 @@ func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 	}
 }
 
+func TestBodyListsAConfiguredPreReleaseTypeAfterRc(t *testing.T) {
+	t.Parallel()
+	labels := releasepr.GuideLabels{
+		Tagged: []string{"release: tagged"}, Alpha: "release: alpha", Rc: "release: rc",
+		Others: []string{"release: next", "release: preview"},
+	}
+
+	got := releasepr.Body("0.4.0", "v0.4.0", releasepr.Guide{Show: true, Labels: labels}, "", "", "## v0.4.0\n")
+
+	want := "`release: alpha`, `release: rc`, `release: next` or `release: preview`"
+	if !strings.Contains(got, want) {
+		t.Fatalf("Body() = %q, want it to contain %q", got, want)
+	}
+}
+
 // TestBodyRendersTheGuideExactlyOnce guards against a regression where an
 // update would duplicate the guide block instead of rendering it once,
 // the same way a human reading the collapsed section expects.

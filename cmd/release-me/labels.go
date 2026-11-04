@@ -31,8 +31,8 @@ func missingLabels(ctx context.Context, f forge.Forge, owner, repoName string, c
 			missing = append(missing, want)
 		}
 	}
-	for _, want := range []string{cfg.Labels.Alpha, cfg.Labels.Beta, cfg.Labels.Rc} {
-		if want != "" && !slices.Contains(repoLabels, want) {
+	for _, want := range cfg.Labels.PreReleaseLabels() {
+		if !slices.Contains(repoLabels, want) {
 			missing = append(missing, want)
 		}
 	}

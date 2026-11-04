@@ -17,38 +17,13 @@ import (
 	"github.com/ostendorf-cloud/release-me/internal/version"
 )
 
-// preReleaseKind pairs a pre-release type with the label that selects it.
-type preReleaseKind struct {
-	Type  string
-	Label string
-}
-
-// preReleaseKinds lists the enabled pre-release types in the fixed order
-// alpha, beta, rc: the order a pull request carrying more than one label is
-// reported in. A type whose label is configured empty is turned off and
-// left out.
-func preReleaseKinds(lbl config.Labels) []preReleaseKind {
-	all := []preReleaseKind{
-		{Type: "alpha", Label: lbl.Alpha},
-		{Type: "beta", Label: lbl.Beta},
-		{Type: "rc", Label: lbl.Rc},
-	}
-	kinds := make([]preReleaseKind, 0, len(all))
-	for _, k := range all {
-		if k.Label != "" {
-			kinds = append(kinds, k)
-		}
-	}
-	return kinds
-}
-
-// selectPreReleaseType reads which of the alpha, beta and rc labels prLabels
-// carries. ok is false when none of them is present: the release stays
+// selectPreReleaseType reads which of the enabled pre-release type labels,
+// alpha, beta, rc and every prerelease-types entry, prLabels carries. ok is false when none of them is present: the release stays
 // stable, the next run's version returns to it the moment the label it
 // carried is removed. err names every label present when more than one is.
 func selectPreReleaseType(prLabels []string, lbl config.Labels) (preType string, ok bool, err error) {
-	var found []preReleaseKind
-	for _, k := range preReleaseKinds(lbl) {
+	var found []config.PreReleaseType
+	for _, k := range lbl.PreReleaseKinds() {
 		if slices.Contains(prLabels, k.Label) {
 			found = append(found, k)
 		}
@@ -138,4 +113,24 @@ func preReleaseEntries(
 		return "", nil, "", err
 	}
 	return preVersion.String(), restricted, since, nil
+}
+
+// otherPreReleaseLabels maps every "prerelease-types" entry's type to its
+// label, for release to swap it alongside pending.
+func otherPreReleaseLabels(lbl config.Labels) map[string]string {
+	out := make(map[string]string, len(lbl.PreReleaseTypes))
+	for _, t := range lbl.PreReleaseTypes {
+		out[t.Type] = t.Label
+	}
+	return out
+}
+
+// otherPreReleaseLabelNames returns every "prerelease-types" entry's label,
+// in release-me.yaml's order, for the release pull request's guide.
+func otherPreReleaseLabelNames(lbl config.Labels) []string {
+	names := make([]string, len(lbl.PreReleaseTypes))
+	for i, t := range lbl.PreReleaseTypes {
+		names[i] = t.Label
+	}
+	return names
 }
