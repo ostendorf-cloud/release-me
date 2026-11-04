@@ -152,6 +152,7 @@ files:
 | `labels.pending` / `labels.tagged` | Label names `pr`, `release` and `check` use, one or a list. | `release: pending` / `release: tagged` | No |
 | `labels.extra` | Labels `pr` adds to every release pull request it opens. | none | No |
 | `labels.alpha` / `labels.beta` / `labels.rc` | Pre-release type labels. | `release: alpha` / `release: beta` / `release: rc` | No |
+| `prerelease-types` | Further pre-release types, each mapped to the label that selects it. | none | No |
 | `author.name` / `author.email` | Git identity `pr` commits the release branch as. | `release-me` / `release-me[bot]@users.noreply.github.com` | No |
 | `files` | Files `pr` bumps to the next version. | none | No |
 | `major-tag` | Moves the major tag on every stable release. | `false` | No |

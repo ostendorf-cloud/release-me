@@ -91,6 +91,35 @@ the three labels. See [Pre-releases](commands.md#pre-releases). `check` reports 
 enabled labels missing by name, it never creates one. `labels.pending` and `labels.tagged`
 cannot be empty, no name can be empty, and one name in two roles, or twice in one, is a
 configuration error: an extra label named like a pre-release label would select that type.
+A pre-release type of another name goes under [`prerelease-types`](#prerelease-types).
+
+## `prerelease-types`
+
+Further pre-release types beside `alpha`, `beta` and `rc`, each a type name mapped to the label
+that selects it, default none:
+
+```yaml
+prerelease-types:
+  next: "release: next"
+  preview: "release: preview"
+```
+
+A type behaves exactly like `alpha`, `beta` and `rc`, see [Pre-releases](commands.md#pre-releases):
+its label on the release pull request turns the next run into `X.Y.Z-<type>.N`, with a counter of
+its own, `check` reports the label missing by name, the guide in the pull request body lists it
+after `rc`, and `release` swaps it for `tagged`. `labels.alpha`, `labels.beta` and `labels.rc`
+keep configuring the three built-in types, `false` included; a pull request carrying more than
+one type label is an error naming them in the order `alpha`, `beta`, `rc`, then this key's.
+
+A type name is one semver pre-release identifier: ASCII letters, digits and `-`, not only
+digits, so `next`, `preview` and `nightly-build` work, `pre.view` and `2024` do not. `alpha`,
+`beta` and `rc` are configured under `labels`, so all three are refused. A label is a non-empty
+string, and must differ from every other label, `labels.pending` and `labels.tagged` included;
+anything else is a configuration error naming the key.
+
+This is release-please's `prerelease-type` with a free name. A pre-release stays something a
+human asks for on the release pull request: there is no key that cuts every release as a
+pre-release, as release-please's `prerelease: true` does.
 
 ## `author`
 
