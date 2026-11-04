@@ -6,7 +6,8 @@
 // fallback-type, token-env, files, changelog, changelog-source, the
 // changelog style keys ChangelogStyle lists, labels, author, major-tag,
 // versioning, release-pull-request-title, release-pull-request-shared-title,
-// draft-until-assets-attach, comment-mention, workspaces and components.
+// draft-until-assets-attach, comment-mention, workspaces, always-link-local
+// and components.
 package config
 
 import (
@@ -319,6 +320,12 @@ type Config struct {
 	// unless configured, which needs "components" and a shared release pull
 	// request.
 	Workspaces []string
+	// AlwaysLinkLocal is the top-level "always-link-local" key, default
+	// true: every node dependency on a local package name links the two
+	// components. false links one only where it resolves to the local
+	// package anyway, through a local protocol or a range the local
+	// version satisfies, see workspace.Options.
+	AlwaysLinkLocal bool
 	// Components is the "components" key, in the order release-me.yaml
 	// declares them, or nil when the key is absent: a repository without
 	// it is one component at the repository root, as Resolve reports.
@@ -595,6 +602,7 @@ type raw struct {
 	ReleasePullRequestTitle       *string    `yaml:"release-pull-request-title"`
 	ReleasePullRequestSharedTitle *string    `yaml:"release-pull-request-shared-title"`
 	Workspaces                    *[]string  `yaml:"workspaces"`
+	AlwaysLinkLocal               *bool      `yaml:"always-link-local"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -637,6 +645,7 @@ func Default() Config {
 		ReleasePullRequestLayout: DefaultReleasePullRequestLayout,
 		ReleasePullRequestGuide:  true,
 		CommentMention:           DefaultCommentMention,
+		AlwaysLinkLocal:          true,
 	}
 }
 
@@ -906,6 +915,13 @@ func Load(path string) (cfg Config, err error) {
 			return Config{}, err
 		}
 		cfg.Workspaces = workspaces
+	}
+	if r.AlwaysLinkLocal != nil {
+		if !slices.Contains(cfg.Workspaces, workspace.Node) {
+			return Config{}, fmt.Errorf("config: parse %s: always-link-local: applies to node dependencies, "+
+				"add node to workspaces", path)
+		}
+		cfg.AlwaysLinkLocal = *r.AlwaysLinkLocal
 	}
 	return cfg, nil
 }
