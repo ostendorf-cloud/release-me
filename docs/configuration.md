@@ -23,6 +23,37 @@ A component overrides it through its own `bump-patch-for-minor-pre-major` key; a
 `linked` family computes its one shared version with the top-level value. `next` names the
 rule in its reason, `0.4.2 (feat, patch below 1.0.0)`.
 
+## `release-as`
+
+Forces the next version, default none:
+
+```yaml
+release-as: 2.0.0
+```
+
+This is release-please's `release-as`. While the value is strictly greater than a component's
+last tag, it wins over every [Release-As footer](overrides.md#release-as-footer), the computed
+bump and `initial-version`. It releases even when no change bumps the version. Once that version
+has shipped, the value is no longer greater than the last tag: it is ignored, the computed bump
+applies again, and every run logs a warning to remove it from `release-me.yaml`, so a forgotten
+key never holds the version back. A `release-me-version` block on the release pull request,
+from a [`release-as` comment](overrides.md#comment-commands) or a hand edit, wins over the key.
+See [forced version precedence](overrides.md#forced-version-precedence) for the full order. A
+pre-release label on the release pull request builds on the forced version, `2.0.0-rc.1` for
+the `rc` label.
+
+Validation goes through the same rule as the comment command and the footer: a plain `X.Y.Z`
+version, optionally prefixed with `v`. A value that does not parse is a configuration error, and
+so is a pre-release, since the key stays in place after its release and would force the same
+pre-release a second time.
+
+At the top level, the key forces every component, each one checked against its own last tag.
+That is how release-please applies a top-level `release-as` to every package. In `linked` it
+releases every component at the forced version, changed or not, the same as `locked` always
+does. In `independent`, a component's own `release-as` key replaces the top-level one for that
+component only. `linked` and `locked` refuse a component's own key, since the family shares one
+version.
+
 ## `hidden-types`
 
 Hides entries of these types from the changelog, default `chore`, `docs`, `ci`, `style`,
@@ -445,16 +476,17 @@ workspace declaration unchanged.
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
-`bump-patch-for-minor-pre-major`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
-`changelog`. A key left out of a component falls back to the top-level setting above. A
-repository without `components` is one component named `main` at path `.`, tag prefix `v`,
-branch `release-me/main`, the default shape a repository with no configuration at all already
-has. A configured component gets tag prefix `<name>/v`, branch `release-me/<name>`, or
-`release-me/main` when the release pull request is shared, changelog `<path>/CHANGELOG.md`, and
-a release title `<name> vX.Y.Z`. A name holds ASCII letters, digits, `-`, `_` and `.` only, does
-not start with `.` or `-`, does not end with `.` or `.lock` and does not contain `..`; anything
-else is a configuration error naming the component and the character, since the name has to
-survive the tag prefix, the branch, the shared pull request title release reads back, the
+`bump-patch-for-minor-pre-major`, `release-as` (only with `versioning: independent`),
+`hidden-types`, `files`, `major-tag`, `changelog-source` and `changelog`. A key left out of a
+component falls back to the top-level setting above. A repository without `components` is one
+component named `main` at path `.`, tag prefix `v`, branch `release-me/main`, the default shape
+a repository with no configuration at all already has. A configured component gets tag prefix
+`<name>/v`, branch `release-me/<name>`, or `release-me/main` when the release pull request is
+shared, changelog `<path>/CHANGELOG.md`, and a release title `<name> vX.Y.Z`. A name holds ASCII
+letters, digits, `-`, `_` and `.` only, does not start with `.` or `-`, does not end with `.` or
+`.lock` and does not contain `..`; anything else is a configuration error naming the component
+and the character, since the name has to survive the tag prefix, the branch, the shared pull
+request title release reads back, the
 [Release-Component footer](overrides.md#release-component-footer) and the compare link.
 
 `tag-prefix` replaces the derived prefix, for a component whose existing tags follow another
