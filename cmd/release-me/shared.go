@@ -171,6 +171,7 @@ func doPRShared(
 		return fmt.Errorf("release-me: %s: %w", sharedWho, err)
 	}
 	defer plan.cleanup()
+	plan.requireSignoff(ctx, cfg.Signoff)
 
 	notes := ""
 	if existing != nil {

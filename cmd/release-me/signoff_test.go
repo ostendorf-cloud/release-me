@@ -8,6 +8,9 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/ostendorf-cloud/release-me/internal/forge"
+	"github.com/ostendorf-cloud/release-me/internal/forge/forgetest"
 )
 
 func TestReleaseCommitCarriesTheSignoffTrailerOnlyWhenConfigured(t *testing.T) {
@@ -45,6 +48,45 @@ func TestReleaseCommitCarriesTheSignoffTrailerOnlyWhenConfigured(t *testing.T) {
 				}
 				if got := bareBranchAuthor(t, origin); got != "release-me <release-me[bot]@users.noreply.github.com>" {
 					t.Fatalf("author = %q, want the configured author unchanged by the signoff", got)
+				}
+			})
+		}
+	}
+}
+
+func TestSignoffChangesRefreshExistingReleaseCommitsAndThenSettle(t *testing.T) {
+	for _, family := range prFamilies {
+		for _, previous := range []string{"", "Old Bot <old@example.com>"} {
+			t.Run(family.name+"/"+previous, func(t *testing.T) {
+				dir, remote, cfg := family.repo(t)
+				cfg.Signoff = previous
+				f := newFake()
+				var out bytes.Buffer
+				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
+					t.Fatal(err)
+				}
+				created := f.CreatedPullRequests[0]
+				before := bareBranchSHA(t, remote)
+				f.ListResponses = []forgetest.ListResponse{{Head: mainBranch, State: "open", PullRequests: []forge.PullRequest{{Number: 1, Title: created.Title, Body: created.Body, HeadSHA: before, Labels: []string{"release: pending"}}}}}
+				cfg.Signoff = "Release Bot <release-bot@example.com>"
+				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
+					t.Fatal(err)
+				}
+				after := bareBranchSHA(t, remote)
+				if after == before {
+					t.Fatal("signoff change left the existing release commit unchanged")
+				}
+				trailers, err := gitOutput(t.Context(), remote, "log", "-1", "--format=%(trailers:key=Signed-off-by,valueonly)", mainBranch)
+				if err != nil || trailers != cfg.Signoff {
+					t.Fatalf("trailers=%q,%v;want %q", trailers, err, cfg.Signoff)
+				}
+				updated := f.UpdatedPullRequests[len(f.UpdatedPullRequests)-1]
+				f.ListResponses[0].PullRequests[0] = forge.PullRequest{Number: 1, Title: updated.Title, Body: updated.Body, HeadSHA: after, Labels: []string{"release: pending"}}
+				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
+					t.Fatal(err)
+				}
+				if got := bareBranchSHA(t, remote); got != after {
+					t.Fatalf("unchanged rerun moved %s to %s", after, got)
 				}
 			})
 		}
