@@ -115,6 +115,7 @@ func TestLoadReadsConfiguredKeys(t *testing.T) {
 			content: `initial-version: 0.2.0
 bump-minor-pre-major: true
 bump-patch-for-minor-pre-major: true
+release-as: 1.0.0
 hidden-types: [chore, docs]
 fallback-type: misc
 token-env: RELEASE_TOKEN
@@ -146,6 +147,7 @@ files:
 				InitialVersion:            "0.2.0",
 				BumpMinorPreMajor:         true,
 				BumpPatchForMinorPreMajor: true,
+				ReleaseAs:                 "1.0.0",
 				HiddenTypes:               []string{"chore", "docs"},
 				FallbackType:              "misc",
 				TokenEnv:                  "RELEASE_TOKEN",
@@ -275,6 +277,20 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{name: "rejects malformed YAML", content: "initial-version: [0.1.0\n"},
 		{name: "rejects a fallback type that bumps the version", content: "fallback-type: feat\n"},
 		{name: "rejects an unknown changelog source", content: "changelog-source: rebase\n"},
+		{name: "rejects a release-as that is no version", content: "release-as: next\n"},
+		{name: "rejects a pre-release release-as", content: "release-as: 2.0.0-rc.1\n"},
+		{
+			name:    "rejects a pre-release release-as on a component",
+			content: "components:\n  api:\n    path: api\n    release-as: 2.0.0-beta.1\n",
+		},
+		{
+			name:    "rejects a component's release-as in a linked family",
+			content: "versioning: linked\ncomponents:\n  api:\n    path: api\n    release-as: 2.0.0\n",
+		},
+		{
+			name:    "rejects a component's release-as in a locked family",
+			content: "versioning: locked\ncomponents:\n  api:\n    path: api\n    release-as: 2.0.0\n",
+		},
 		{
 			name:    "rejects an unknown changelog source on a component",
 			content: "components:\n  frontend:\n    path: frontend\n    changelog-source: rebase\n",
@@ -488,6 +504,7 @@ components:
     initial-version: 0.2.0
     bump-minor-pre-major: false
     bump-patch-for-minor-pre-major: false
+    release-as: v1.0.0
     hidden-types: [chore]
     files:
       - path: frontend/package.json
@@ -509,7 +526,7 @@ components:
 		{
 			Name: "frontend", Path: "frontend", TagPrefix: "frontend/v", Branch: "release-me/frontend",
 			ChangelogPath: "frontend/CHANGELOG.md", Multi: true,
-			InitialVersion: "0.2.0", BumpMinorPreMajor: false, HiddenTypes: []string{"chore"},
+			InitialVersion: "0.2.0", BumpMinorPreMajor: false, BumpPatchForMinorPreMajor: false, ReleaseAs: "v1.0.0", HiddenTypes: []string{"chore"},
 			Files:           []config.File{{Path: "frontend/package.json", Updater: "marker"}},
 			ChangelogSource: config.DefaultChangelogSource,
 		},
