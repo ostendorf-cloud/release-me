@@ -26,8 +26,44 @@ rule in its reason, `0.4.2 (feat, patch below 1.0.0)`.
 ## `hidden-types`
 
 Hides entries of these types from the changelog, default `chore`, `docs`, `ci`, `style`,
-`refactor`, `test`, `build`, `other`. Only `feat`, `fix`, `perf`, `revert` and a breaking
-change ever render a section; a type outside those five never renders, hidden or not.
+`refactor`, `test`, `build`, `other`. Without [`changelog-sections`](#changelog-sections), only
+`feat`, `fix`, `perf`, `revert` and a breaking change ever render a section; a type outside
+those five never renders, hidden or not.
+
+## `changelog-sections`
+
+Renames, reorders or adds the sections after `Breaking Changes`, release-please's shape: a list
+of `type`, `section` and an optional `hidden`, default `false`. Left out, the sections are
+`Features` (`feat`), `Bug Fixes` (`fix`), `Performance` (`perf`) and `Reverts` (`revert`). Given,
+the list replaces them:
+
+```yaml
+changelog-sections:
+  - type: feat
+    section: Features
+  - type: fix
+    section: Bug Fixes
+  - type: deps
+    section: Dependencies
+  - type: chore
+    hidden: true
+```
+
+- Sections render in the list's order. Types sharing a `section` render under one heading,
+  where that heading first appears.
+- A type the list names decides its own visibility: listed with a `section`, it renders even
+  when `hidden-types` names it; listed with `hidden: true`, it never renders. `section` is
+  required unless `hidden` is `true`.
+- A type the list leaves out renders nowhere, the same as a type outside the default sections
+  today. A breaking change always renders under `Breaking Changes`, first, unless its type is
+  hidden.
+- An empty list, `changelog-sections: []`, keeps `Breaking Changes` only.
+
+A type listed twice, an entry without a `type` and a `section` spanning more than one line are
+configuration errors. A component overrides the list through its own `changelog-sections` key.
+Renaming a section changes the next release only: `CHANGELOG.md` keeps every earlier section as
+it was written, and an open release pull request picks the new headings up on the next `pr`
+run.
 
 ## `changelog-sentence-case`
 
@@ -445,16 +481,17 @@ workspace declaration unchanged.
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
-`bump-patch-for-minor-pre-major`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
-`changelog`. A key left out of a component falls back to the top-level setting above. A
-repository without `components` is one component named `main` at path `.`, tag prefix `v`,
-branch `release-me/main`, the default shape a repository with no configuration at all already
-has. A configured component gets tag prefix `<name>/v`, branch `release-me/<name>`, or
-`release-me/main` when the release pull request is shared, changelog `<path>/CHANGELOG.md`, and
-a release title `<name> vX.Y.Z`. A name holds ASCII letters, digits, `-`, `_` and `.` only, does
-not start with `.` or `-`, does not end with `.` or `.lock` and does not contain `..`; anything
-else is a configuration error naming the component and the character, since the name has to
-survive the tag prefix, the branch, the shared pull request title release reads back, the
+`bump-patch-for-minor-pre-major`, `hidden-types`, `changelog-sections`, `files`, `major-tag`,
+`changelog-source` and `changelog`. A key left out of a component falls back to the top-level
+setting above. A repository without `components` is one component named `main` at path `.`,
+tag prefix `v`, branch `release-me/main`, the default shape a repository with no configuration
+at all already has. A configured component gets tag prefix `<name>/v`, branch
+`release-me/<name>`, or `release-me/main` when the release pull request is shared, changelog
+`<path>/CHANGELOG.md`, and a release title `<name> vX.Y.Z`. A name holds ASCII letters, digits,
+`-`, `_` and `.` only, does not start with `.` or `-`, does not end with `.` or `.lock` and does
+not contain `..`; anything else is a configuration error naming the component and the
+character, since the name has to survive the tag prefix, the branch, the shared pull request
+title release reads back, the
 [Release-Component footer](overrides.md#release-component-footer) and the compare link.
 
 `tag-prefix` replaces the derived prefix, for a component whose existing tags follow another
