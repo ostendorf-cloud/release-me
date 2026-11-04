@@ -32,6 +32,9 @@ type Entry struct {
 	// is also the fallback text used when the forge has no pull request
 	// for that number.
 	Body string
+	// AuthorName is the commit's git author name, the merge commit's own
+	// for a Walk merge entry.
+	AuthorName string
 	// Squashed is true only for a WalkSquash entry whose PullRequestNumber
 	// came from a trailing "(#N)" on the commit's own subject: Subject is
 	// then the real, already cleaned commit title, which a caller should
@@ -50,14 +53,15 @@ const (
 )
 
 // logFormat is the git log format Walk, WalkSquash, AllEntries and
-// SubCommits all share: one record per commit, SHA, subject and body
-// separated by fieldSep, records separated by recordSep.
-const logFormat = "--format=" + recordSep + "%H" + fieldSep + "%s" + fieldSep + "%b"
+// SubCommits all share: one record per commit, SHA, author name, subject
+// and body separated by fieldSep, records separated by recordSep.
+const logFormat = "--format=" + recordSep + "%H" + fieldSep + "%an" + fieldSep + "%s" + fieldSep + "%b"
 
 // record is one parsed commit before it is turned into an Entry: a plain
-// SHA, subject and body, with no pull request number resolved yet.
+// SHA, author name, subject and body, with no pull request number resolved
+// yet.
 type record struct {
-	SHA, Subject, Body string
+	SHA, Author, Subject, Body string
 }
 
 // parseRecords splits raw git log output in logFormat's shape into records.
@@ -68,8 +72,9 @@ func parseRecords(out string) []record {
 			continue
 		}
 		sha, rest, _ := strings.Cut(chunk, fieldSep)
+		author, rest, _ := strings.Cut(rest, fieldSep)
 		subject, body, _ := strings.Cut(rest, fieldSep)
-		records = append(records, record{SHA: sha, Subject: subject, Body: strings.TrimRight(body, "\n")})
+		records = append(records, record{SHA: sha, Author: author, Subject: subject, Body: strings.TrimRight(body, "\n")})
 	}
 	return records
 }
@@ -84,7 +89,7 @@ func Walk(ctx context.Context, dir, since string) ([]Entry, error) {
 
 	var entries []Entry
 	for _, r := range parseRecords(out) {
-		entry := Entry{SHA: r.SHA, Subject: r.Subject, Body: r.Body}
+		entry := Entry{SHA: r.SHA, AuthorName: r.Author, Subject: r.Subject, Body: r.Body}
 		if m := mergeSubject.FindStringSubmatch(r.Subject); m != nil {
 			if number, err := strconv.Atoi(m[1]); err == nil {
 				entry.PullRequestNumber = number

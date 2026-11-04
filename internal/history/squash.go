@@ -38,13 +38,13 @@ func WalkSquash(ctx context.Context, dir, since string) ([]Entry, error) {
 func squashEntry(r record) Entry {
 	if m := mergeSubject.FindStringSubmatch(r.Subject); m != nil {
 		if number, err := strconv.Atoi(m[1]); err == nil {
-			return Entry{SHA: r.SHA, PullRequestNumber: number, Subject: r.Subject, Body: r.Body}
+			return Entry{SHA: r.SHA, AuthorName: r.Author, PullRequestNumber: number, Subject: r.Subject, Body: r.Body}
 		}
 	}
 	if m := squashSubject.FindStringSubmatch(r.Subject); m != nil {
 		if number, err := strconv.Atoi(m[2]); err == nil {
-			return Entry{SHA: r.SHA, PullRequestNumber: number, Subject: m[1], Body: r.Body, Squashed: true}
+			return Entry{SHA: r.SHA, AuthorName: r.Author, PullRequestNumber: number, Subject: m[1], Body: r.Body, Squashed: true}
 		}
 	}
-	return Entry{SHA: r.SHA, Subject: r.Subject, Body: r.Body}
+	return Entry{SHA: r.SHA, AuthorName: r.Author, Subject: r.Subject, Body: r.Body}
 }

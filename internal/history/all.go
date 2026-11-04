@@ -34,7 +34,7 @@ func AllEntries(ctx context.Context, dir, since string) ([]Entry, error) {
 	entries := make([]Entry, 0, len(records))
 	for _, r := range records {
 		entries = append(entries, Entry{
-			SHA: r.SHA, Subject: r.Subject, Body: r.Body,
+			SHA: r.SHA, AuthorName: r.Author, Subject: r.Subject, Body: r.Body,
 			PullRequestNumber: attribution[r.SHA],
 		})
 	}
