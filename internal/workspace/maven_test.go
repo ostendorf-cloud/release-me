@@ -136,3 +136,32 @@ func TestSetDependencyLeavesAPomsOwnVersionAlone(t *testing.T) {
 		t.Fatalf("SetDependency() error = %v, want the module's own version left to its files", err)
 	}
 }
+
+func TestParseIncludesProfileDependenciesInTheWorkspaceGraph(t *testing.T) {
+	t.Parallel()
+	dependency := `<dependency><groupId>com.acme</groupId><artifactId>acme-core</artifactId><version>1.2.0</version></dependency>`
+	for _, tt := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"profile dependency", "<dependencies>" + dependency + "</dependencies>", true},
+		{"profile dependency management", "<dependencyManagement><dependencies>" + dependency + "</dependencies></dependencyManagement>", true},
+		{"active by default profile", "<activation><activeByDefault>true</activeByDefault></activation><dependencies>" + dependency + "</dependencies>", true},
+		{"profile plugin dependency", "<build><plugins><plugin><artifactId>compiler</artifactId><dependencies>" + dependency + "</dependencies></plugin></plugins></build>", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			content := `<project><groupId>com.acme</groupId><artifactId>acme-api</artifactId><version>0.4.0</version><profiles><profile><id>production</id>` + tt.body + `</profile></profiles></project>`
+			pkg, err := workspace.Parse(workspace.Maven, []byte(content))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var want []workspace.Dependency
+			if tt.want {
+				want = []workspace.Dependency{{Name: "com.acme:acme-core", Range: "1.2.0"}}
+			}
+			if !reflect.DeepEqual(pkg.Dependencies, want) {
+				t.Fatalf("dependencies = %+v, want %+v", pkg.Dependencies, want)
+			}
+		})
+	}
+}

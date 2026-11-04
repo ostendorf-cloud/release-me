@@ -338,3 +338,48 @@ func TestCargoWorkspaceReleasesDependentsThroughInheritedAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestMavenWorkspaceReleasesDependenciesDeclaredOnlyInProfiles(t *testing.T) {
+	for _, tt := range []struct{ name, before, after string }{
+		{"dependency", "<dependencies>", "</dependencies>"},
+		{"managed dependency", "<dependencyManagement><dependencies>", "</dependencies></dependencyManagement>"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, origin := newPRRepo(t)
+			writeConfig(t, dir, `release-pull-request: shared
+workspaces: [maven]
+components:
+  core:
+    path: modules/core
+  api:
+    path: modules/api
+`)
+			dependency := `<dependency><groupId>com.acme</groupId><artifactId>acme-core</artifactId><version>1.2.0</version></dependency>`
+			profile := `<profiles><profile><id>production</id><activation><activeByDefault>true</activeByDefault></activation>` + tt.before + dependency + tt.after + `</profile></profiles>`
+			api := strings.Replace(modulePom("acme-api", "0.4.0", ""), "</project>", profile+"</project>", 1)
+			writeFiles(t, dir, "chore: scaffold modules", map[string]string{
+				"modules/core/pom.xml": modulePom("acme-core", "1.2.0", ""), "modules/api/pom.xml": api,
+			})
+			for _, tag := range []string{"core/v1.2.0", "api/v0.4.0"} {
+				runGit(t, dir, "tag", tag)
+			}
+			writeFiles(t, dir, "feat(core): add pricing", map[string]string{"modules/core/Pricing.java": "class Pricing {}\n"})
+			cfg, err := config.Load(filepath.Join(dir, "release-me.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := newFake()
+			var out bytes.Buffer
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.CreatedPullRequests) != 1 || f.CreatedPullRequests[0].Title != "chore: release core v1.3.0, api v0.4.1" {
+				t.Fatalf("pull requests = %+v", f.CreatedPullRequests)
+			}
+			want := strings.Replace(api, "<version>1.2.0</version>", "<version>1.3.0</version>", 1)
+			if got := showBareFile(t, origin, "release-me/main", "modules/api/pom.xml"); got != want {
+				t.Fatalf("profile dependency = %s, want %s", got, want)
+			}
+		})
+	}
+}

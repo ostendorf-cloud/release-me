@@ -23,7 +23,7 @@ type mavenCoordinates struct {
 // parseMaven reads a pom.xml. A package is named "<groupId>:<artifactId>",
 // the groupId inherited from the parent where the project sets none. Its
 // dependencies are its parent, its dependencies and its
-// dependencyManagement entries, a "${project.groupId}" resolved to its
+// dependencyManagement entries, including those in profiles, a "${project.groupId}" resolved to its
 // own groupId.
 func parseMaven(content []byte) (Package, error) {
 	var pom struct {
@@ -31,6 +31,10 @@ func parseMaven(content []byte) (Package, error) {
 		Parent       *mavenCoordinates  `xml:"parent"`
 		Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
 		Managed      []mavenCoordinates `xml:"dependencyManagement>dependencies>dependency"`
+		Profiles     []struct {
+			Dependencies []mavenCoordinates `xml:"dependencies>dependency"`
+			Managed      []mavenCoordinates `xml:"dependencyManagement>dependencies>dependency"`
+		} `xml:"profiles>profile"`
 	}
 	if err := xml.Unmarshal(content, &pom); err != nil {
 		return Package{}, fmt.Errorf("workspace: pom.xml: %w", err)
@@ -57,6 +61,14 @@ func parseMaven(content []byte) (Package, error) {
 	}
 	for _, d := range pom.Managed {
 		add(d)
+	}
+	for _, profile := range pom.Profiles {
+		for _, d := range profile.Dependencies {
+			add(d)
+		}
+		for _, d := range profile.Managed {
+			add(d)
+		}
 	}
 	return pkg, nil
 }
