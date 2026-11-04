@@ -65,7 +65,7 @@ type rpPackage struct {
 var packageKeys = []string{
 	"release-type", "package-name", "component", "include-component-in-tag", "include-v-in-tag",
 	"tag-separator", "changelog-path", "bump-minor-pre-major", "bump-patch-for-minor-pre-major",
-	"initial-version", "extra-files", "version-file",
+	"initial-version", "extra-files", "skip-changelog", "version-file",
 }
 
 // topLevelKeys are the release-please settings that only exist at the top
@@ -274,6 +274,8 @@ type component struct {
 	bumpPatchForMinorPreMajor bool
 	initialVersion            string
 	files                     []file
+	// skipChangelog is release-please's skip-changelog.
+	skipChangelog bool
 }
 
 // file is one release-me "files" entry.
@@ -291,7 +293,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		releaseType, packageName, componentName, separator, changelogPath, initialVersion string
 		versionFileName                                                                   string
 		includeComponent, includeV                                                        = true, true
-		bumpMinor, bumpPatchForMinor                                                      bool
+		bumpMinor, bumpPatchForMinor, skipChangelog                                       bool
 	)
 	separator = "-"
 	changelogPath = "CHANGELOG.md"
@@ -301,6 +303,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		"version-file":             &versionFileName,
 		"include-component-in-tag": &includeComponent, "include-v-in-tag": &includeV,
 		"bump-minor-pre-major": &bumpMinor, "bump-patch-for-minor-pre-major": &bumpPatchForMinor,
+		"skip-changelog": &skipChangelog,
 	} {
 		raw, ok := p.settings[key]
 		if !ok {
@@ -367,6 +370,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		bumpMinorPreMajor:         bumpMinor,
 		bumpPatchForMinorPreMajor: bumpPatchForMinor,
 		initialVersion:            initialVersion,
+		skipChangelog:             skipChangelog,
 	}
 
 	// A version file the release type implies is carried over only where it
@@ -910,18 +914,23 @@ func render(components []component, top topLevel) ([]byte, error) {
 	}
 
 	// A pre-major rule carried by every component is written once, at the
-	// top level, instead of repeated per component.
+	// top level, instead of repeated per component. So is a skip-changelog
+	// every component carries alike.
 	shared := sharedRules{
 		bumpMinorPreMajor: !slices.ContainsFunc(components, func(c component) bool { return !c.bumpMinorPreMajor }),
 		bumpPatchForMinorPreMajor: !slices.ContainsFunc(components, func(c component) bool {
 			return !c.bumpPatchForMinorPreMajor
 		}),
+		skipChangelog: !slices.ContainsFunc(components, func(c component) bool { return !c.skipChangelog }),
 	}
 	if shared.bumpMinorPreMajor {
 		add(doc, "bump-minor-pre-major", boolean(true))
 	}
 	if shared.bumpPatchForMinorPreMajor {
 		add(doc, "bump-patch-for-minor-pre-major", boolean(true))
+	}
+	if shared.skipChangelog {
+		add(doc, "skip-changelog", boolean(true))
 	}
 
 	if len(components) == 1 && components[0].path == "." && components[0].tagPrefix == "v" {
@@ -960,17 +969,19 @@ func render(components []component, top topLevel) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// sharedRules names the pre-major rules every component carries, which
-// render writes once at the top level.
+// sharedRules names the per-component settings every component carries
+// alike, which render writes once at the top level instead of repeating
+// per component: the pre-major rules and skip-changelog.
 type sharedRules struct {
 	bumpMinorPreMajor         bool
 	bumpPatchForMinorPreMajor bool
+	skipChangelog             bool
 }
 
 // addSettings writes the settings release-me reads per component or at the
 // top level alike: initial-version, bump-minor-pre-major,
-// bump-patch-for-minor-pre-major and files. A pre-major rule is left out
-// where the top level already carries it.
+// bump-patch-for-minor-pre-major, skip-changelog and files. A setting
+// shared already names is left out, the top level already carries it.
 func addSettings(m *yaml.Node, c component, shared sharedRules, add func(*yaml.Node, string, *yaml.Node)) {
 	if c.initialVersion != "" {
 		add(m, "initial-version", scalar(c.initialVersion))
@@ -980,6 +991,9 @@ func addSettings(m *yaml.Node, c component, shared sharedRules, add func(*yaml.N
 	}
 	if c.bumpPatchForMinorPreMajor && !shared.bumpPatchForMinorPreMajor {
 		add(m, "bump-patch-for-minor-pre-major", boolean(true))
+	}
+	if c.skipChangelog && !shared.skipChangelog {
+		add(m, "skip-changelog", boolean(true))
 	}
 	if len(c.files) > 0 {
 		list := &yaml.Node{Kind: yaml.SequenceNode}
