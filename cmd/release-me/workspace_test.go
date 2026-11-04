@@ -301,3 +301,33 @@ func TestCargoWorkspaceReleasesDependentsThroughInheritedAliases(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeWorkspaceFiltersEachDeclarationOfTheSameDependency(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		always  bool
+		wantDev string
+	}{
+		{name: "local ranges only", wantDev: "^9.0.0"},
+		{name: "always link local", always: true, wantDev: "^1.3.0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, remote, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\nworkspaces: [node]\n")
+			cfg.AlwaysLinkLocal = tc.always
+			content := "{\n  \"name\": \"@acme/web\",\n  \"version\": \"0.4.0\",\n  \"dependencies\": {\n    \"@acme/core\": \"^1.2.0\"\n  },\n  \"devDependencies\": {\n    \"@acme/core\": \"^9.0.0\"\n  }\n}\n"
+			writeFiles(t, dir, "chore: pin the registry development dependency", map[string]string{"packages/web/package.json": content})
+			f := newFake()
+			var out bytes.Buffer
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
+				t.Fatal(err)
+			}
+			got := showBareFile(t, remote, "release-me/main", "packages/web/package.json")
+			want := strings.Replace(content, `"version": "0.4.0"`, `"version": "0.4.1"`, 1)
+			want = strings.Replace(want, `"^1.2.0"`, `"^1.3.0"`, 1)
+			want = strings.Replace(want, `"^9.0.0"`, `"`+tc.wantDev+`"`, 1)
+			if got != want {
+				t.Fatalf("manifest = %s;want %s", got, want)
+			}
+		})
+	}
+}

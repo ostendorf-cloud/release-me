@@ -146,10 +146,17 @@ func workspaceUpdates(
 				continue
 			}
 			manager, name := link.Manager, link.Name
+			localVersion := ""
+			for _, target := range members {
+				if target.Component == link.Dependency && target.Manager == manager {
+					localVersion = target.Package.Version
+					break
+				}
+			}
 			files = append(files, fileUpdate{
 				file: config.File{Path: m.path},
 				apply: func(content string) (string, error) {
-					return workspace.SetDependency(manager, content, name, to)
+					return workspace.SetLocalDependency(manager, content, name, to, localVersion, workspaceOptions(cfg))
 				},
 				what: "workspace dependency " + name,
 			})

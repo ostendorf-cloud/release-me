@@ -70,6 +70,10 @@ var nodeSectionOpen = regexp.MustCompile(`^\s*"(` + strings.Join(nodeSections, "
 // own and declare one dependency per line, the layout npm, pnpm and yarn
 // write; everything else in the file is kept byte for byte.
 func setNodeDependency(content, name, version string) (string, error) {
+	return setNodeDependencyWhere(content, name, version, nil)
+}
+
+func setNodeDependencyWhere(content, name, version string, eligible func(string) bool) (string, error) {
 	entry := regexp.MustCompile(`^(\s*"` + regexp.QuoteMeta(name) + `"\s*:\s*)"((?:[^"\\]|\\.)*)"(.*)$`)
 	lines := strings.Split(content, "\n")
 	depth := -1
@@ -82,7 +86,7 @@ func setNodeDependency(content, name, version string) (string, error) {
 		case inSection && depth == 1:
 			if m := entry.FindStringSubmatch(line); m != nil {
 				found = true
-				if moved, ok := moveNodeRange(m[2], version); ok {
+				if moved, ok := moveNodeRange(m[2], version); ok && (eligible == nil || eligible(m[2])) {
 					lines[i] = m[1] + `"` + moved + `"` + m[3]
 				}
 			}

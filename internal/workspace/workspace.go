@@ -195,3 +195,12 @@ func Dependents(members []Member, released []string, opts Options) []string {
 // semverPattern matches a full version, pre-release and build metadata
 // included, the shape every released version carries.
 const semverPattern = `\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`
+
+// SetLocalDependency rewrites the declarations of name that link to the
+// original localVersion under opts, leaving registry declarations alone.
+func SetLocalDependency(manager, content, name, version, localVersion string, opts Options) (string, error) {
+	if manager == Node && opts.LocalRangesOnly {
+		return setNodeDependencyWhere(content, name, version, func(rng string) bool { return nodeLinksLocal(rng, localVersion) })
+	}
+	return SetDependency(manager, content, name, version)
+}
