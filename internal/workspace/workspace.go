@@ -29,13 +29,29 @@ type manager struct {
 	file  string
 	parse func(content []byte) (Package, error)
 	set   func(content, name, version string) (string, error)
+	// linksLocal reports whether a dependency range resolves to the local
+	// package at localVersion when Options.LocalRangesOnly is set; nil for
+	// a manager that always links a local dependency.
+	linksLocal func(rng, localVersion string) bool
 }
 
 // managers maps every package manager "workspaces" accepts to its
 // manifest.
 var managers = map[string]manager{
-	Node:  {file: "package.json", parse: parseNode, set: setNodeDependency},
+	Node:  {file: "package.json", parse: parseNode, set: setNodeDependency, linksLocal: nodeLinksLocal},
 	Cargo: {file: "Cargo.toml", parse: parseCargo, set: setCargoDependency},
+}
+
+// Options tunes which dependencies link two members.
+type Options struct {
+	// LocalRangesOnly links a node dependency only where it resolves to
+	// the local package anyway: through a local protocol such as
+	// "workspace:" or "file:", or a range the local package's current
+	// version satisfies. Any other dependency on a local package name is
+	// left to the registry. It is release-please's "always-link-local"
+	// turned off; without it every dependency on a local package name
+	// links.
+	LocalRangesOnly bool
 }
 
 // Managers lists every package manager "workspaces" accepts, in the order
@@ -114,8 +130,9 @@ type Link struct {
 // Links returns every dependency a member declares on another member's
 // package of the same package manager, in members' order, each
 // dependent's links in its manifest's order. A dependency on the member's
-// own package is no link.
-func Links(members []Member) []Link {
+// own package is no link, and with opts.LocalRangesOnly neither is one
+// whose range would not resolve to the local package.
+func Links(members []Member, opts Options) []Link {
 	var links []Link
 	for _, m := range members {
 		for _, dep := range m.Package.Dependencies {
@@ -134,6 +151,10 @@ func Links(members []Member) []Link {
 				if target.Component == m.Component || target.Manager != m.Manager || target.Package.Name != name {
 					continue
 				}
+				if local := managers[m.Manager].linksLocal; opts.LocalRangesOnly && local != nil &&
+					!local(dep.Range, target.Package.Version) {
+					continue
+				}
 				link := Link{Dependent: m.Component, Dependency: target.Component, Manager: m.Manager, Name: name}
 				if !slices.Contains(links, link) {
 					links = append(links, link)
@@ -148,9 +169,9 @@ func Links(members []Member) []Link {
 // component in released does: one that depends on a released component,
 // directly or through another dependent, in members' order, the released
 // components themselves left out, and so is the workspace root manifest,
-// which belongs to no component.
-func Dependents(members []Member, released []string) []string {
-	links := Links(members)
+// which belongs to no component. opts decides the links, as in Links.
+func Dependents(members []Member, released []string, opts Options) []string {
+	links := Links(members, opts)
 	releasing := slices.Clone(released)
 	var out []string
 	for changed := true; changed; {

@@ -153,7 +153,7 @@ func TestCargoArrayTablesEndPackageAndDependencyContexts(t *testing.T) {
 				t.Fatalf("package = %+v;want core 1.0.0 deps %+v", pkg, tc.wantDeps)
 			}
 			members := []workspace.Member{{Component: "core", Manager: workspace.Cargo, Package: pkg}, {Component: "cli", Manager: workspace.Cargo, Package: workspace.Package{Name: "cli", Dependencies: []workspace.Dependency{{Name: "core", Range: "1.0.0"}}}}}
-			links := workspace.Links(members)
+			links := workspace.Links(members, workspace.Options{})
 			if len(links) != 1 || links[0].Dependent != "cli" || links[0].Dependency != "core" {
 				t.Fatalf("links = %+v", links)
 			}
@@ -175,7 +175,7 @@ func TestCargoInheritedAliasesLinkToTheWorkspacePackage(t *testing.T) {
 				t.Fatal(err)
 			}
 			members := []workspace.Member{{Manager: workspace.Cargo, Package: root}, {Component: "core", Manager: workspace.Cargo, Package: workspace.Package{Name: "core", Version: "1.0.0"}}, {Component: "cli", Manager: workspace.Cargo, Package: cli}}
-			dependents := workspace.Dependents(members, []string{"core"})
+			dependents := workspace.Dependents(members, []string{"core"}, workspace.Options{})
 			if !reflect.DeepEqual(dependents, []string{"cli"}) {
 				t.Fatalf("dependents = %v, want cli", dependents)
 			}

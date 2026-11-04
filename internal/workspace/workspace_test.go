@@ -32,7 +32,7 @@ var acmeMembers = []workspace.Member{
 
 func TestLinksFindsEveryDependencyOnAnotherMember(t *testing.T) {
 	t.Parallel()
-	got := workspace.Links(acmeMembers)
+	got := workspace.Links(acmeMembers, workspace.Options{})
 	want := []workspace.Link{
 		{Dependent: "ui", Dependency: "core", Manager: workspace.Node, Name: "@acme/core"},
 		{Dependent: "web", Dependency: "ui", Manager: workspace.Node, Name: "@acme/ui"},
@@ -58,7 +58,7 @@ func TestDependentsReleasesEveryComponentDependingOnAReleasedOne(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := workspace.Dependents(acmeMembers, tc.released); !reflect.DeepEqual(got, tc.want) {
+			if got := workspace.Dependents(acmeMembers, tc.released, workspace.Options{}); !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("Dependents(%q) = %q, want %q", tc.released, got, tc.want)
 			}
 		})
@@ -73,7 +73,7 @@ func TestLinksIgnoresAPackageOfAnotherManagerWithTheSameName(t *testing.T) {
 			Name: "web", Dependencies: []workspace.Dependency{{Name: "core", Range: "^1.0.0"}},
 		}},
 	}
-	if got := workspace.Links(members); len(got) != 0 {
+	if got := workspace.Links(members, workspace.Options{}); len(got) != 0 {
 		t.Fatalf("Links() = %+v, want none across package managers", got)
 	}
 }

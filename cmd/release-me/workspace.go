@@ -80,12 +80,18 @@ func readWorkspace(dir string, cfg config.Config, all []config.ResolvedComponent
 // workspaceDependents returns every component that must release because
 // one in released does, through the manifests' local dependencies, in
 // release-me.yaml's order.
-func workspaceDependents(manifests []workspaceManifest, released []string) []string {
+func workspaceDependents(cfg config.Config, manifests []workspaceManifest, released []string) []string {
 	members := make([]workspace.Member, 0, len(manifests))
 	for _, m := range manifests {
 		members = append(members, m.member)
 	}
-	return workspace.Dependents(members, released)
+	return workspace.Dependents(members, released, workspaceOptions(cfg))
+}
+
+// workspaceOptions returns the link options cfg's "always-link-local"
+// selects.
+func workspaceOptions(cfg config.Config) workspace.Options {
+	return workspace.Options{LocalRangesOnly: !cfg.AlwaysLinkLocal}
 }
 
 // dependencyRelease is the release of a component that has nothing of its
@@ -113,7 +119,9 @@ func dependencyRelease(ctx context.Context, dir string, comp config.ResolvedComp
 // releasing this run to its final version. Each dependent gets one entry
 // per dependency, "update <package> to <version>", typed fix and scoped
 // deps, the patch a dependency bump releases it with.
-func workspaceUpdates(manifests []workspaceManifest, versions map[string]string, logger *slog.Logger) ([]fileUpdate, map[string][]changelog.Entry) {
+func workspaceUpdates(
+	cfg config.Config, manifests []workspaceManifest, versions map[string]string, logger *slog.Logger,
+) ([]fileUpdate, map[string][]changelog.Entry) {
 	members := make([]workspace.Member, 0, len(manifests))
 	for _, m := range manifests {
 		members = append(members, m.member)
@@ -121,7 +129,7 @@ func workspaceUpdates(manifests []workspaceManifest, versions map[string]string,
 	var files []fileUpdate
 	entries := map[string][]changelog.Entry{}
 	var done []workspace.Link
-	for _, link := range workspace.Links(members) {
+	for _, link := range workspace.Links(members, workspaceOptions(cfg)) {
 		to, released := versions[link.Dependency]
 		// The workspace root manifest belongs to no component: it never
 		// releases, but its dependencies move.

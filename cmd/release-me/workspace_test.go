@@ -223,6 +223,34 @@ components:
 	}
 }
 
+func TestNodeWorkspaceWithoutAlwaysLinkLocalLeavesARangeTheLocalVersionMissesAlone(t *testing.T) {
+	dir, origin, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\nworkspaces: [node]\nalways-link-local: false\n")
+	// web pins core from the registry at a range the local 1.2.0 misses,
+	// and reaches core only through ui, which it links by workspace:*.
+	writeFiles(t, dir, "chore(web): pin core from the registry", map[string]string{
+		"packages/web/package.json": "{\n  \"name\": \"@acme/web\",\n  \"version\": \"0.4.0\",\n  \"dependencies\": {\n" +
+			"    \"@acme/core\": \"~1.1.0\",\n    \"@acme/ui\": \"workspace:*\"\n  }\n}\n",
+	})
+
+	f := newFake()
+	var stdout bytes.Buffer
+	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
+		t.Fatalf("doPR() error = %v", err)
+	}
+
+	if len(f.CreatedPullRequests) != 1 || f.CreatedPullRequests[0].Title != "chore: release core v1.3.0, ui v0.8.1, web v0.4.1" {
+		t.Fatalf("CreatedPullRequests = %+v, want web released through ui", f.CreatedPullRequests)
+	}
+	web := showBareFile(t, origin, "release-me/main", "packages/web/package.json")
+	if !strings.Contains(web, `"@acme/core": "~1.1.0"`) {
+		t.Errorf("packages/web/package.json = %q, want the registry range left alone", web)
+	}
+	changelog := showBareFile(t, origin, "release-me/main", "packages/web/CHANGELOG.md")
+	if !strings.Contains(changelog, "update @acme/ui to 0.8.1") || strings.Contains(changelog, "update @acme/core") {
+		t.Errorf("packages/web/CHANGELOG.md = %q, want the ui update only", changelog)
+	}
+}
+
 func TestNodeWorkspaceLeftOutReleasesNoDependent(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\n")
 
