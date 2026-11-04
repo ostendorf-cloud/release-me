@@ -122,3 +122,90 @@ func TestDoPRSkipsTheChangelogOfOnlyTheComponentThatAsksTo(t *testing.T) {
 		t.Fatalf("pull request changelog = %q, want api's section in the body all the same", changelogText)
 	}
 }
+
+func TestEnablingSkipChangelogDiscardsExistingBranchEdits(t *testing.T) {
+	for _, tt := range []struct {
+		name             string
+		shared, existing bool
+	}{
+		{"single absent changelog", false, false},
+		{"single existing changelog", false, true},
+		{"mixed shared absent changelog", true, false},
+		{"mixed shared existing changelog", true, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, origin := newPRRepo(t)
+			yaml := ""
+			path := "CHANGELOG.md"
+			files := map[string]string{"main.go": "package main\n"}
+			if tt.shared {
+				yaml = "release-pull-request: shared\ncomponents:\n  api:\n    path: api\n  web:\n    path: web\n"
+				path = "api/CHANGELOG.md"
+				files = map[string]string{"api/main.go": "package api\n", "web/index.html": "<p>web</p>\n"}
+			}
+			const baseline = "# Changelog\n\nWritten by hand.\n"
+			if tt.existing {
+				files[path] = baseline
+			}
+			writeConfig(t, dir, yaml)
+			writeFiles(t, dir, "chore: scaffold", files)
+			if tt.shared {
+				writeFiles(t, dir, "feat: add endpoint", map[string]string{"api/new.go": "package api\n"})
+				writeFiles(t, dir, "feat: add page", map[string]string{"web/new.html": "<p>new</p>\n"})
+			} else {
+				commitEntry(t, dir, "feat: add endpoint")
+			}
+			cfg, err := config.Load(filepath.Join(dir, "release-me.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := newFake()
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			created := f.CreatedPullRequests[0]
+			old := bareBranchSHA(t, origin)
+			f.ListResponses = []forgetest.ListResponse{{Head: mainBranch, State: "open", PullRequests: []forge.PullRequest{{Number: 1, Title: created.Title, Body: created.Body, HeadSHA: old}}}}
+			if tt.shared {
+				yaml = strings.Replace(yaml, "    path: api\n", "    path: api\n    skip-changelog: true\n", 1)
+			} else {
+				yaml = "skip-changelog: true\n"
+			}
+			writeConfig(t, dir, yaml)
+			cfg, err = config.Load(filepath.Join(dir, "release-me.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			tip := bareBranchSHA(t, origin)
+			if tip == old {
+				t.Fatal("release branch still contains the generated changelog edit")
+			}
+			if got := bareFileExists(t, origin, mainBranch, path); got != tt.existing {
+				t.Fatalf("changelog exists = %v, want %v", got, tt.existing)
+			}
+			if tt.existing {
+				if got := showBareFile(t, origin, mainBranch, path); got != baseline {
+					t.Fatalf("changelog = %q, want original %q", got, baseline)
+				}
+			}
+			if tt.shared {
+				if got := showBareFile(t, origin, mainBranch, "web/CHANGELOG.md"); !strings.Contains(got, "- add page") {
+					t.Fatalf("web changelog = %q", got)
+				}
+			}
+			if !strings.Contains(releasepr.ExtractChangelog(f.UpdatedPullRequests[len(f.UpdatedPullRequests)-1].Body), "- add endpoint") {
+				t.Fatal("skipped component disappeared from the body")
+			}
+			f.ListResponses[0].PullRequests[0].HeadSHA = tip
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			if got := bareBranchSHA(t, origin); got != tip {
+				t.Fatalf("rerun moved branch from %s to %s", tip, got)
+			}
+		})
+	}
+}

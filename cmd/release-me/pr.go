@@ -911,6 +911,11 @@ func sameAsReleaseBranch(ctx context.Context, tmp string, changelogs []changelog
 
 	for _, c := range changelogs {
 		if c.skip {
+			branchContent, branchExists := gitShowFile(ctx, tmp, compareRef, c.path)
+			headContent, headExists := gitShowFile(ctx, tmp, "HEAD", c.path)
+			if branchExists != headExists || branchContent != headContent {
+				return false
+			}
 			continue
 		}
 		changelogContent, ok := gitShowFile(ctx, tmp, compareRef, c.path)
