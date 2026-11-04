@@ -289,7 +289,7 @@ func doPRComponent(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, existing, comp.Branch, date, title); err != nil {
+		if err := plan.write(ctx, cfg, existing, comp.Branch, date, releasepr.CommitMessage(title, cfg.Signoff)); err != nil {
 			return fmt.Errorf("release-me: component %s: %w", comp.Name, err)
 		}
 
@@ -493,7 +493,7 @@ func publishSharedPR(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, existing, branch, date, title); err != nil {
+		if err := plan.write(ctx, cfg, existing, branch, date, releasepr.CommitMessage(title, cfg.Signoff)); err != nil {
 			return fmt.Errorf("release-me: %s: %w", who, err)
 		}
 
