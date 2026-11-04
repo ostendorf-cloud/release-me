@@ -47,6 +47,9 @@ type PullRequest struct {
 	URL     string
 	Merged  bool
 	HeadSHA string
+	// Author is the login of the account that opened the pull request,
+	// without "@", "" when the forge does not report one.
+	Author string
 }
 
 // Forge reads and writes pull request, label, tag and release data on a
