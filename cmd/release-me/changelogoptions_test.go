@@ -11,6 +11,7 @@ import (
 
 	"github.com/ostendorf-cloud/release-me/internal/changelog"
 	"github.com/ostendorf-cloud/release-me/internal/config"
+	"github.com/ostendorf-cloud/release-me/internal/forge"
 	"github.com/ostendorf-cloud/release-me/internal/forge/forgetest"
 )
 
@@ -54,6 +55,17 @@ func commits(subjects ...string) func(t *testing.T, dir string) {
 	}
 }
 
+// withPullRequests returns newFake with responses configured for every
+// pull request in prs, keyed by number.
+func withPullRequests(prs ...forge.PullRequest) *forgetest.Fake {
+	f := newFake()
+	f.Responses = map[int]forgetest.Response{}
+	for _, pr := range prs {
+		f.Responses[pr.Number] = forgetest.Response{PullRequest: pr}
+	}
+	return f
+}
+
 func TestDoPRRendersTheConfiguredChangelogStyle(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -69,6 +81,31 @@ func TestDoPRRendersTheConfiguredChangelogStyle(t *testing.T) {
 			build:      commits("feat(cli): add the widget", "fix: npm publish runs once"),
 			want: "### Features\n\n- **cli:** Add the widget\n\n" +
 				"### Bug Fixes\n\n- npm publish runs once",
+		},
+		{
+			name:       "changelog-authors credits the pull request's login and a direct commit's author",
+			configYAML: "changelog-authors: true\n",
+			forge: withPullRequests(forge.PullRequest{
+				Number: 12, Title: "feat: add the widget", URL: "https://github.com/owner/repo/pull/12", Author: "octocat",
+			}),
+			build: func(t *testing.T, dir string) {
+				t.Helper()
+				mergePullRequest(t, dir, 12, "feat/widget", map[string]string{"widget.go": "package widget\n"})
+				runGit(t, dir, "-c", "user.name=Ada Lovelace", "commit", "--allow-empty", "-q", "-m", "fix: handle the empty case")
+			},
+			want: "### Features\n\n- add the widget (@octocat) ([#12](https://github.com/owner/repo/pull/12))\n\n" +
+				"### Bug Fixes\n\n- handle the empty case (Ada Lovelace)",
+		},
+		{
+			name: "without changelog-authors no one is credited",
+			forge: withPullRequests(forge.PullRequest{
+				Number: 12, Title: "feat: add the widget", URL: "https://github.com/owner/repo/pull/12", Author: "octocat",
+			}),
+			build: func(t *testing.T, dir string) {
+				t.Helper()
+				mergePullRequest(t, dir, 12, "feat/widget", map[string]string{"widget.go": "package widget\n"})
+			},
+			want: "### Features\n\n- add the widget ([#12](https://github.com/owner/repo/pull/12))",
 		},
 	}
 	for _, tc := range cases {

@@ -169,17 +169,17 @@ func assembleEntries(
 func processEntry(
 	ctx context.Context, f forge.Forge, owner, repoName string, e history.Entry, fallbackType, source string, subs subCommitReader,
 ) ([]version.Change, []changelog.Entry, error) {
-	text, url := entryText(e), ""
+	text, url, author := entryText(e), "", e.AuthorName
 
 	if e.PullRequestNumber > 0 {
 		pr, err := f.PullRequest(ctx, owner, repoName, e.PullRequestNumber)
 		switch {
 		case err == nil:
 			if override := conventional.ParseOverride(pr.Body); override.Present {
-				c, en := overrideEntries(override, e.PullRequestNumber, pr.URL, fallbackType)
+				c, en := overrideEntries(override, e.PullRequestNumber, pr.URL, pullRequestAuthor(pr, e), fallbackType)
 				return c, en, nil
 			}
-			text, url = pullRequestText(e, pr.Title, pr.Body), pr.URL
+			text, url, author = pullRequestText(e, pr.Title, pr.Body), pr.URL, pullRequestAuthor(pr, e)
 		case errors.Is(err, forge.ErrNotFound):
 			text, url = unresolvedText(e), pr.URL
 		default:
@@ -202,6 +202,7 @@ func processEntry(
 		Breaking:          msg.Breaking,
 		PullRequestNumber: e.PullRequestNumber,
 		URL:               url,
+		Author:            author,
 	}
 
 	if source == config.ChangelogSourceNested && e.PullRequestNumber > 0 {
@@ -277,7 +278,7 @@ func assembleAllEntries(ctx context.Context, f forge.Forge, owner, repoName stri
 		switch {
 		case err == nil:
 			if override := conventional.ParseOverride(pr.Body); override.Present {
-				c, en := overrideEntries(override, e.PullRequestNumber, pr.URL, fallbackType)
+				c, en := overrideEntries(override, e.PullRequestNumber, pr.URL, pullRequestAuthor(pr, e), fallbackType)
 				changes = append(changes, c...)
 				entries = append(entries, en...)
 				continue
@@ -308,7 +309,8 @@ func assembleAllEntries(ctx context.Context, f forge.Forge, owner, repoName stri
 
 // parseCommit parses one commit's own subject and body as a conventional
 // commit, attributing it to the given pull request number and URL, 0 and
-// "" for a commit belonging to none.
+// "" for a commit belonging to none. Its text is the commit's own, so the
+// commit's author is credited, not the pull request's.
 func parseCommit(e history.Entry, fallbackType string, number int, url string) (version.Change, changelog.Entry) {
 	msg := conventional.Parse(entryText(e), fallbackType)
 	return version.Change{Type: msg.Type, Breaking: msg.Breaking, ReleaseAs: msg.ReleaseAs}, changelog.Entry{
@@ -318,7 +320,18 @@ func parseCommit(e history.Entry, fallbackType string, number int, url string) (
 		Breaking:          msg.Breaking,
 		PullRequestNumber: number,
 		URL:               url,
+		Author:            e.AuthorName,
 	}
+}
+
+// pullRequestAuthor is the author an entry whose text the pull request pr
+// gave credits: "@" and the login of the account that opened it, or e's
+// own git author name when the forge reports no login.
+func pullRequestAuthor(pr forge.PullRequest, e history.Entry) string {
+	if pr.Author != "" {
+		return "@" + pr.Author
+	}
+	return e.AuthorName
 }
 
 // warnRefusedReleaseAs logs every "Release-As" footer version.Next
@@ -333,8 +346,8 @@ func warnRefusedReleaseAs(logger *slog.Logger, who string, refused []version.Ref
 }
 
 // overrideEntries parses one change and one changelog entry per line of an
-// override block, all naming the same pull request.
-func overrideEntries(override conventional.Override, number int, url, fallbackType string) ([]version.Change, []changelog.Entry) {
+// override block, all naming the same pull request and crediting author.
+func overrideEntries(override conventional.Override, number int, url, author, fallbackType string) ([]version.Change, []changelog.Entry) {
 	changes := make([]version.Change, 0, len(override.Entries))
 	entries := make([]changelog.Entry, 0, len(override.Entries))
 	for _, line := range override.Entries {
@@ -347,6 +360,7 @@ func overrideEntries(override conventional.Override, number int, url, fallbackTy
 			Breaking:          msg.Breaking,
 			PullRequestNumber: number,
 			URL:               url,
+			Author:            author,
 		})
 	}
 	return changes, entries
