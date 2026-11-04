@@ -117,7 +117,7 @@ func readBody(body string) readBack {
 	r.NotesText, r.NotesOK = releasepr.ExtractNotes(body)
 	r.Override, r.OverrideOK = releasepr.ExtractVersionOverride(body)
 	r.Changelog = releasepr.ExtractChangelog(body)
-	r.Date, r.DateOK = releasepr.ExtractDate(body)
+	r.Date, r.DateOK = releasepr.ExtractDate(body, "")
 	r.Components = releasepr.ComponentNames(r.Changelog)
 	for _, name := range r.Components {
 		r.Sections = append(r.Sections, releasepr.ComponentSection(r.Changelog, name))

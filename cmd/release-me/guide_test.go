@@ -67,7 +67,7 @@ func TestEveryReleasePullRequestBodyCarriesTheGuideOnlyWhileTheKeyIsOn(t *testin
 				if got := releasepr.ComponentNames(changelogText); !slices.Equal(got, family.names) {
 					t.Fatalf("components = %v, want %v", got, family.names)
 				}
-				if _, ok := releasepr.ExtractDate(body); !ok {
+				if _, ok := releasepr.ExtractDate(body, ""); !ok {
 					t.Fatalf("body = %q, want a changelog date read back", body)
 				}
 			})

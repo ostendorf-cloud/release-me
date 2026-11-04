@@ -62,6 +62,10 @@ override.
 release-please's own `date-format` formats the date its generic updater writes into a file, not
 the changelog's, so `release-me migrate` leaves it out with a warning saying so.
 
+Custom-formatted pull request bodies record the canonical date in machine metadata outside
+the rendered body. Changing to another custom format, or back to the default, keeps that
+date until release content changes. Older bodies fall back to the current format and ISO.
+
 ## `fallback-type`
 
 The type assigned to text that does not parse as a conventional commit, default `other`.

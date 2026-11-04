@@ -15,6 +15,7 @@ import (
 	"github.com/ostendorf-cloud/release-me/internal/config"
 	"github.com/ostendorf-cloud/release-me/internal/forge"
 	"github.com/ostendorf-cloud/release-me/internal/forge/forgetest"
+	"github.com/ostendorf-cloud/release-me/internal/releasepr"
 )
 
 func TestDoPRWritesTheHeadingDateInTheConfiguredFormatAboveOlderHeadings(t *testing.T) {
@@ -81,6 +82,11 @@ func TestDoPRReadsTheDateOfAnOpenReleasePullRequestBackInTheConfiguredFormat(t *
 			older := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
 			body := strings.Replace(created.Body,
 				"("+changelog.FormatDate(time.Now(), tc.format)+")", "("+changelog.FormatDate(older, tc.writtenFormat)+")", 1)
+			if tc.writtenFormat == "" {
+				body = strings.Replace(body, releasepr.DateMarker(time.Now(), tc.format), "", 1)
+			} else {
+				body = strings.Replace(body, releasepr.DateMarker(time.Now(), tc.format), releasepr.DateMarker(older, tc.format), 1)
+			}
 			if body == created.Body {
 				t.Fatalf("body = %q, want a heading date to replace", body)
 			}
