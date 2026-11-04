@@ -467,6 +467,12 @@ func TestFromReleasePleaseMapsWorkspacePluginsToWorkspaces(t *testing.T) {
 			warnings: []string{"plugins: cargo-workspace: merge: no release-me equivalent, left out"},
 		},
 		{
+			name:       "the maven plugin",
+			configJSON: `{"plugins": [{"type": "maven-workspace", "considerAllArtifacts": true}], ` + packages + `}`,
+			want:       []string{"maven"}, sharedPR: true,
+			warnings: []string{"plugins: maven-workspace: considerAllArtifacts: no release-me equivalent, left out"},
+		},
+		{
 			name:       "a single package has nothing to link",
 			configJSON: `{"plugins": ["node-workspace"], "packages": {"packages/core": {"component": "core"}}}`,
 			warnings:   []string{"workspaces: node: a single package has no workspace dependency to move, left out"},
