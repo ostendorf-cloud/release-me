@@ -230,6 +230,136 @@ func TestCountsLeavesARootComponentOnlyTheFilesOutsideTheOthers(t *testing.T) {
 	}
 }
 
+func TestCountsLeavesOutACommitThatChangedOnlyExcludedPaths(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		paths   []string
+		named   []string
+		path    string
+		exclude []string
+		want    bool
+	}{
+		{
+			name:    "a commit changing only an excluded subpath counts for none",
+			paths:   []string{"packages/duxt/docs/layout.md", "packages/duxt/docs/props.md"},
+			path:    "packages/duxt",
+			exclude: []string{"packages/duxt/docs"},
+			want:    false,
+		},
+		{
+			name:    "a commit changing an excluded subpath and a file outside it counts",
+			paths:   []string{"packages/duxt/docs/layout.md", "packages/duxt/src/layout.ts"},
+			path:    "packages/duxt",
+			exclude: []string{"packages/duxt/docs"},
+			want:    true,
+		},
+		{
+			name:    "an excluded path matches a file named like it as a separate file",
+			paths:   []string{"packages/duxt/docs-site.ts"},
+			path:    "packages/duxt",
+			exclude: []string{"packages/duxt/docs"},
+			want:    true,
+		},
+		{
+			name:    "an excluded file counts for none",
+			paths:   []string{"packages/duxt/package-lock.json"},
+			path:    "packages/duxt",
+			exclude: []string{"packages/duxt/package-lock.json"},
+			want:    false,
+		},
+		{
+			name:    "a commit naming the component counts whatever it changed",
+			paths:   []string{"packages/duxt/docs/layout.md"},
+			named:   []string{"duxt"},
+			path:    "packages/duxt",
+			exclude: []string{"packages/duxt/docs"},
+			want:    true,
+		},
+		{
+			name:    "the root component leaves out its excluded paths",
+			paths:   []string{"packages/api/handler.go"},
+			path:    ".",
+			exclude: []string{"packages"},
+			want:    false,
+		},
+		{
+			name:    "the root component counts a commit outside its excluded paths",
+			paths:   []string{"packages/api/handler.go", "README.md"},
+			path:    ".",
+			exclude: []string{"packages"},
+			want:    true,
+		},
+		{
+			name:    "an empty commit still counts for a component with excluded paths",
+			path:    ".",
+			exclude: []string{"packages"},
+			want:    true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := history.Counts(tc.paths, tc.named, "duxt", tc.path, tc.exclude); got != tc.want {
+				t.Fatalf("Counts(%q, %q, %q, %q, %q) = %v, want %v", tc.paths, tc.named, "duxt", tc.path, tc.exclude, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCountsCombinesRootComponentExclusionWithAComponentsOwnExcludePaths
+// covers a root component beside a non-root component that also carries
+// its own "exclude-paths": a file inside the non-root component's excluded
+// subpath must count for neither component, a file inside the non-root
+// component outside its excluded subpath must count for it alone, and a
+// file outside every component's path must count for the root alone.
+func TestCountsCombinesRootComponentExclusionWithAComponentsOwnExcludePaths(t *testing.T) {
+	t.Parallel()
+	// acme is the root component at ".", excluding every other component's
+	// path, as config.Resolve derives for ResolvedComponent.OtherPaths. web
+	// additionally excludes its own "docs" subpath, as a component's own
+	// "exclude-paths" would.
+	otherPaths := []string{"packages/web"}
+	webExclude := []string{"packages/web/docs"}
+
+	cases := []struct {
+		name     string
+		paths    []string
+		wantAcme bool
+		wantWeb  bool
+	}{
+		{
+			name:     "a file inside the component's own excluded subpath belongs to neither",
+			paths:    []string{"packages/web/docs/guide.md"},
+			wantAcme: false,
+			wantWeb:  false,
+		},
+		{
+			name:     "a file inside the component outside its excluded subpath belongs to it alone",
+			paths:    []string{"packages/web/src/app.vue"},
+			wantAcme: false,
+			wantWeb:  true,
+		},
+		{
+			name:     "a file outside every component path belongs to the root alone",
+			paths:    []string{"README.md"},
+			wantAcme: true,
+			wantWeb:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := history.Counts(tc.paths, nil, "acme", ".", otherPaths); got != tc.wantAcme {
+				t.Fatalf("Counts(%q, nil, %q, %q, %q) = %v, want %v", tc.paths, "acme", ".", otherPaths, got, tc.wantAcme)
+			}
+			if got := history.Counts(tc.paths, nil, "web", "packages/web", webExclude); got != tc.wantWeb {
+				t.Fatalf("Counts(%q, nil, %q, %q, %q) = %v, want %v", tc.paths, "web", "packages/web", webExclude, got, tc.wantWeb)
+			}
+		})
+	}
+}
+
 func TestTouchesReturnsNoPathsForAnEmptyCommit(t *testing.T) {
 	t.Parallel()
 	dir := newRepo(t)

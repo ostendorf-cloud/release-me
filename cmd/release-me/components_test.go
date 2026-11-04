@@ -295,6 +295,94 @@ func TestRunNextGivesARootComponentEveryFileOutsideTheOthers(t *testing.T) {
 	}
 }
 
+// TestRunNextLeavesOutACommitThatChangedOnlyExcludedPaths exercises
+// "exclude-paths" through run(): a feat changing only a component's
+// excluded docs releases nothing for it, one changing its source does.
+func TestRunNextLeavesOutACommitThatChangedOnlyExcludedPaths(t *testing.T) {
+	cases := []struct {
+		name   string
+		config string
+		want   string
+	}{
+		{
+			name: "a component leaves out its excluded subpath",
+			config: "components:\n  frontend:\n    path: frontend\n    exclude-paths: [frontend/docs]\n" +
+				"  backend:\n    path: backend\n",
+			want: "backend: 0.1.1 (fix)\n",
+		},
+		{
+			name:   "the implicit main component leaves out the top-level excluded paths",
+			config: "exclude-paths: [frontend/docs, frontend/README.md]\n",
+			want:   "0.1.1 (fix)\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := newRepo(t)
+			writeConfig(t, dir, tc.config)
+			writeFiles(t, dir, "chore: scaffold the two components", map[string]string{
+				"frontend/README.md": "frontend\n",
+				"backend/README.md":  "backend\n",
+			})
+			runGit(t, dir, "tag", "v0.1.0")
+			runGit(t, dir, "tag", "frontend/v0.1.0")
+			runGit(t, dir, "tag", "backend/v0.1.0")
+			writeFiles(t, dir, "feat(frontend): document the layout prop", map[string]string{
+				"frontend/docs/layout.md": "# Layout\n",
+			})
+			writeFiles(t, dir, "fix(backend): answer the health check with 200", map[string]string{
+				"backend/health.go": "package backend\n",
+			})
+
+			var stdout, stderr bytes.Buffer
+			code := run([]string{"next"}, &stdout, &stderr)
+
+			if code != 0 {
+				t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+			}
+			if stdout.String() != tc.want {
+				t.Fatalf("stdout = %q, want %q", stdout.String(), tc.want)
+			}
+		})
+	}
+}
+
+// TestRunNextCombinesARootComponentWithANestedComponentsOwnExcludePaths
+// exercises both features together through run(): a root component beside
+// a nested component that carries its own "exclude-paths". A feat inside
+// the nested component's excluded subpath releases nothing for either
+// component, and a feat inside the nested component outside that subpath
+// releases only for it, never for the root.
+func TestRunNextCombinesARootComponentWithANestedComponentsOwnExcludePaths(t *testing.T) {
+	dir := newRepo(t)
+	writeConfig(t, dir,
+		"components:\n  acme:\n    path: .\n    tag-prefix: v\n"+
+			"  web:\n    path: packages/web\n    exclude-paths: [packages/web/docs]\n")
+	writeFiles(t, dir, "chore: scaffold the site and the web package", map[string]string{
+		"README.md":                 "acme\n",
+		"packages/web/package.json": `{"name": "@acme/web", "version": "0.4.0"}` + "\n",
+	})
+	runGit(t, dir, "tag", "v1.2.0")
+	runGit(t, dir, "tag", "web/v0.4.0")
+	// A feat inside web's excluded docs: neither component releases for it.
+	writeFiles(t, dir, "feat(web): document the pricing page", map[string]string{
+		"packages/web/docs/pricing.md": "# Pricing\n",
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"next"}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+	// next prints nothing for a component with nothing to release: web's
+	// excluded docs must not release for it, and must not be left
+	// unclaimed for the root either.
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want no output: neither component should have anything to release", stdout.String())
+	}
+}
+
 // TestRunNextComponentFlagLimitsToOneComponent exercises --component
 // through run(): with two components configured, only the named one
 // prints, and without the "<name>: " prefix since the run targets one
