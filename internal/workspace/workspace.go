@@ -99,7 +99,8 @@ type Member struct {
 	// Component is the component's name, "" for the workspace root
 	// manifest of a repository without a component at ".": it releases
 	// nothing, but the dependencies it declares, such as a Cargo
-	// "[workspace.dependencies]" table, still move.
+	// "[workspace.dependencies]" table or a Maven aggregator's
+	// "<dependencyManagement>", still move.
 	Component string
 	Manager   string
 	Package   Package
