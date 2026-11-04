@@ -65,7 +65,7 @@ type rpPackage struct {
 var packageKeys = []string{
 	"release-type", "package-name", "component", "include-component-in-tag", "include-v-in-tag",
 	"tag-separator", "changelog-path", "bump-minor-pre-major", "bump-patch-for-minor-pre-major",
-	"initial-version", "extra-files", "version-file",
+	"initial-version", "extra-files", "version-file", "include-commit-authors",
 }
 
 // topLevelKeys are the release-please settings that only exist at the top
@@ -183,6 +183,13 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 	if err != nil {
 		return Result{}, err
 	}
+	// release-me credits authors for every component or for none.
+	switch authors := slices.IndexFunc(components, func(c component) bool { return !c.includeCommitAuthors }) == -1; {
+	case authors:
+		st.authors = true
+	case slices.ContainsFunc(components, func(c component) bool { return c.includeCommitAuthors }):
+		warn("include-commit-authors: release-me credits authors for every component or none, left out")
+	}
 	// release-please groups every package into one release pull request
 	// unless separate-pull-requests is true; release-me's own default is one
 	// per component, so the grouped default is written out. locked always
@@ -274,6 +281,8 @@ type component struct {
 	bumpPatchForMinorPreMajor bool
 	initialVersion            string
 	files                     []file
+	// includeCommitAuthors is release-please's include-commit-authors.
+	includeCommitAuthors bool
 }
 
 // file is one release-me "files" entry.
@@ -291,7 +300,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		releaseType, packageName, componentName, separator, changelogPath, initialVersion string
 		versionFileName                                                                   string
 		includeComponent, includeV                                                        = true, true
-		bumpMinor, bumpPatchForMinor                                                      bool
+		bumpMinor, bumpPatchForMinor, includeAuthors                                      bool
 	)
 	separator = "-"
 	changelogPath = "CHANGELOG.md"
@@ -301,6 +310,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		"version-file":             &versionFileName,
 		"include-component-in-tag": &includeComponent, "include-v-in-tag": &includeV,
 		"bump-minor-pre-major": &bumpMinor, "bump-patch-for-minor-pre-major": &bumpPatchForMinor,
+		"include-commit-authors": &includeAuthors,
 	} {
 		raw, ok := p.settings[key]
 		if !ok {
@@ -367,6 +377,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		bumpMinorPreMajor:         bumpMinor,
 		bumpPatchForMinorPreMajor: bumpPatchForMinor,
 		initialVersion:            initialVersion,
+		includeCommitAuthors:      includeAuthors,
 	}
 
 	// A version file the release type implies is carried over only where it
@@ -611,6 +622,7 @@ func xpathKey(xpath string) (string, bool) {
 // carried over from release-please's plugins and settings.
 type style struct {
 	sentenceCase bool
+	authors      bool
 }
 
 // workspacePlugins maps each release-please workspace plugin to the
@@ -907,6 +919,9 @@ func render(components []component, top topLevel) ([]byte, error) {
 	add(doc, "labels", labels)
 	if top.style.sentenceCase {
 		add(doc, "changelog-sentence-case", boolean(true))
+	}
+	if top.style.authors {
+		add(doc, "changelog-authors", boolean(true))
 	}
 
 	// A pre-major rule carried by every component is written once, at the
