@@ -21,6 +21,9 @@ const (
 	// Cargo reads a component's Cargo.toml: a crate of a Cargo
 	// workspace.
 	Cargo = "cargo"
+	// Maven reads a component's pom.xml: a module of a Maven
+	// multi-module build.
+	Maven = "maven"
 )
 
 // manager is one package manager's manifest file name, reader and
@@ -36,11 +39,12 @@ type manager struct {
 var managers = map[string]manager{
 	Node:  {file: "package.json", parse: parseNode, set: setNodeDependency},
 	Cargo: {file: "Cargo.toml", parse: parseCargo, set: setCargoDependency},
+	Maven: {file: "pom.xml", parse: parseMaven, set: setMavenDependency},
 }
 
 // Managers lists every package manager "workspaces" accepts, in the order
 // errors report them.
-var Managers = []string{Node, Cargo}
+var Managers = []string{Node, Cargo, Maven}
 
 // ManifestFile returns the file name a component's manifest carries for
 // manager, relative to the component's path, "" for an unknown manager.
