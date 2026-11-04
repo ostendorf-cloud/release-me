@@ -187,6 +187,15 @@ func renderEntry(e Entry, opts Options) []string {
 		if slices.Contains(opts.HiddenTypes, sub.Type) {
 			continue
 		}
+		if opts.Sections != nil {
+			visible := sub.Breaking
+			for _, section := range opts.Sections {
+				visible = visible || slices.Contains(section.Types, sub.Type)
+			}
+			if !visible {
+				continue
+			}
+		}
 		lines = append(lines, "  "+renderLine(sub, opts))
 	}
 	return lines

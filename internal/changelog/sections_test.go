@@ -4,6 +4,7 @@
 package changelog_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ostendorf-cloud/release-me/internal/changelog"
@@ -178,5 +179,30 @@ func TestSectionsReadsBackUnderARenamedSection(t *testing.T) {
 	}
 	if h, ok := changelog.ParseHeading(rendered); !ok || h.Version != "1.2.0" {
 		t.Fatalf("ParseHeading() = %+v, %v, want version 1.2.0", h, ok)
+	}
+}
+
+func TestCustomSectionsFilterNestedEntries(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		options  changelog.Options
+		breaking bool
+		wantPerf bool
+	}{
+		{name: "omitted nested type", options: changelog.Options{Sections: []changelog.Section{{Heading: "Features", Types: []string{"feat"}}}}},
+		{name: "explicitly hidden nested type", options: changelog.Options{Sections: []changelog.Section{{Heading: "Features", Types: []string{"feat", "perf"}}}, HiddenTypes: []string{"perf"}}},
+		{name: "empty list under a breaking parent", options: changelog.Options{Sections: []changelog.Section{}}, breaking: true},
+		{name: "visible breaking child", options: changelog.Options{Sections: []changelog.Section{}}, breaking: true, wantPerf: true},
+		{name: "default nested behavior is preserved", options: changelog.Options{}, wantPerf: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			entry := changelog.Entry{Type: "feat", Description: "add export", Breaking: tc.breaking, SubEntries: []changelog.Entry{{Type: "perf", Description: "speed up export", Breaking: tc.name == "visible breaking child"}}}
+			got := changelog.Sections([]changelog.Entry{entry}, tc.options)
+			if strings.Contains(got, "  - speed up export") != tc.wantPerf {
+				t.Fatalf("nested visibility: %s", got)
+			}
+		})
 	}
 }
