@@ -432,6 +432,54 @@ func TestFromReleasePleaseCarriesARootPackageBesideOthersOver(t *testing.T) {
 	}
 }
 
+func TestFromReleasePleaseCarriesExcludePathsOverPerPackage(t *testing.T) {
+	t.Parallel()
+	configJSON := `{
+	  "release-type": "go",
+	  "exclude-paths": ["packages/api/testdata"],
+	  "packages": {
+	    "packages/api": {"component": "api"},
+	    "packages/web": {"component": "web", "exclude-paths": ["./packages/web/docs/", "docs"]}
+	  }
+	}`
+
+	got, err := migrate.FromReleasePlease([]byte(configJSON), nil, files(nil))
+	if err != nil {
+		t.Fatalf("FromReleasePlease() error = %v", err)
+	}
+
+	cfg := load(t, got.YAML)
+	exclude := map[string][]string{}
+	for _, c := range cfg.Resolve() {
+		exclude[c.Name] = c.ExcludePaths
+	}
+	want := map[string][]string{"api": {"packages/api/testdata"}, "web": {"packages/web/docs"}}
+	if !reflect.DeepEqual(exclude, want) {
+		t.Fatalf("ExcludePaths = %q, want %q, YAML:\n%s", exclude, want, got.YAML)
+	}
+	if !slices.Contains(got.Warnings, "package packages/web: exclude-paths: docs does not lie inside the package, left out") {
+		t.Errorf("Warnings = %q, want the path outside the package named", got.Warnings)
+	}
+	if slices.ContainsFunc(got.Warnings, func(w string) bool { return strings.Contains(w, "exclude-paths: no release-me equivalent") }) {
+		t.Errorf("Warnings = %q, want exclude-paths carried over", got.Warnings)
+	}
+}
+
+func TestFromReleasePleaseCarriesARootPackagesExcludePathsToTheTopLevel(t *testing.T) {
+	t.Parallel()
+	configJSON := `{"packages": {".": {"release-type": "go", "include-component-in-tag": false, "exclude-paths": ["examples"]}}}`
+
+	got, err := migrate.FromReleasePlease([]byte(configJSON), nil, files(nil))
+	if err != nil {
+		t.Fatalf("FromReleasePlease() error = %v", err)
+	}
+
+	cfg := load(t, got.YAML)
+	if len(cfg.Components) != 0 || !reflect.DeepEqual(cfg.ExcludePaths, []string{"examples"}) {
+		t.Fatalf("Components = %+v, ExcludePaths = %q, YAML:\n%s", cfg.Components, cfg.ExcludePaths, got.YAML)
+	}
+}
+
 func TestFromReleasePleaseMapsWorkspacePluginsToWorkspaces(t *testing.T) {
 	t.Parallel()
 	packages := `"packages": {"packages/core": {"component": "core"}, "packages/web": {"component": "web"}}`
