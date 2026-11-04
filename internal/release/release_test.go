@@ -724,6 +724,38 @@ func TestRunMarksAPreReleaseVersionAsAPreReleaseAndSwapsItsTypeLabel(t *testing.
 	}
 }
 
+func TestRunSwapsTheLabelOfAConfiguredPreReleaseType(t *testing.T) {
+	t.Parallel()
+	pr := forge.PullRequest{
+		Number: 9, Title: "chore(main): release v0.2.0-next.3",
+		Labels: []string{"release: pending", "release: next"}, Merged: true,
+	}
+	f := &forgetest.Fake{
+		ListResponses: []forgetest.ListResponse{
+			{Head: "release-me/main", State: "closed", PullRequests: []forge.PullRequest{pr}},
+		},
+		MergeCommits: map[int]string{9: "deadbeef"},
+		PRLabels:     map[int][]string{9: {"release: pending", "release: next"}},
+	}
+	labels := testLabels
+	labels.Others = map[string]string{"next": "release: next"}
+
+	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, labels, false, false, discardLogger())
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(results) != 1 || results[0].Tag != "v0.2.0-next.3" {
+		t.Fatalf("Run() = %+v", results)
+	}
+	if len(f.CreatedReleases) != 1 || !f.CreatedReleases[0].Prerelease {
+		t.Fatalf("CreatedReleases = %+v, want a pre-release", f.CreatedReleases)
+	}
+	want := []string{"release: tagged"}
+	if len(f.SetLabelsCalls) != 1 || !reflect.DeepEqual(f.SetLabelsCalls[0].Labels, want) {
+		t.Fatalf("SetLabelsCalls = %+v, want the pending and next labels both swapped for %v", f.SetLabelsCalls, want)
+	}
+}
+
 func TestRunKeepsAHumanAddedLabelWhenSwappingAPreReleaseType(t *testing.T) {
 	t.Parallel()
 	pr := forge.PullRequest{

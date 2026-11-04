@@ -459,10 +459,13 @@ type Labels struct {
 	Alpha  string
 	Beta   string
 	Rc     string
+	// Others maps every further pre-release type "prerelease-types"
+	// configures to its label.
+	Others map[string]string
 }
 
 // typeLabel returns the label naming preType, "" when preType is "" or
-// names none of the three pre-release types.
+// names no configured pre-release type.
 func (l Labels) typeLabel(preType string) string {
 	switch preType {
 	case "alpha":
@@ -472,7 +475,7 @@ func (l Labels) typeLabel(preType string) string {
 	case "rc":
 		return l.Rc
 	default:
-		return ""
+		return l.Others[preType]
 	}
 }
 
