@@ -354,6 +354,20 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 			name:    "rejects workspaces with one release pull request per component",
 			content: "workspaces: [node]\ncomponents:\n  core:\n    path: packages/core\n  web:\n    path: packages/web\n",
 		},
+		{name: "rejects an empty excluded path", content: "components:\n  web:\n    path: web\n    exclude-paths: [\"\"]\n"},
+		{name: "rejects an absolute excluded path", content: "components:\n  web:\n    path: web\n    exclude-paths: [/web/docs]\n"},
+		{name: "rejects an excluded path outside its component", content: "components:\n  web:\n    path: web\n    exclude-paths: [docs]\n"},
+		{
+			name:    "rejects an excluded path relative to the component instead of the repository root",
+			content: "components:\n  web:\n    path: packages/web\n    exclude-paths: [docs]\n",
+		},
+		{name: "rejects an excluded path equal to its component", content: "components:\n  web:\n    path: web\n    exclude-paths: [web/]\n"},
+		{name: "rejects an excluded path climbing out of the repository", content: "exclude-paths: [../docs]\n"},
+		{name: "rejects the repository root as an excluded path", content: "exclude-paths: [.]\n"},
+		{
+			name:    "rejects top-level excluded paths beside components",
+			content: "exclude-paths: [web/docs]\ncomponents:\n  web:\n    path: web\n",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -453,6 +467,42 @@ func TestLoadReadsWorkspacesWithASharedReleasePullRequest(t *testing.T) {
 			}
 			if !reflect.DeepEqual(cfg.Workspaces, tc.want) {
 				t.Fatalf("Workspaces = %q, want %q", cfg.Workspaces, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveCarriesExcludedPathsCleaned(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		content string
+		want    map[string][]string
+	}{
+		{
+			name:    "a component's own excluded paths, cleaned and deduplicated",
+			content: "components:\n  web:\n    path: packages/web\n    exclude-paths: [packages/web/docs/, ./packages/web/docs, packages/web/package-lock.json]\n  api:\n    path: api\n",
+			want:    map[string][]string{"web": {"packages/web/docs", "packages/web/package-lock.json"}, "api": nil},
+		},
+		{
+			name:    "the top-level excluded paths for the implicit main component",
+			content: "exclude-paths: [docs, examples/]\n",
+			want:    map[string][]string{"main": {"docs", "examples"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg, err := config.Load(writeFile(t, tc.content))
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			got := map[string][]string{}
+			for _, c := range cfg.Resolve() {
+				got[c.Name] = c.ExcludePaths
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("ExcludePaths = %q, want %q", got, tc.want)
 			}
 		})
 	}
