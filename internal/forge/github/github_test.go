@@ -541,7 +541,7 @@ func TestCreateReleaseCreatesADraftRelease(t *testing.T) {
 	})
 	f := newTestForge(t, mux)
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	// draft-until-assets-attach is on: immutable releases rejects any
@@ -553,6 +553,30 @@ func TestCreateReleaseCreatesADraftRelease(t *testing.T) {
 	}
 	if body["tag_name"] != "v0.1.0" || body["body"] != "Release v0.1.0" {
 		t.Fatalf("body = %v", body)
+	}
+}
+
+func TestCreateReleaseReturnsTheAddressesOfTheCreatedRelease(t *testing.T) {
+	t.Parallel()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v3/repos/owner/repo/releases", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprint(w, `{"id": 1874, "tag_name": "v0.1.0", "draft": false,
+		  "html_url": "https://github.com/owner/repo/releases/tag/v0.1.0",
+		  "upload_url": "https://uploads.github.com/repos/owner/repo/releases/1874/assets{?name,label}"}`)
+	})
+	f := newTestForge(t, mux)
+
+	got, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false)
+	if err != nil {
+		t.Fatalf("CreateRelease() error = %v", err)
+	}
+	want := forge.Release{
+		HTMLURL:   "https://github.com/owner/repo/releases/tag/v0.1.0",
+		UploadURL: "https://uploads.github.com/repos/owner/repo/releases/1874/assets{?name,label}",
+	}
+	if got != want {
+		t.Fatalf("CreateRelease() = %+v, want %+v", got, want)
 	}
 }
 
@@ -572,7 +596,7 @@ func TestCreateReleasePublishesImmediatelyWhenDraftIsFalse(t *testing.T) {
 	// publishes immediately, exactly as release-me did before that key
 	// existed, so a repository that never turns it on sees no behavior
 	// change at all.
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if body["draft"] != false || body["prerelease"] != false {
@@ -592,7 +616,7 @@ func TestCreateReleaseMarksAPreReleaseVersionAsAPreReleaseDraft(t *testing.T) {
 	})
 	f := newTestForge(t, mux)
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if body["draft"] != true || body["prerelease"] != true {
@@ -612,7 +636,7 @@ func TestCreateReleaseMarksAPreReleaseVersionAsAPreReleaseWhenDraftIsFalse(t *te
 	})
 	f := newTestForge(t, mux)
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, false); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, false); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if body["draft"] != false || body["prerelease"] != true {
@@ -654,7 +678,7 @@ func TestCreateReleaseTellsAGenuineDuplicateApartFromAnImmutableRelease(t *testi
 			})
 			f := newTestForge(t, mux)
 
-			err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.1", "v0.1.1", "Release v0.1.1", false, false)
+			_, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.1", "v0.1.1", "Release v0.1.1", false, false)
 			if err == nil {
 				t.Fatalf("CreateRelease() error = nil, want an error")
 			}
@@ -674,31 +698,38 @@ func TestCreateReleaseTellsAGenuineDuplicateApartFromAnImmutableRelease(t *testi
 	}
 }
 
-func TestIsReleaseDraft(t *testing.T) {
+func TestRelease(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name      string
 		tag       string
 		handler   http.HandlerFunc
-		want      bool
+		want      forge.Release
 		wantErrIs error
 		wantErr   bool
 	}{
 		{
-			name: "reports true for a draft release, which get-by-tag alone would 404 on",
+			name: "reads a draft release, which get-by-tag alone would 404 on",
 			tag:  "v0.1.0",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
-				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": true}]`)
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": true,
+				  "html_url": "https://github.com/owner/repo/releases/tag/untagged-3f1c",
+				  "upload_url": "https://uploads.github.com/repos/owner/repo/releases/1874/assets{?name,label}"}]`)
 			},
-			want: true,
+			want: forge.Release{
+				Draft:     true,
+				HTMLURL:   "https://github.com/owner/repo/releases/tag/untagged-3f1c",
+				UploadURL: "https://uploads.github.com/repos/owner/repo/releases/1874/assets{?name,label}",
+			},
 		},
 		{
-			name: "reports false for an already published release",
+			name: "reads an already published release",
 			tag:  "v0.1.0",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
-				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": false}]`)
+				fmt.Fprint(w, `[{"tag_name": "v0.1.0", "draft": false,
+				  "html_url": "https://github.com/owner/repo/releases/tag/v0.1.0"}]`)
 			},
-			want: false,
+			want: forge.Release{HTMLURL: "https://github.com/owner/repo/releases/tag/v0.1.0"},
 		},
 		{
 			name: "returns ErrReleaseNotFound when no release matches the tag",
@@ -724,22 +755,22 @@ func TestIsReleaseDraft(t *testing.T) {
 			mux.HandleFunc("/api/v3/repos/owner/repo/releases", tc.handler)
 			f := newTestForge(t, mux)
 
-			got, err := f.IsReleaseDraft(context.Background(), "owner", "repo", tc.tag)
+			got, err := f.Release(context.Background(), "owner", "repo", tc.tag)
 			switch {
 			case tc.wantErrIs != nil:
 				if !errors.Is(err, tc.wantErrIs) {
-					t.Fatalf("IsReleaseDraft() error = %v, want %v", err, tc.wantErrIs)
+					t.Fatalf("Release() error = %v, want %v", err, tc.wantErrIs)
 				}
 			case tc.wantErr:
 				if err == nil {
-					t.Fatal("IsReleaseDraft() error = nil, want an error")
+					t.Fatal("Release() error = nil, want an error")
 				}
 			default:
 				if err != nil {
-					t.Fatalf("IsReleaseDraft() error = %v", err)
+					t.Fatalf("Release() error = %v", err)
 				}
 				if got != tc.want {
-					t.Fatalf("IsReleaseDraft() = %v, want %v", got, tc.want)
+					t.Fatalf("Release() = %v, want %v", got, tc.want)
 				}
 			}
 		})

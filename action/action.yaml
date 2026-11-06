@@ -71,10 +71,16 @@ outputs:
   components:
     description: >-
       JSON object keyed by every component this run handled, all configured ones unless the
-      component input limits it, each {"released", "version", "tag", "pr"}: version and tag
-      are empty unless released is true, pr is the release pull request object, as in prs,
-      opened, updated or found up to date for that component this run, null otherwise. Read
-      one with fromJSON(steps.<id>.outputs.components).<name>.released.
+      component input limits it, each {"released", "version", "tag", "major", "minor",
+      "patch", "sha", "body", "html_url", "upload_url", "draft", "pr"}: version, tag, sha
+      (the merge commit) and body (notes rendered from the pull request, excluding edits to
+      the GitHub release) are empty and major, minor and patch null unless released is true.
+      html_url and upload_url are the release's page and asset upload template, empty when
+      not released or when an existing release cannot be found on read-back. draft is true
+      while the release is still an unpublished draft, false otherwise. pr is the release
+      pull request object, as in prs, opened, updated or found up to date for that component
+      this run, null otherwise. Read one with
+      fromJSON(steps.<id>.outputs.components).<name>.released.
     value: ${{ steps.release-me.outputs.components }}
   pr:
     description: >-

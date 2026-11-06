@@ -37,7 +37,7 @@ func TestRenderOutputs(t *testing.T) {
 			name:       "nothing recorded keeps every handled component unreleased with valid JSON",
 			components: []string{"duxt", "duxt-ui"},
 			want: "released=false\n" +
-				`components={"duxt":{"released":false,"version":"","tag":"","pr":null},"duxt-ui":{"released":false,"version":"","tag":"","pr":null}}` + "\n" +
+				`components={"duxt":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":null},"duxt-ui":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":null}}` + "\n" +
 				"pr=null\n" +
 				"prs=[]\n",
 		},
@@ -46,9 +46,9 @@ func TestRenderOutputs(t *testing.T) {
 			out:        runOutputs{prs: []prOutput{sharedPR}},
 			components: []string{"duxt", "duxt-ui", "docs"},
 			want: "released=false\n" +
-				`components={"docs":{"released":false,"version":"","tag":"","pr":null},` +
-				`"duxt":{"released":false,"version":"","tag":"","pr":{"number":12,"url":"https://github.com/kirchDev/duxt/pull/12","branch":"release-me/main","components":["duxt","duxt-ui"]}},` +
-				`"duxt-ui":{"released":false,"version":"","tag":"","pr":{"number":12,"url":"https://github.com/kirchDev/duxt/pull/12","branch":"release-me/main","components":["duxt","duxt-ui"]}}}` + "\n" +
+				`components={"docs":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":null},` +
+				`"duxt":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":{"number":12,"url":"https://github.com/kirchDev/duxt/pull/12","branch":"release-me/main","components":["duxt","duxt-ui"]}},` +
+				`"duxt-ui":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":{"number":12,"url":"https://github.com/kirchDev/duxt/pull/12","branch":"release-me/main","components":["duxt","duxt-ui"]}}}` + "\n" +
 				`pr={"number":12,"url":"https://github.com/kirchDev/duxt/pull/12","branch":"release-me/main","components":["duxt","duxt-ui"]}` + "\n" +
 				`prs=[{"number":12,"url":"https://github.com/kirchDev/duxt/pull/12","branch":"release-me/main","components":["duxt","duxt-ui"]}]` + "\n",
 		},
@@ -60,20 +60,28 @@ func TestRenderOutputs(t *testing.T) {
 			}},
 			components: []string{"duxt", "duxt-ui"},
 			want: "released=false\n" +
-				`components={"duxt":{"released":false,"version":"","tag":"","pr":{"number":3,"url":"https://github.com/kirchDev/duxt/pull/3","branch":"release-me/duxt","components":["duxt"]}},` +
-				`"duxt-ui":{"released":false,"version":"","tag":"","pr":{"number":4,"url":"https://github.com/kirchDev/duxt/pull/4","branch":"release-me/duxt-ui","components":["duxt-ui"]}}}` + "\n" +
+				`components={"duxt":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":{"number":3,"url":"https://github.com/kirchDev/duxt/pull/3","branch":"release-me/duxt","components":["duxt"]}},` +
+				`"duxt-ui":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":{"number":4,"url":"https://github.com/kirchDev/duxt/pull/4","branch":"release-me/duxt-ui","components":["duxt-ui"]}}}` + "\n" +
 				"pr=null\n" +
 				`prs=[{"number":3,"url":"https://github.com/kirchDev/duxt/pull/3","branch":"release-me/duxt","components":["duxt"]},` +
 				`{"number":4,"url":"https://github.com/kirchDev/duxt/pull/4","branch":"release-me/duxt-ui","components":["duxt-ui"]}]` + "\n",
 		},
 		{
-			name: "a tagged release marks its component released with its version and tag",
+			name: "a tagged release marks its component released with its version, commit, notes and addresses",
 			out: runOutputs{releases: []tagrelease.Result{
-				{PullRequestNumber: 12, Name: "duxt", Version: "0.9.0", Tag: "duxt@v0.9.0"},
+				{
+					PullRequestNumber: 12, Name: "duxt", Version: "0.9.0", Tag: "duxt@v0.9.0",
+					SHA: "4f2a9c1e", Body: "## v0.9.0 (2026-10-01)\n\n- add the search page",
+					HTMLURL:   "https://github.com/kirchDev/duxt/releases/tag/duxt@v0.9.0",
+					UploadURL: "https://uploads.github.com/repos/kirchDev/duxt/releases/1874/assets{?name,label}",
+				},
 			}},
 			components: []string{"duxt", "duxt-ui"},
 			want: "released=true\n" +
-				`components={"duxt":{"released":true,"version":"0.9.0","tag":"duxt@v0.9.0","pr":null},"duxt-ui":{"released":false,"version":"","tag":"","pr":null}}` + "\n" +
+				`components={"duxt":{"released":true,"version":"0.9.0","tag":"duxt@v0.9.0","major":0,"minor":9,"patch":0,` +
+				`"sha":"4f2a9c1e","body":"## v0.9.0 (2026-10-01)\n\n- add the search page",` +
+				`"html_url":"https://github.com/kirchDev/duxt/releases/tag/duxt@v0.9.0",` +
+				`"upload_url":"https://uploads.github.com/repos/kirchDev/duxt/releases/1874/assets{?name,label}","draft":false,"pr":null},"duxt-ui":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":null}}` + "\n" +
 				"pr=null\n" +
 				"prs=[]\n",
 		},
@@ -87,7 +95,7 @@ func TestRenderOutputs(t *testing.T) {
 			},
 			components: []string{"duxt"},
 			want: "released=true\n" +
-				`components={"duxt":{"released":false,"version":"","tag":"","pr":null}}` + "\n" +
+				`components={"duxt":{"released":false,"version":"","tag":"","major":null,"minor":null,"patch":null,"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":null}}` + "\n" +
 				`pr={"number":7,"url":"https://github.com/kirchDev/duxt/pull/7","branch":"release-me/docs","components":["docs"]}` + "\n" +
 				`prs=[{"number":7,"url":"https://github.com/kirchDev/duxt/pull/7","branch":"release-me/docs","components":["docs"]}]` + "\n",
 		},
@@ -102,6 +110,28 @@ func TestRenderOutputs(t *testing.T) {
 				t.Fatalf("render() =\n%s\nwant\n%s", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestRenderOutputsReportsWhetherTheReleaseIsAnUnpublishedDraft(t *testing.T) {
+	for _, draft := range []bool{false, true} {
+		t.Run(map[bool]string{false: "published", true: "draft"}[draft], func(t *testing.T) {
+			out := runOutputs{releases: []tagrelease.Result{{Name: "main", Version: "0.2.0", Tag: "v0.2.0", Draft: draft}}}
+			rendered, err := out.render([]string{"main"})
+			if err != nil {
+				t.Fatalf("render() error = %v", err)
+			}
+			if got := parseOutputs(t, rendered).components["main"].Draft; got != draft {
+				t.Fatalf("draft = %t, want %t", got, draft)
+			}
+		})
+	}
+}
+
+func TestRenderOutputsRejectsAnInvalidReleaseVersion(t *testing.T) {
+	out := runOutputs{releases: []tagrelease.Result{{Name: "main", Version: "not-a-version"}}}
+	if _, err := out.render([]string{"main"}); err == nil || !strings.Contains(err.Error(), "component main") {
+		t.Fatalf("render() error = %v, want an invalid release version naming the component", err)
 	}
 }
 
@@ -354,7 +384,8 @@ func TestEmitOutputsAppendsToTheFileTheEnvironmentNames(t *testing.T) {
 	}
 	want := "version=0.2.1\n" +
 		"released=true\n" +
-		`components={"main":{"released":true,"version":"0.2.2","tag":"v0.2.2","pr":null}}` + "\n" +
+		`components={"main":{"released":true,"version":"0.2.2","tag":"v0.2.2","major":0,"minor":2,"patch":2,` +
+		`"sha":"","body":"","html_url":"","upload_url":"","draft":false,"pr":null}}` + "\n" +
 		"pr=null\n" +
 		"prs=[]\n"
 	if string(got) != want {

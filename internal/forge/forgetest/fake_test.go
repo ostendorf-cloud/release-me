@@ -333,7 +333,7 @@ func TestFakeCreateReleaseRecordsTheCall(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || f.CreatedReleases[0].Tag != "v0.1.0" || f.CreatedReleases[0].Prerelease {
@@ -345,7 +345,7 @@ func TestFakeCreateReleaseRecordsAPreRelease(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || !f.CreatedReleases[0].Prerelease {
@@ -357,7 +357,7 @@ func TestFakeCreateReleaseReturnsErrReleaseExistsForAnExistingTag(t *testing.T) 
 	t.Parallel()
 	f := &forgetest.Fake{ExistingReleases: map[string]bool{"v0.1.0": true}}
 
-	err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true)
+	_, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true)
 	if !errors.Is(err, forge.ErrReleaseExists) {
 		t.Fatalf("CreateRelease() error = %v, want %v", err, forge.ErrReleaseExists)
 	}
@@ -370,18 +370,18 @@ func TestFakeCreateReleaseRecordsItAsADraftWhenAskedFor(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || !f.CreatedReleases[0].Draft {
 		t.Fatalf("CreatedReleases = %+v, want Draft true", f.CreatedReleases)
 	}
-	draft, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	rel, err := f.Release(context.Background(), "owner", "repo", "v0.1.0")
 	if err != nil {
-		t.Fatalf("IsReleaseDraft() error = %v", err)
+		t.Fatalf("Release() error = %v", err)
 	}
-	if !draft {
-		t.Fatalf("IsReleaseDraft() = %v, want true", draft)
+	if !rel.Draft {
+		t.Fatalf("Release() = %v, want true", rel.Draft)
 	}
 }
 
@@ -389,41 +389,66 @@ func TestFakeCreateReleaseRecordsItAsPublishedWhenDraftIsFalse(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false); err != nil {
+	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || f.CreatedReleases[0].Draft {
 		t.Fatalf("CreatedReleases = %+v, want Draft false", f.CreatedReleases)
 	}
-	draft, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	rel, err := f.Release(context.Background(), "owner", "repo", "v0.1.0")
 	if err != nil {
-		t.Fatalf("IsReleaseDraft() error = %v", err)
+		t.Fatalf("Release() error = %v", err)
 	}
-	if draft {
-		t.Fatalf("IsReleaseDraft() = %v, want false", draft)
+	if rel.Draft {
+		t.Fatalf("Release() = %v, want false", rel.Draft)
 	}
 }
 
-func TestFakeIsReleaseDraftReportsAPublishedRelease(t *testing.T) {
+func TestFakeReleaseReportsAPublishedRelease(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{ReleaseDrafts: map[string]bool{"v0.1.0": false}}
 
-	draft, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	rel, err := f.Release(context.Background(), "owner", "repo", "v0.1.0")
 	if err != nil {
-		t.Fatalf("IsReleaseDraft() error = %v", err)
+		t.Fatalf("Release() error = %v", err)
 	}
-	if draft {
-		t.Fatalf("IsReleaseDraft() = %v, want false", draft)
+	if rel.Draft {
+		t.Fatalf("Release() = %v, want false", rel.Draft)
 	}
 }
 
-func TestFakeIsReleaseDraftReturnsErrReleaseNotFoundForAnUnknownTag(t *testing.T) {
+func TestFakeReleaseReturnsErrReleaseNotFoundForAnUnknownTag(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	_, err := f.IsReleaseDraft(context.Background(), "owner", "repo", "v0.1.0")
+	_, err := f.Release(context.Background(), "owner", "repo", "v0.1.0")
 	if !errors.Is(err, forge.ErrReleaseNotFound) {
-		t.Fatalf("IsReleaseDraft() error = %v, want %v", err, forge.ErrReleaseNotFound)
+		t.Fatalf("Release() error = %v, want %v", err, forge.ErrReleaseNotFound)
+	}
+}
+
+func TestFakeReleaseReportsTheAddressesCreateReleaseReturned(t *testing.T) {
+	t.Parallel()
+	f := &forgetest.Fake{ExistingReleases: map[string]bool{"v0.1.0": true}}
+
+	created, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.2.0", "v0.2.0", "Release v0.2.0", false, true)
+	if err != nil {
+		t.Fatalf("CreateRelease() error = %v", err)
+	}
+	want := forge.Release{
+		Draft:     true,
+		HTMLURL:   "https://github.com/owner/repo/releases/tag/v0.2.0",
+		UploadURL: "https://uploads.github.com/repos/owner/repo/releases/9001/assets{?name,label}",
+	}
+	if created != want {
+		t.Fatalf("CreateRelease() = %+v, want %+v", created, want)
+	}
+	if got, err := f.Release(context.Background(), "owner", "repo", "v0.2.0"); err != nil || got != want {
+		t.Fatalf("Release() = %+v, %v, want %+v", got, err, want)
+	}
+	published, err := f.Release(context.Background(), "owner", "repo", "v0.1.0")
+	if err != nil || published.Draft || published.UploadURL == want.UploadURL {
+		t.Fatalf("Release() = %+v, %v, want the published v0.1.0 under its own id", published, err)
 	}
 }
 

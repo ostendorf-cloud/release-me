@@ -144,13 +144,17 @@ type Fake struct {
 	// ever used by a now-deleted immutable release.
 	CreateReleaseErrs map[string]error
 
-	// ReleaseDrafts is the draft status IsReleaseDraft reports, by tag
-	// name: true for a draft, false for a published release. A
-	// successful CreateRelease call sets its tag here to whatever draft
-	// it was called with, the same as the real forge. A tag absent from
-	// this map has no release at all, as far as IsReleaseDraft is
-	// concerned, and is reported as forge.ErrReleaseNotFound.
+	// ReleaseDrafts is the draft status Release reports, by tag name:
+	// true for a draft, false for a published release. A successful
+	// CreateRelease call sets its tag here to whatever draft it was called
+	// with, the same as the real forge. A tag absent from this map has no
+	// release at all, as far as Release is concerned, and is reported as
+	// forge.ErrReleaseNotFound. Release and CreateRelease report the web
+	// and upload addresses releaseURLs derives from the tag.
 	ReleaseDrafts map[string]bool
+
+	// releaseIDs is the numeric release id release assigned each tag.
+	releaseIDs map[string]int
 
 	// NextNumber is the pull request number CreatePullRequest assigns next.
 	NextNumber int
@@ -297,12 +301,14 @@ func (f *Fake) MoveTag(_ context.Context, owner, repo, tag, sha string) error {
 }
 
 // CreateRelease implements forge.Forge.
-func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error {
+func (f *Fake) CreateRelease(
+	_ context.Context, owner, repo, tag, name, body string, prerelease, draft bool,
+) (forge.Release, error) {
 	if err, ok := f.CreateReleaseErrs[tag]; ok {
-		return err
+		return forge.Release{}, err
 	}
 	if f.ExistingReleases[tag] {
-		return forge.ErrReleaseExists
+		return forge.Release{}, forge.ErrReleaseExists
 	}
 	f.CreatedReleases = append(
 		f.CreatedReleases,
@@ -312,16 +318,36 @@ func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body str
 		f.ReleaseDrafts = map[string]bool{}
 	}
 	f.ReleaseDrafts[tag] = draft
-	return nil
+	return f.release(owner, repo, tag, draft), nil
 }
 
-// IsReleaseDraft implements forge.Forge.
-func (f *Fake) IsReleaseDraft(_ context.Context, _, _, tag string) (bool, error) {
+// Release implements forge.Forge. A tag in ExistingReleases and not in
+// ReleaseDrafts is a published release.
+func (f *Fake) Release(_ context.Context, owner, repo, tag string) (forge.Release, error) {
 	draft, ok := f.ReleaseDrafts[tag]
-	if !ok {
-		return false, forge.ErrReleaseNotFound
+	if !ok && !f.ExistingReleases[tag] {
+		return forge.Release{}, forge.ErrReleaseNotFound
 	}
-	return draft, nil
+	return f.release(owner, repo, tag, draft), nil
+}
+
+// release returns tag's release with the addresses GitHub gives one: the
+// web page under its tag and the upload template under its numeric id,
+// assigned in the order the fake first sees each tag, from 9001 on.
+func (f *Fake) release(owner, repo, tag string, draft bool) forge.Release {
+	if f.releaseIDs == nil {
+		f.releaseIDs = map[string]int{}
+	}
+	id, ok := f.releaseIDs[tag]
+	if !ok {
+		id = 9001 + len(f.releaseIDs)
+		f.releaseIDs[tag] = id
+	}
+	return forge.Release{
+		Draft:     draft,
+		HTMLURL:   "https://github.com/" + owner + "/" + repo + "/releases/tag/" + tag,
+		UploadURL: "https://uploads.github.com/repos/" + owner + "/" + repo + "/releases/" + strconv.Itoa(id) + "/assets{?name,label}",
+	}
 }
 
 // MergeCommit implements forge.Forge.

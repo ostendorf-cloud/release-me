@@ -285,21 +285,28 @@ func resumeShared(
 	ctx context.Context, f forge.Forge, owner, repoName, who string, pr forge.PullRequest, plan []planned,
 ) ([]Result, error) {
 	var results []Result
+	sha := ""
 	for _, p := range plan {
 		tag := p.comp.TagPrefix + p.versionStr
-		draft, err := f.IsReleaseDraft(ctx, owner, repoName, tag)
+		rel, err := f.Release(ctx, owner, repoName, tag)
 		if err != nil {
 			if errors.Is(err, forge.ErrReleaseNotFound) {
 				continue
 			}
 			return nil, fmt.Errorf("release: %s: component %s: pull request #%d: resume %s: %w", who, p.comp.Name, pr.Number, tag, err)
 		}
-		if !draft {
+		if !rel.Draft {
 			continue
+		}
+		if sha == "" {
+			if sha, err = f.MergeCommit(ctx, owner, repoName, pr.Number); err != nil {
+				return nil, fmt.Errorf("release: %s: pull request #%d: merge commit: %w", who, pr.Number, err)
+			}
 		}
 		results = append(results, Result{
 			PullRequestNumber: pr.Number, Name: p.comp.Name, Version: p.versionStr, Tag: tag,
 			Message: fmt.Sprintf("resuming unpublished release %s", tag),
+			SHA:     sha, Body: lockedReleaseBody(pr.Body, p.comp.Name), HTMLURL: rel.HTMLURL, UploadURL: rel.UploadURL, Draft: rel.Draft,
 		})
 	}
 	return results, nil
@@ -349,10 +356,7 @@ func releaseShared(
 			}
 		}
 		tag := comp.TagPrefix + versionStr
-		name := tag
-		if comp.Multi {
-			name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
-		}
+		name := comp.releaseName(versionStr)
 
 		alreadyTagged := false
 		if err := f.CreateTag(ctx, owner, repoName, tag, sha); err != nil {
@@ -362,31 +366,10 @@ func releaseShared(
 			alreadyTagged = true
 		}
 
-		// See releaseOne's matching comment: a draft release is invisible
-		// to GitHub's own duplicate-tag_name check, so checking
-		// IsReleaseDraft first closes the same race here, one step
-		// before the label swap, that resumeShared closes one step
-		// after it.
-		alreadyDrafted := false
-		if draftUntilAssetsAttach {
-			draft, err := f.IsReleaseDraft(ctx, owner, repoName, tag)
-			switch {
-			case err == nil && draft:
-				alreadyDrafted = true
-			case errors.Is(err, forge.ErrReleaseNotFound):
-				// The normal, first-time case: nothing has been
-				// drafted yet, so CreateRelease below runs as usual.
-			case err != nil:
-				return nil, fmt.Errorf("release: %s: component %s: pull request #%d: check draft %s: %w", who, comp.Name, pr.Number, tag, err)
-			}
-		}
-
-		if !alreadyDrafted {
-			body := lockedReleaseBody(pr.Body, comp.Name)
-			if err := f.CreateRelease(ctx, owner, repoName, tag, name, body, ver.IsPreRelease(), draftUntilAssetsAttach); err != nil &&
-				!errors.Is(err, forge.ErrReleaseExists) {
-				return nil, fmt.Errorf("release: %s: component %s: pull request #%d: create release %s: %w", who, comp.Name, pr.Number, tag, err)
-			}
+		body := lockedReleaseBody(pr.Body, comp.Name)
+		rel, err := createRelease(ctx, f, owner, repoName, tag, name, body, ver.IsPreRelease(), draftUntilAssetsAttach)
+		if err != nil {
+			return nil, fmt.Errorf("release: %s: component %s: pull request #%d: %w", who, comp.Name, pr.Number, err)
 		}
 
 		message := fmt.Sprintf("tagged and released %s", tag)
@@ -401,6 +384,7 @@ func releaseShared(
 		results = append(results, Result{
 			PullRequestNumber: pr.Number, Name: comp.Name, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
 			Message: message, MajorTag: mtag, MajorTagMessage: mmsg,
+			SHA: sha, Body: body, HTMLURL: rel.HTMLURL, UploadURL: rel.UploadURL, Draft: rel.Draft,
 		})
 	}
 
@@ -429,6 +413,16 @@ type Component struct {
 	// release moves the major tag, TagPrefix plus the released major
 	// number, to the release commit. A pre-release never moves it.
 	MajorTag bool
+}
+
+// releaseName returns the name of comp's release at versionStr, "X.Y.Z"
+// without the "v": the tag itself for the implicit "main" component,
+// "<name> vX.Y.Z" for a configured one.
+func (comp Component) releaseName(versionStr string) string {
+	if comp.Multi {
+		return fmt.Sprintf("%s v%s", comp.Name, versionStr)
+	}
+	return comp.TagPrefix + versionStr
 }
 
 // Labels names the labels Run reads and writes: Pending and Tagged on
@@ -478,6 +472,19 @@ type Result struct {
 	// MajorTagMessage reports what happened to the major tag, including
 	// why it was skipped; empty when major-tag is off for the component.
 	MajorTagMessage string
+	// SHA is the merge commit the tag is on.
+	SHA string
+	// Body is the release notes rendered from the pull request for the
+	// component, including when an existing release is read back. Edits
+	// made directly to the GitHub release are not included.
+	Body string
+	// HTMLURL and UploadURL are the GitHub release's web page and asset
+	// upload address, empty when an earlier run's release exists but its
+	// lookup found none.
+	HTMLURL   string
+	UploadURL string
+	// Draft is true while the release is still an unpublished draft.
+	Draft bool
 }
 
 // MajorTagName returns the major tag name for tagPrefix and releasedVersion,
@@ -567,13 +574,7 @@ func Run(
 			if !ok {
 				return nil, fmt.Errorf("release: component %s: pull request #%d: version %q does not parse", comp.Name, pr.Number, versionStr)
 			}
-			tag := comp.TagPrefix + versionStr
-			name := tag
-			if comp.Multi {
-				name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
-			}
-
-			result, err := releaseOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr, tag, name, ver, labels, draftUntilAssetsAttach, dryRun, comp.MajorTag)
+			result, err := releaseOne(ctx, f, owner, repoName, comp, pr, ver, labels, draftUntilAssetsAttach, dryRun)
 			if err != nil {
 				return nil, err
 			}
@@ -619,31 +620,39 @@ func resumeOne(
 	}
 	tag := tagPrefix + versionStr
 
-	draft, err := f.IsReleaseDraft(ctx, owner, repoName, tag)
+	rel, err := f.Release(ctx, owner, repoName, tag)
 	if err != nil {
 		if errors.Is(err, forge.ErrReleaseNotFound) {
 			return Result{}, false, nil
 		}
 		return Result{}, false, fmt.Errorf("release: component %s: pull request #%d: resume %s: %w", componentName, pr.Number, tag, err)
 	}
-	if !draft {
+	if !rel.Draft {
 		return Result{}, false, nil
+	}
+	sha, err := f.MergeCommit(ctx, owner, repoName, pr.Number)
+	if err != nil {
+		return Result{}, false, fmt.Errorf("release: component %s: pull request #%d: merge commit: %w", componentName, pr.Number, err)
 	}
 
 	return Result{
 		PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag,
 		Message: fmt.Sprintf("resuming unpublished release %s", tag),
+		SHA:     sha, Body: releasepr.ReleaseBody(pr.Body), HTMLURL: rel.HTMLURL, UploadURL: rel.UploadURL, Draft: rel.Draft,
 	}, true, nil
 }
 
-// releaseOne tags and releases pr, swapping its label, for the component
-// componentName names. draftUntilAssetsAttach decides whether
-// CreateRelease drafts the release or publishes it immediately; see Run.
+// releaseOne tags and releases pr, swapping its label, for comp at ver.
+// draftUntilAssetsAttach decides whether CreateRelease drafts the release
+// or publishes it immediately; see Run.
 func releaseOne(
-	ctx context.Context, f forge.Forge, owner, repoName, componentName, tagPrefix string,
-	pr forge.PullRequest, tag, releaseName string, ver version.Semver, labels Labels, draftUntilAssetsAttach, dryRun, majorTagEnabled bool,
+	ctx context.Context, f forge.Forge, owner, repoName string, comp Component,
+	pr forge.PullRequest, ver version.Semver, labels Labels, draftUntilAssetsAttach, dryRun bool,
 ) (Result, error) {
+	componentName, tagPrefix, majorTagEnabled := comp.Name, comp.TagPrefix, comp.MajorTag
 	versionStr := ver.String()
+	tag := tagPrefix + versionStr
+	releaseName := comp.releaseName(versionStr)
 	if dryRun {
 		result := Result{
 			PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag,
@@ -674,38 +683,10 @@ func releaseOne(
 		alreadyTagged = true
 	}
 
-	// A draft release is invisible to GitHub's own duplicate-tag_name check
-	// (see forge.Forge's CreateRelease and IsReleaseDraft doc comments), so
-	// the ErrReleaseExists tolerance below only closes this hole once the
-	// release is published. The gap it misses sits one step earlier: a
-	// previous run can have drafted the release successfully and then
-	// failed before the label swap below, leaving the pull request still
-	// Pending. Re-entering here would call CreateRelease again and get a
-	// second, orphaned draft at the same tag, since GitHub never objects.
-	// Checking IsReleaseDraft first closes that gap the same way
-	// resumeOne closes it for the step after the label swap: find the
-	// draft that already exists and skip straight past it, instead of
-	// creating another one.
-	alreadyDrafted := false
-	if draftUntilAssetsAttach {
-		draft, err := f.IsReleaseDraft(ctx, owner, repoName, tag)
-		switch {
-		case err == nil && draft:
-			alreadyDrafted = true
-		case errors.Is(err, forge.ErrReleaseNotFound):
-			// The normal, first-time case: nothing has been drafted yet,
-			// so CreateRelease below runs as usual.
-		case err != nil:
-			return Result{}, fmt.Errorf("release: component %s: pull request #%d: check draft %s: %w", componentName, pr.Number, tag, err)
-		}
-	}
-
-	if !alreadyDrafted {
-		body := releasepr.ReleaseBody(pr.Body)
-		if err := f.CreateRelease(ctx, owner, repoName, tag, releaseName, body, ver.IsPreRelease(), draftUntilAssetsAttach); err != nil &&
-			!errors.Is(err, forge.ErrReleaseExists) {
-			return Result{}, fmt.Errorf("release: component %s: pull request #%d: create release %s: %w", componentName, pr.Number, tag, err)
-		}
+	body := releasepr.ReleaseBody(pr.Body)
+	rel, err := createRelease(ctx, f, owner, repoName, tag, releaseName, body, ver.IsPreRelease(), draftUntilAssetsAttach)
+	if err != nil {
+		return Result{}, fmt.Errorf("release: component %s: pull request #%d: %w", componentName, pr.Number, err)
 	}
 
 	prLabels, err := f.Labels(ctx, owner, repoName, pr.Number)
@@ -735,7 +716,55 @@ func releaseOne(
 	return Result{
 		PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag, Skipped: alreadyTagged,
 		Message: message, MajorTag: mtag, MajorTagMessage: mmsg,
+		SHA: sha, Body: body, HTMLURL: rel.HTMLURL, UploadURL: rel.UploadURL, Draft: rel.Draft,
 	}, nil
+}
+
+// createRelease creates the release for tag, named name with body, a
+// pre-release when prerelease is true, a draft when draft is true. A
+// release that already exists is not an error: an earlier, interrupted run
+// created it, and it is read back for its addresses instead. It returns the
+// release, created or found. The returned error names the step, for the
+// caller to wrap with the component and the pull request.
+//
+// A draft release is invisible to GitHub's own duplicate-tag_name check
+// (see forge.Forge's CreateRelease and Release doc comments), so the
+// ErrReleaseExists tolerance only closes this hole once the release is
+// published. The gap it misses sits one step earlier: a previous run can
+// have drafted the release successfully and then failed before the label
+// swap, leaving the pull request still pending. Re-entering would call
+// CreateRelease again and get a second, orphaned draft at the same tag,
+// since GitHub never objects. Reading the release first closes that gap
+// the same way resumeOne and resumeShared close it for the step after the
+// label swap: find the draft that already exists and skip straight past
+// it, instead of creating another one.
+func createRelease(
+	ctx context.Context, f forge.Forge, owner, repoName, tag, name, body string, prerelease, draft bool,
+) (forge.Release, error) {
+	if draft {
+		existing, err := f.Release(ctx, owner, repoName, tag)
+		switch {
+		case err == nil && existing.Draft:
+			return existing, nil
+		case errors.Is(err, forge.ErrReleaseNotFound):
+			// The normal, first-time case: nothing has been drafted yet,
+			// so CreateRelease below runs as usual.
+		case err != nil:
+			return forge.Release{}, fmt.Errorf("check draft %s: %w", tag, err)
+		}
+	}
+	created, err := f.CreateRelease(ctx, owner, repoName, tag, name, body, prerelease, draft)
+	switch {
+	case err == nil:
+		return created, nil
+	case !errors.Is(err, forge.ErrReleaseExists):
+		return forge.Release{}, fmt.Errorf("create release %s: %w", tag, err)
+	}
+	existing, err := f.Release(ctx, owner, repoName, tag)
+	if err != nil && !errors.Is(err, forge.ErrReleaseNotFound) {
+		return forge.Release{}, fmt.Errorf("read release %s: %w", tag, err)
+	}
+	return existing, nil
 }
 
 // swapLabels removes every label in remove from labels, when present, and
