@@ -38,7 +38,9 @@ happened even when the step fails, for a later step with `if: always()`: a `run`
 phase fails still lists in `prs` the pull request its `pr` phase opened.
 
 - `tags`: the newline-separated tags this run tagged a release for, one per released
-  component, empty when nothing was released or `dry-run` was set.
+  component, empty when nothing was released or `dry-run` was set. With
+  `force-tag-creation: false`, a draft's tag name is included before its git ref exists;
+  publish the release before using that name as a git ref.
 - `released`: `true` when this run tagged a release for any component, `false` otherwise and
   always in dry-run.
 - `components`: a JSON object keyed by every component this run handled, every configured
@@ -85,7 +87,9 @@ each setting needs from the calling workflow:
   drafted it must also build, attach and publish it itself, for example with
   `gh release upload` followed by `gh release edit --draft=false`; see this repository's own
   `release.yaml` and `scripts/publish-release-assets.sh` for the full shape, the one this
-  repository uses.
+  repository uses. That script and GoReleaser require the tag ref to exist, so keep
+  `force-tag-creation: true` with this shape. With deferred tags, build from the release's
+  `targetCommitish` using tooling that supports a missing tag ref before publishing.
 
 ## Triggering the workflow
 

@@ -88,6 +88,36 @@ func doPRShared(
 
 	reportSupersededPRs(ctx, f, owner, repoName, all, branch, logger, stdout)
 
+	if cfg.DraftUntilAssetsAttach {
+		needsSweep := false
+		for _, comp := range all {
+			needsSweep = needsSweep || !comp.ForceTagCreation
+		}
+		// A legacy branch can hold an unpublished deferred draft or a
+		// merged release still pending; finish either before opening a
+		// shared release pull request.
+		if needsSweep {
+			own, err := remoteBranches(ctx, dir, "release-me/*")
+			if err != nil {
+				return fmt.Errorf("release-me: shared release pull request: list legacy branches: %w", err)
+			}
+			for _, comp := range all {
+				legacy := config.PerComponentBranch(comp.Name)
+				if legacy == branch || !own[legacy] {
+					continue
+				}
+				deferral, err := mergedReleaseDeferral(ctx, f, owner, repoName, legacy, cfg, logger)
+				if err != nil {
+					return fmt.Errorf("release-me: component %s: %w", comp.Name, err)
+				}
+				if deferral != "" {
+					fmt.Fprintln(stdout, deferral)
+					return nil
+				}
+			}
+		}
+	}
+
 	members, familyLast, familyHasLast, err := sharedMembers(ctx, dir, cfg, all, owner, repoName, f, logger, stdout)
 	if err != nil {
 		return err
@@ -101,12 +131,12 @@ func doPRShared(
 		return err
 	}
 	if existing == nil {
-		pending, err := mergedPendingRelease(ctx, f, owner, repoName, branch, cfg.Labels.Pending, logger)
+		deferral, err := mergedReleaseDeferral(ctx, f, owner, repoName, branch, cfg, logger)
 		if err != nil {
 			return fmt.Errorf("release-me: %s: %w", sharedWho, err)
 		}
-		if pending {
-			fmt.Fprintln(stdout, "nothing to release")
+		if deferral != "" {
+			fmt.Fprintln(stdout, deferral)
 			return nil
 		}
 	}

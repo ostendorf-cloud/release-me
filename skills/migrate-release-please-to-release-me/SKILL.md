@@ -124,7 +124,7 @@ confirmation:
   | `tag_name`, `<path>--tag_name` | `fromJSON(steps.release.outputs.components).<name>.tag` |
   | `version`, `<path>--version` | `fromJSON(steps.release.outputs.components).<name>.version` |
   | `major`, `minor`, `patch` | none: split `version` in the consuming step |
-  | `paths_released` | `steps.release.outputs.tags`, one tag per released component |
+  | `paths_released` | `steps.release.outputs.tags`, one tag name per released component; with `force-tag-creation: false` a draft's ref exists only after publish |
   | `pr` | `steps.release.outputs.pr`: `number`, `url`, `branch`, `components` |
   | `prs`, `prs_created` | `steps.release.outputs.prs`, `prs != '[]'` |
   | `upload_url`, `html_url`, `id`, `sha` | none: `gh release view <tag>` in the consuming step |

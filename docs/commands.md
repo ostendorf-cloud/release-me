@@ -125,6 +125,11 @@ publish step fail after an earlier run tagged and drafted it, so this reprints t
 `released-tag` marker for it, without creating anything again, letting the workflow's asset
 step retry. Off, the default, this never runs: a published release has nothing left to resume.
 
+With `force-tag-creation: false`, `release` creates no tag itself: the release names the merge
+commit as its target and GitHub tags it when the release is published, so a draft reports
+`drafted <tag>, tagged on publish` and has no tag until then. See
+[configuration](configuration.md#force-tag-creation).
+
 With `major-tag: true`, every stable release additionally creates or force-moves the major
 tag, `vX` for the implicit `main` component or its tag prefix followed by `X` for a configured
 one, onto the same commit. A tag that does not exist yet is created; one that does is moved,
@@ -167,6 +172,9 @@ release-me continues from the existing tags and changelogs. A single root packag
 `vX.Y.Z` tags becomes the implicit `main` component instead. It also carries over:
 
 - `bump-minor-pre-major` and `initial-version`;
+- `force-tag-creation`, at the top level when every package carries the same value, on the
+  component otherwise. When absent, release-me's default `true` is kept, rather than
+  release-please's `false`; without drafts both create the tag during the release run;
 - the version file of a `node` (`package.json`) or `helm` (`Chart.yaml`) package where that
   file exists, `node` being release-please's default type, and every `extra-files` entry of
   type `json`, `yaml` or `toml` with a plain `$.a.b` jsonpath;

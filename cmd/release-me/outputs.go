@@ -86,10 +86,10 @@ func recordPR(ctx context.Context, dryRun bool, pr forge.PullRequest, branch str
 // reportReleased prints r's tag in the stable, unprefixed "released-tag:
 // <tag>" shape run-release-me.sh greps for, to fill the composite action's
 // "tags" output, and records r for the other outputs when ctx carries a
-// *runOutputs: every tag this run tagged, including one already tagged by
-// an earlier, interrupted run, since its release still needs assets
-// attached and publishing. Does nothing in dry-run: CreateRelease was
-// never called, so there is no release yet for anything to act on.
+// *runOutputs: every release this run handled, including a draft left by
+// an earlier run. With force-tag-creation false, the reported name has no
+// git ref until the draft is published. Does nothing in dry-run: no tag
+// or release was created.
 func reportReleased(ctx context.Context, w io.Writer, dryRun bool, r tagrelease.Result) {
 	if dryRun {
 		return

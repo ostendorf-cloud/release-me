@@ -211,14 +211,22 @@ func (f *Forge) MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 // afterward must publish it itself once they land, for example with
 // "gh release edit <tag> --draft=false", rather than wait on a webhook
 // that never comes.
-func (f *Forge) CreateRelease(ctx context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error {
-	_, resp, err := f.client.Repositories.CreateRelease(ctx, owner, repo, gogithub.CreateReleaseRequest{
+//
+// target is sent as target_commitish only when set: GitHub ignores it for
+// a tag that already exists, and creates the tag on it once the release is
+// published otherwise.
+func (f *Forge) CreateRelease(ctx context.Context, owner, repo, tag, target, name, body string, prerelease, draft bool) error {
+	req := gogithub.CreateReleaseRequest{
 		TagName:    tag,
 		Name:       &name,
 		Body:       &body,
 		Draft:      &draft,
 		Prerelease: &prerelease,
-	})
+	}
+	if target != "" {
+		req.TargetCommitish = &target
+	}
+	_, resp, err := f.client.Repositories.CreateRelease(ctx, owner, repo, req)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusUnprocessableEntity && releaseAlreadyExists(err) {
 			return forge.ErrReleaseExists

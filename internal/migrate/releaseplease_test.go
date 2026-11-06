@@ -342,6 +342,60 @@ func TestFromReleasePleaseFindsTheExpectedTagForAManifestKeyWrittenWithDotSlash(
 	}
 }
 
+func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
+	t.Parallel()
+	forceTag := func(c config.ResolvedComponent) bool { return c.ForceTagCreation }
+	cases := []struct {
+		name       string
+		configJSON string
+		wantYAML   string
+		get        func(config.ResolvedComponent) bool
+		want       []bool
+	}{
+		{
+			name:       "leaves out force-tag-creation for a published release",
+			configJSON: `{"packages": {".": {"release-type": "go"}}}`,
+			get:        forceTag, want: []bool{true},
+		},
+		{
+			name:       "carries force-tag-creation turned off explicitly",
+			configJSON: `{"force-tag-creation": false, "packages": {".": {"release-type": "go"}}}`,
+			wantYAML:   "\nforce-tag-creation: false\n",
+			get:        forceTag, want: []bool{false},
+		},
+		{
+			name: "writes force-tag-creation on the one package that turns it off",
+			configJSON: `{"packages": {
+			  "api": {"component": "api", "release-type": "go"},
+			  "web": {"component": "web", "release-type": "go", "force-tag-creation": false}}}`,
+			wantYAML: "    path: web\n    tag-prefix: web-v\n    force-tag-creation: false\n",
+			get:      forceTag, want: []bool{true, false},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			if tc.wantYAML != "" && !strings.Contains(string(got.YAML), tc.wantYAML) {
+				t.Fatalf("YAML =\n%s\nwant it to contain\n%s", got.YAML, tc.wantYAML)
+			}
+			if len(got.Warnings) != 0 {
+				t.Fatalf("Warnings = %q, want none", got.Warnings)
+			}
+			var values []bool
+			for _, c := range load(t, got.YAML).Resolve() {
+				values = append(values, tc.get(c))
+			}
+			if !slices.Equal(values, tc.want) {
+				t.Fatalf("resolved per component = %v, want %v", values, tc.want)
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	t.Parallel()
 	configJSON := `{

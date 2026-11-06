@@ -69,8 +69,8 @@ type MoveTagCall struct {
 
 // CreateReleaseCall records one call to CreateRelease.
 type CreateReleaseCall struct {
-	Owner, Repo, Tag, Name, Body string
-	Prerelease, Draft            bool
+	Owner, Repo, Tag, Target, Name, Body string
+	Prerelease, Draft                    bool
 }
 
 // CreateCommentCall records one call to CreateComment.
@@ -297,7 +297,7 @@ func (f *Fake) MoveTag(_ context.Context, owner, repo, tag, sha string) error {
 }
 
 // CreateRelease implements forge.Forge.
-func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body string, prerelease, draft bool) error {
+func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, target, name, body string, prerelease, draft bool) error {
 	if err, ok := f.CreateReleaseErrs[tag]; ok {
 		return err
 	}
@@ -306,7 +306,7 @@ func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body str
 	}
 	f.CreatedReleases = append(
 		f.CreatedReleases,
-		CreateReleaseCall{Owner: owner, Repo: repo, Tag: tag, Name: name, Body: body, Prerelease: prerelease, Draft: draft},
+		CreateReleaseCall{Owner: owner, Repo: repo, Tag: tag, Target: target, Name: name, Body: body, Prerelease: prerelease, Draft: draft},
 	)
 	if f.ReleaseDrafts == nil {
 		f.ReleaseDrafts = map[string]bool{}

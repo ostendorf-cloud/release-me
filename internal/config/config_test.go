@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -108,6 +109,7 @@ func TestLoadReadsConfiguredKeys(t *testing.T) {
 				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
 				ReleasePullRequestGuide:  true,
 				CommentMention:           config.DefaultCommentMention,
+				ForceTagCreation:         true,
 			},
 		},
 		{
@@ -160,6 +162,7 @@ files:
 				ReleasePullRequestLayout: config.LayoutDetails,
 				DraftUntilAssetsAttach:   true,
 				CommentMention:           config.DefaultCommentMention,
+				ForceTagCreation:         true,
 				Files: []config.File{
 					{Path: "cmd/cli/version.go", Updater: "marker"},
 					{Path: "deploy/values.yaml", Updater: "marker"},
@@ -187,6 +190,7 @@ files:
 				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
 				ReleasePullRequestGuide:  true,
 				CommentMention:           config.DefaultCommentMention,
+				ForceTagCreation:         true,
 			},
 		},
 		{
@@ -209,6 +213,7 @@ files:
 				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
 				ReleasePullRequestGuide:  true,
 				CommentMention:           config.DefaultCommentMention,
+				ForceTagCreation:         true,
 			},
 		},
 		{
@@ -231,6 +236,7 @@ files:
 				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
 				ReleasePullRequestGuide:  true,
 				CommentMention:           config.DefaultCommentMention,
+				ForceTagCreation:         true,
 			},
 		},
 	}
@@ -390,7 +396,7 @@ func TestResolveReturnsTheImplicitMainComponentWithoutAComponentsKey(t *testing.
 		Name: "main", Path: ".", TagPrefix: "v", Branch: "release-me/main",
 		ChangelogPath: "CHANGELOG.md", Multi: false,
 		InitialVersion: config.DefaultInitialVersion, HiddenTypes: config.DefaultHiddenTypes,
-		ChangelogSource: config.DefaultChangelogSource,
+		ChangelogSource: config.DefaultChangelogSource, ForceTagCreation: true,
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Resolve() = %+v, want %+v", got, want)
@@ -424,14 +430,14 @@ components:
 			Name: "backend", Path: "backend", TagPrefix: "backend/v", Branch: "release-me/backend",
 			ChangelogPath: "backend/CHANGELOG.md", Multi: true,
 			InitialVersion: "0.5.0", BumpMinorPreMajor: true, HiddenTypes: []string{"chore", "docs"},
-			ChangelogSource: config.DefaultChangelogSource,
+			ChangelogSource: config.DefaultChangelogSource, ForceTagCreation: true,
 		},
 		{
 			Name: "frontend", Path: "frontend", TagPrefix: "frontend/v", Branch: "release-me/frontend",
 			ChangelogPath: "frontend/CHANGELOG.md", Multi: true,
 			InitialVersion: "0.2.0", BumpMinorPreMajor: false, HiddenTypes: []string{"chore"},
 			Files:           []config.File{{Path: "frontend/package.json", Updater: "marker"}},
-			ChangelogSource: config.DefaultChangelogSource,
+			ChangelogSource: config.DefaultChangelogSource, ForceTagCreation: true,
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -463,6 +469,54 @@ components:
 	}
 	if got[1].MajorTag {
 		t.Fatalf("frontend MajorTag = %v, want false from its own override", got[1].MajorTag)
+	}
+}
+
+// releaseKeysConfig carries two components, the second one overriding
+// every GitHub release key the top level sets.
+const releaseKeysConfig = `components:
+  api:
+    path: services/api
+  web:
+    path: web
+`
+
+func TestResolveAppliesTheGitHubReleaseKeysFromTheTopLevelAndPerComponentOverride(t *testing.T) {
+	t.Parallel()
+	forceTag := func(c config.ResolvedComponent) bool { return c.ForceTagCreation }
+	cases := []struct {
+		name    string
+		content string
+		get     func(config.ResolvedComponent) bool
+		want    []bool
+	}{
+		{name: "force-tag-creation is on by default", get: forceTag, want: []bool{true}},
+		{
+			name: "force-tag-creation turns off for the implicit main component", content: "force-tag-creation: false\n",
+			get: forceTag, want: []bool{false},
+		},
+		{
+			name:    "a component turns force-tag-creation off for itself alone",
+			content: releaseKeysConfig + "    force-tag-creation: false\n",
+			get:     forceTag, want: []bool{true, false},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg, err := config.Load(writeFile(t, tc.content))
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			resolved := cfg.Resolve()
+			got := make([]bool, 0, len(resolved))
+			for _, c := range resolved {
+				got = append(got, tc.get(c))
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("resolved per component = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

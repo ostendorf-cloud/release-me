@@ -4,7 +4,8 @@
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
 // changelog, changelog-source, labels, author, major-tag, versioning,
-// draft-until-assets-attach, comment-mention and components.
+// draft-until-assets-attach, force-tag-creation, comment-mention and
+// components.
 package config
 
 import (
@@ -267,6 +268,13 @@ type Config struct {
 	// applies to the whole repository, there is no per-component
 	// override. See docs/adr/0001-draft-releases-until-assets-attach.md.
 	DraftUntilAssetsAttach bool
+	// ForceTagCreation is the top-level "force-tag-creation" key, default
+	// true: release creates the tag itself, before the release, even for
+	// a draft. False leaves the tag to GitHub, which creates it from the
+	// release's target commit once the release is published, immediately
+	// for a published release, on publish for a draft. A component
+	// overrides it through its own "force-tag-creation" key.
+	ForceTagCreation bool
 	// CommentMention is the top-level "comment-mention" key: the mention
 	// prefix a write-access commenter's "release-as" or "release-notes"
 	// command on the release pull request must start with, default
@@ -280,8 +288,8 @@ type Config struct {
 
 // Component is one entry of the "components" key: a name mapped to a path
 // and optional overrides of the top-level initial-version,
-// bump-minor-pre-major, hidden-types, files, major-tag and
-// changelog-source, plus its own tag-prefix and changelog path. A nil
+// bump-minor-pre-major, hidden-types, files, major-tag, changelog-source
+// and force-tag-creation, plus its own tag-prefix and changelog path. A nil
 // field was left out of release-me.yaml and falls back to the top-level
 // value, the same left-out-versus-zero-value distinction Load applies to
 // the top level itself.
@@ -294,6 +302,7 @@ type Component struct {
 	Files             *[]File
 	MajorTag          *bool
 	ChangelogSource   *string
+	ForceTagCreation  *bool
 	// TagPrefix is the component's "tag-prefix" key, nil when it was left
 	// out and the component keeps the derived "<name>/v".
 	TagPrefix *string
@@ -327,6 +336,9 @@ type ResolvedComponent struct {
 	// ChangelogSource is one of the ChangelogSource* constants: which
 	// commits become this component's changelog entries.
 	ChangelogSource string
+	// ForceTagCreation is true when release creates this component's tag
+	// itself, false when it leaves the tag to GitHub's release publish.
+	ForceTagCreation bool
 }
 
 // Resolve returns the components a command should loop over, in
@@ -348,6 +360,7 @@ func (cfg Config) Resolve() []ResolvedComponent {
 			Files:             cfg.Files,
 			MajorTag:          cfg.MajorTag,
 			ChangelogSource:   cfg.ChangelogSource,
+			ForceTagCreation:  cfg.ForceTagCreation,
 		}}
 	}
 
@@ -376,6 +389,7 @@ func (cfg Config) Resolve() []ResolvedComponent {
 			Files:             cfg.Files,
 			MajorTag:          cfg.MajorTag,
 			ChangelogSource:   cfg.ChangelogSource,
+			ForceTagCreation:  cfg.ForceTagCreation,
 		}
 		if c.InitialVersion != nil {
 			rc.InitialVersion = *c.InitialVersion
@@ -394,6 +408,9 @@ func (cfg Config) Resolve() []ResolvedComponent {
 		}
 		if c.ChangelogSource != nil {
 			rc.ChangelogSource = *c.ChangelogSource
+		}
+		if c.ForceTagCreation != nil {
+			rc.ForceTagCreation = *c.ForceTagCreation
 		}
 		out = append(out, rc)
 	}
@@ -470,6 +487,7 @@ type raw struct {
 	ReleasePullRequestLayout *string    `yaml:"release-pull-request-layout"`
 	ReleasePullRequestGuide  *bool      `yaml:"release-pull-request-guide"`
 	DraftUntilAssetsAttach   *bool      `yaml:"draft-until-assets-attach"`
+	ForceTagCreation         *bool      `yaml:"force-tag-creation"`
 	CommentMention           *string    `yaml:"comment-mention"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
@@ -489,6 +507,7 @@ type rawComponent struct {
 	Files             *[]rawFile `yaml:"files"`
 	MajorTag          *bool      `yaml:"major-tag"`
 	ChangelogSource   *string    `yaml:"changelog-source"`
+	ForceTagCreation  *bool      `yaml:"force-tag-creation"`
 	TagPrefix         *string    `yaml:"tag-prefix"`
 	Changelog         *string    `yaml:"changelog"`
 }
@@ -512,6 +531,7 @@ func Default() Config {
 		ReleasePullRequestLayout: DefaultReleasePullRequestLayout,
 		ReleasePullRequestGuide:  true,
 		CommentMention:           DefaultCommentMention,
+		ForceTagCreation:         true,
 	}
 }
 
@@ -671,6 +691,9 @@ func Load(path string) (cfg Config, err error) {
 	if r.DraftUntilAssetsAttach != nil {
 		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach
 	}
+	if r.ForceTagCreation != nil {
+		cfg.ForceTagCreation = *r.ForceTagCreation
+	}
 	if r.CommentMention != nil {
 		if *r.CommentMention == "" {
 			return Config{}, fmt.Errorf("config: parse %s: comment-mention is empty", path)
@@ -780,6 +803,7 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 			Name: name, Path: *rc.Path, InitialVersion: rc.InitialVersion,
 			BumpMinorPreMajor: rc.BumpMinorPreMajor, HiddenTypes: rc.HiddenTypes, MajorTag: rc.MajorTag,
 			ChangelogSource: rc.ChangelogSource, TagPrefix: rc.TagPrefix, Changelog: rc.Changelog,
+			ForceTagCreation: rc.ForceTagCreation,
 		}
 		if rc.Files != nil {
 			files, err := decodeFiles(path, *rc.Files)

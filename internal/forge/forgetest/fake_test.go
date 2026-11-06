@@ -333,7 +333,7 @@ func TestFakeCreateReleaseRecordsTheCall(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || f.CreatedReleases[0].Tag != "v0.1.0" || f.CreatedReleases[0].Prerelease {
@@ -345,7 +345,7 @@ func TestFakeCreateReleaseRecordsAPreRelease(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0-alpha.1", "", "v0.1.0-alpha.1", "Release v0.1.0-alpha.1", true, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || !f.CreatedReleases[0].Prerelease {
@@ -357,7 +357,7 @@ func TestFakeCreateReleaseReturnsErrReleaseExistsForAnExistingTag(t *testing.T) 
 	t.Parallel()
 	f := &forgetest.Fake{ExistingReleases: map[string]bool{"v0.1.0": true}}
 
-	err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true)
+	err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "", "v0.1.0", "Release v0.1.0", false, true)
 	if !errors.Is(err, forge.ErrReleaseExists) {
 		t.Fatalf("CreateRelease() error = %v, want %v", err, forge.ErrReleaseExists)
 	}
@@ -370,7 +370,7 @@ func TestFakeCreateReleaseRecordsItAsADraftWhenAskedFor(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, true); err != nil {
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || !f.CreatedReleases[0].Draft {
@@ -389,7 +389,7 @@ func TestFakeCreateReleaseRecordsItAsPublishedWhenDraftIsFalse(t *testing.T) {
 	t.Parallel()
 	f := &forgetest.Fake{}
 
-	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "v0.1.0", "Release v0.1.0", false, false); err != nil {
+	if err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "", "v0.1.0", "Release v0.1.0", false, false); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
 	if len(f.CreatedReleases) != 1 || f.CreatedReleases[0].Draft {
