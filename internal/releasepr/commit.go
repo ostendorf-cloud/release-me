@@ -10,7 +10,7 @@ import (
 
 // signoffPattern matches a "Name <email>" identity, the shape git's own
 // Signed-off-by trailer carries.
-var signoffPattern = regexp.MustCompile(`^[^<>\r\n]*[^<>\s][^<>\r\n]* <[^<>\s]+>$`)
+var signoffPattern = regexp.MustCompile(`^[^<>\s][^<>\r\n]* <[^<>\s]+>$`)
 
 // CheckSignoff refuses a signoff identity that is not "Name <email>" on one
 // line.

@@ -38,6 +38,9 @@ func TestCheckSignoffAcceptsOnlyANameAndAnEmail(t *testing.T) {
 	}{
 		{identity: "Release Bot <release-bot@example.com>", ok: true},
 		{identity: "release-me[bot] <release-me[bot]@users.noreply.github.com>", ok: true},
+		{identity: "R <r@example.com>", ok: true},
+		{identity: " Release Bot <release-bot@example.com>"},
+		{identity: "\tRelease Bot <release-bot@example.com>"},
 		{identity: "release-bot@example.com"},
 		{identity: "<release-bot@example.com>"},
 		{identity: "Release Bot <release bot@example.com>"},
