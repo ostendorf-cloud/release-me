@@ -33,10 +33,6 @@ func (f Frame) Wrap(body string) string {
 	return body
 }
 
-// frameChangelogOpen matches the opening of the collapsed changelog block
-// ExtractChangelog reads a body's changelog from.
-var frameChangelogOpen = regexp.MustCompile(`<details>\s*<summary>Changelog</summary>`)
-
 // frameMarker matches a line opening an HTML comment in the release-me-
 // namespace, the comments a body records what release-me reads back in.
 var frameMarker = regexp.MustCompile(`(?m)^<!-- release-me-`)
@@ -47,7 +43,7 @@ var frameMarker = regexp.MustCompile(`(?m)^<!-- release-me-`)
 // release-me- comment, which release-me reserves for what it records in a
 // body and reads back.
 func CheckFrameText(text string) error {
-	if frameChangelogOpen.MatchString(text) {
+	if changelogOpen.MatchString(text) {
 		return errors.New(`carries "<details><summary>Changelog</summary>", the opening release-me reads the changelog from`)
 	}
 	if frameMarker.MatchString(text) {
