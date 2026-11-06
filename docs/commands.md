@@ -176,7 +176,9 @@ release-me continues from the existing tags and changelogs. A single root packag
   component at the family's version, changed or not;
 - `separate-pull-requests`, default `false` in release-please: more than one package without it,
   or with `false`, becomes `release-pull-request: shared`, one release pull request for every
-  package as release-please opened; `true` keeps release-me's default of one per component.
+  package as release-please opened; `true` keeps release-me's default of one per component;
+- `draft-pull-request` as
+  [`release-pull-request-draft`](configuration.md#release-pull-request-draft).
 
 `changelog-source` is set to `all`, because release-please reads every commit since the last
 release, not the first parent history.

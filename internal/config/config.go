@@ -4,6 +4,7 @@
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
 // changelog, changelog-source, labels, author, major-tag, versioning,
+// release-pull-request, release-pull-request-layout, release-pull-request-draft,
 // draft-until-assets-attach, comment-mention and components.
 package config
 
@@ -259,6 +260,10 @@ type Config struct {
 	// stop being advertised in the body. Nothing reads the body back by the
 	// guide, so the key can change while a release pull request is open.
 	ReleasePullRequestGuide bool
+	// ReleasePullRequestDraft is the top-level "release-pull-request-draft"
+	// key, default false: when true, pr opens every release pull request as
+	// a draft. It never touches one already open.
+	ReleasePullRequestDraft bool
 	// DraftUntilAssetsAttach is the top-level "draft-until-assets-attach"
 	// key, default false: when true, release creates every release as a
 	// draft instead of publishing it immediately, and resumes publishing
@@ -469,6 +474,7 @@ type raw struct {
 	ReleasePullRequest       *string    `yaml:"release-pull-request"`
 	ReleasePullRequestLayout *string    `yaml:"release-pull-request-layout"`
 	ReleasePullRequestGuide  *bool      `yaml:"release-pull-request-guide"`
+	ReleasePullRequestDraft  *bool      `yaml:"release-pull-request-draft"`
 	DraftUntilAssetsAttach   *bool      `yaml:"draft-until-assets-attach"`
 	CommentMention           *string    `yaml:"comment-mention"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
@@ -667,6 +673,9 @@ func Load(path string) (cfg Config, err error) {
 	}
 	if r.ReleasePullRequestGuide != nil {
 		cfg.ReleasePullRequestGuide = *r.ReleasePullRequestGuide
+	}
+	if r.ReleasePullRequestDraft != nil {
+		cfg.ReleasePullRequestDraft = *r.ReleasePullRequestDraft
 	}
 	if r.DraftUntilAssetsAttach != nil {
 		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach

@@ -76,12 +76,15 @@ func (f *Forge) PullRequests(ctx context.Context, owner, repo, head, state strin
 }
 
 // CreatePullRequest implements forge.Forge.
-func (f *Forge) CreatePullRequest(ctx context.Context, owner, repo, base, head, title, body string, labels []string) (forge.PullRequest, error) {
+func (f *Forge) CreatePullRequest(
+	ctx context.Context, owner, repo, base, head, title, body string, labels []string, draft bool,
+) (forge.PullRequest, error) {
 	pr, _, err := f.client.PullRequests.Create(ctx, owner, repo, gogithub.CreatePullRequest{
 		Title: &title,
 		Head:  head,
 		Base:  base,
 		Body:  &body,
+		Draft: &draft,
 	})
 	if err != nil {
 		return forge.PullRequest{}, fmt.Errorf("github: create pull request %s onto %s: %w", head, base, err)

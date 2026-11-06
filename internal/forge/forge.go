@@ -65,8 +65,9 @@ type Forge interface {
 	PullRequests(ctx context.Context, owner, repo, head, state string) ([]PullRequest, error)
 
 	// CreatePullRequest opens a pull request from head onto base, with the
-	// given title, body and labels.
-	CreatePullRequest(ctx context.Context, owner, repo, base, head, title, body string, labels []string) (PullRequest, error)
+	// given title, body and labels, as a draft when draft is true: one the
+	// forge refuses to merge until a human marks it ready for review.
+	CreatePullRequest(ctx context.Context, owner, repo, base, head, title, body string, labels []string, draft bool) (PullRequest, error)
 
 	// UpdatePullRequest edits the title and body of an existing pull
 	// request. It never touches labels: a label a human added stays.

@@ -222,8 +222,24 @@ func TestPullRequestsListedMergeTimestampDrivesRelease(t *testing.T) {
 
 func TestCreatePullRequestCreatesAndLabelsIt(t *testing.T) {
 	t.Parallel()
+	for _, draft := range []bool{false, true} {
+		t.Run(fmt.Sprintf("draft=%v", draft), func(t *testing.T) {
+			t.Parallel()
+			testCreatePullRequest(t, draft)
+		})
+	}
+}
+
+// testCreatePullRequest creates a pull request, a draft or not, and checks
+// the request carries the draft flag and the labels follow.
+func testCreatePullRequest(t *testing.T, draft bool) {
+	t.Helper()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v3/repos/owner/repo/pulls", func(w http.ResponseWriter, _ *http.Request) {
+	var created map[string]any
+	mux.HandleFunc("/api/v3/repos/owner/repo/pulls", func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&created); err != nil {
+			t.Errorf("decode pull request body: %v", err)
+		}
 		fmt.Fprint(w, `{"number": 12, "title": "chore(main): release v0.1.0", "body": "Release v0.1.0"}`)
 	})
 	var labeled []string
@@ -238,9 +254,12 @@ func TestCreatePullRequestCreatesAndLabelsIt(t *testing.T) {
 	f := newTestForge(t, mux)
 
 	got, err := f.CreatePullRequest(context.Background(), "owner", "repo", "main", "release-me/main",
-		"chore(main): release v0.1.0", "Release v0.1.0", []string{"release: pending"})
+		"chore(main): release v0.1.0", "Release v0.1.0", []string{"release: pending"}, draft)
 	if err != nil {
 		t.Fatalf("CreatePullRequest() error = %v", err)
+	}
+	if created["draft"] != draft {
+		t.Fatalf("created draft = %v, want %v", created["draft"], draft)
 	}
 	want := forge.PullRequest{Number: 12, Title: "chore(main): release v0.1.0", Body: "Release v0.1.0", Labels: []string{"release: pending"}}
 	if !reflect.DeepEqual(got, want) {

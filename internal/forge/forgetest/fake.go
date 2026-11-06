@@ -33,6 +33,7 @@ type ListResponse struct {
 type CreatePullRequestCall struct {
 	Owner, Repo, Base, Head, Title, Body string
 	Labels                               []string
+	Draft                                bool
 }
 
 // UpdatePullRequestCall records one call to UpdatePullRequest. It never
@@ -204,11 +205,13 @@ func (f *Fake) PullRequests(_ context.Context, owner, repo, head, state string) 
 }
 
 // CreatePullRequest implements forge.Forge.
-func (f *Fake) CreatePullRequest(_ context.Context, owner, repo, base, head, title, body string, labels []string) (forge.PullRequest, error) {
+func (f *Fake) CreatePullRequest(
+	_ context.Context, owner, repo, base, head, title, body string, labels []string, draft bool,
+) (forge.PullRequest, error) {
 	f.NextNumber++
 	number := f.NextNumber
 	f.CreatedPullRequests = append(f.CreatedPullRequests, CreatePullRequestCall{
-		Owner: owner, Repo: repo, Base: base, Head: head, Title: title, Body: body, Labels: labels,
+		Owner: owner, Repo: repo, Base: base, Head: head, Title: title, Body: body, Labels: labels, Draft: draft,
 	})
 	f.setPRLabels(number, labels)
 	return forge.PullRequest{Number: number, Title: title, Body: body, Labels: labels, URL: pullRequestURL(owner, repo, number)}, nil

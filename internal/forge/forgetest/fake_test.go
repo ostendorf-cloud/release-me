@@ -119,7 +119,7 @@ func TestFakeCreatePullRequestRecordsTheCallAndAssignsANumber(t *testing.T) {
 	f := &forgetest.Fake{}
 
 	got, err := f.CreatePullRequest(context.Background(), "owner", "repo", "main", "release-me/main",
-		"chore(main): release v0.1.0", "Release v0.1.0", []string{"release: pending"})
+		"chore(main): release v0.1.0", "Release v0.1.0", []string{"release: pending"}, false)
 	if err != nil {
 		t.Fatalf("CreatePullRequest() error = %v", err)
 	}
