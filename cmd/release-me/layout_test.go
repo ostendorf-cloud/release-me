@@ -56,7 +56,7 @@ func TestSharedReleasePullRequestRendersTheConfiguredLayout(t *testing.T) {
 		t.Run(string(tc.layout), func(t *testing.T) {
 			dir, origin, cfg := newSharedRepo(t)
 			cfg.ReleasePullRequestLayout = tc.layout
-			f := newFake()
+			f := newPRFake(origin)
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 				t.Fatalf("doPR() error = %v", err)
@@ -95,9 +95,9 @@ func TestLockedFamilyRendersTheConfiguredLayout(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(string(tc.layout), func(t *testing.T) {
-			dir, _, cfg := newLockedRepo(t)
+			dir, origin, cfg := newLockedRepo(t)
 			cfg.ReleasePullRequestLayout = tc.layout
-			f := newFake()
+			f := newPRFake(origin)
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 				t.Fatalf("doPR() error = %v", err)
@@ -134,7 +134,7 @@ func TestRerunReadsAPullRequestOpenedUnderAnotherLayout(t *testing.T) {
 				t.Run(family.name+"/"+string(opened)+"-to-"+string(current), func(t *testing.T) {
 					dir, origin, cfg := family.repo(t)
 					cfg.ReleasePullRequestLayout = opened
-					f := newFake()
+					f := newPRFake(origin)
 					var first bytes.Buffer
 					if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 						t.Fatalf("doPR() first run error = %v", err)
@@ -203,7 +203,7 @@ func TestDoCommentReleaseAsReadsTheComponentsOfAnyLayout(t *testing.T) {
 				t.Run(string(opened)+"-to-"+string(current)+"/"+tc.comment, func(t *testing.T) {
 					dir, origin, cfg := newSharedRepo(t)
 					cfg.ReleasePullRequestLayout = opened
-					f := newFake()
+					f := newPRFake(origin)
 					var first bytes.Buffer
 					if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 						t.Fatalf("doPR() first run error = %v", err)

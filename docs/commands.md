@@ -55,10 +55,14 @@ settles after that one push. Should the heading this tool would write not read b
 heading is left out of the comparison instead, so `pr` never pushes the same content on every
 run. Equal content
 changes nothing, not even the pull request body, and nothing is pushed. A change pushes the
-branch and sets the heading to today's date; the push carries a `--force-with-lease` whose
-expected value is the existing pull request's head SHA from the forge, not a locally fetched
-ref, so nothing can quietly defeat it. A fresh branch, with no existing pull request to lease
-against, pushes without force.
+branch, publishing an API-created commit (see [signed release commits](#signed-release-commits)), and
+sets the heading to today's date. The new commit is always built on the default branch's tip,
+and replaces the existing branch only while it is still at the existing pull request's head
+SHA from the forge, the lease `--force-with-lease` takes; a branch found anywhere else is left
+alone and `pr` fails, naming the branch and the pull request. The commit object is fetched
+from the forge and published through Git with an atomic `--force-with-lease` comparison. A fresh
+branch, with no existing pull request to lease against, is created, or moved only as a
+fast-forward, the rule a push without force follows.
 Editing only the notes block of an open pull request updates its body, with no push: the content
 that would land on the branch did not change.
 
@@ -77,6 +81,33 @@ hidden type, the changelog carries one explicit line,
 reaches the changelog file or the GitHub release. A shared release pull request's title and
 body name every component it releases: see
 [shared release pull request](versioning-modes.md#shared-release-pull-request).
+
+### Signed release commits
+
+`pr` creates no local commit. It creates the release branch's commit through the
+forge's API, on GitHub the Git Data API: a blob per changed file, a tree on top of the default
+branch's tip, a commit with that one parent, then the branch created or moved onto it.
+
+GitHub signs a commit it creates this way only for a GitHub App installation token, a token
+from `actions/create-github-app-token` or `secrets.GITHUB_TOKEN`. Then the release pull request
+satisfies a ruleset or branch protection that requires signed commits, which a local commit
+made with a token that has no signing key never does. A personal access token, classic or
+fine-grained, or an OAuth token such as the one `gh auth login` stores, yields an unsigned
+commit, and a ruleset requiring signed commits blocks the release pull request from merging.
+After every commit `pr` reads back the signature GitHub verified and, when there is none, logs
+a warning naming the branch; the run itself still succeeds.
+
+GitHub signs that commit only when the request names no author and no committer, so none is
+passed: the commit is attributed to the token's own identity, the app's `<slug>[bot]` account
+for a GitHub App token, the user for a personal access token, `github-actions[bot]` for
+`secrets.GITHUB_TOKEN`. The `author` configuration key, the `author-name`, `author-email` and
+`app-slug` action inputs and the `GIT_AUTHOR_*` and `GIT_COMMITTER_*` environment variables no
+longer change the release commit. They are still accepted, so an existing configuration or
+workflow keeps working unchanged; `check` warns about an `author` key that is set.
+
+The commit's parent must already exist on GitHub: `pr` builds on the checkout's `HEAD`, the
+default branch's tip in a workflow triggered by a push to it. A local run on top of unpushed
+commits fails, naming the branch and the parent it could not read.
 
 ## Pre-releases
 

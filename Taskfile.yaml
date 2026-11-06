@@ -83,7 +83,6 @@ tasks:
   test:action:
     desc: Shell script tests for the composite action and this repository's own CI scripts
     cmds:
-      - action/resolve-author_test.sh
       - action/resolve-version_test.sh
       - action/run-release-me_test.sh
       - scripts/publish-release-assets_test.sh

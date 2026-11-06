@@ -75,7 +75,7 @@ func newSharedRepo(t *testing.T) (dir, origin string, cfg config.Config) {
 func TestSharedReleasePullRequestCarriesEveryChangedComponentAtItsOwnVersion(t *testing.T) {
 	dir, origin, cfg := newSharedRepo(t)
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -186,7 +186,7 @@ func TestSharedReleasePullRequestInLinkedVersioningSharesTheFamilyVersion(t *tes
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -235,7 +235,7 @@ func TestSharedReleasePullRequestAppliesAVersionOverridePerComponent(t *testing.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, origin, cfg := newSharedRepo(t)
-			f := newFake()
+			f := newPRFake(origin)
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 				t.Fatalf("doPR() first run error = %v", err)
@@ -266,7 +266,7 @@ func TestSharedReleasePullRequestAppliesAVersionOverridePerComponent(t *testing.
 
 func TestSharedReleasePullRequestTurnsEveryComponentIntoAPreRelease(t *testing.T) {
 	dir, origin, cfg := newSharedRepo(t)
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -294,7 +294,7 @@ func TestSharedReleasePullRequestTurnsEveryComponentIntoAPreRelease(t *testing.T
 
 func TestSharedReleasePullRequestReportsAPerComponentOneItSupersedes(t *testing.T) {
 	dir, _, cfg := newSharedRepo(t)
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	f.ListResponses = []forgetest.ListResponse{
 		{Head: "release-me/api", State: "open", PullRequests: []forge.PullRequest{
 			{Number: 4, Title: "chore(api): release v1.3.0", Labels: []string{"release: pending"}},
@@ -315,7 +315,7 @@ func TestSharedReleasePullRequestReportsAPerComponentOneItSupersedes(t *testing.
 
 func TestSharedReleasePullRequestIsWrittenWhenLookingForASupersededOneFails(t *testing.T) {
 	dir, _, cfg := newSharedRepo(t)
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	f.ListResponses = []forgetest.ListResponse{
 		{Head: "release-me/api", State: "open", Err: errors.New("GET /repos/owner/repo/pulls: 502 Bad Gateway")},
 	}
@@ -394,7 +394,7 @@ func TestDoCommentReleaseAsTargetsAComponentOfASharedReleasePullRequest(t *testi
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, origin, cfg := newSharedRepo(t)
-			f := newFake()
+			f := newPRFake(origin)
 			var first bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 				t.Fatalf("doPR() first run error = %v", err)
@@ -504,7 +504,7 @@ func TestSharedReleasePullRequestHonoursTheReleaseAsAndReleaseComponentFooters(t
 	commitEntry(t, dir, "fix: correct the session cookie\n\nRelease-Component: web\nRelease-As: 1.0.0")
 	commitEntry(t, dir, "docs: describe the CSV export\n\nRelease-Component: docs\nRelease-As: 2.1.0")
 
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -533,7 +533,7 @@ func TestSharedReleasePullRequestRefusesATitlePastTheForgeLimitBeforeWritingAnyt
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 
 	var stdout bytes.Buffer
 	err = doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout)

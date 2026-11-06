@@ -44,11 +44,11 @@ steps:
   - uses: ostendorf-cloud/release-me/action@<commit sha>  # v0.1.1
     with:
       token: ${{ steps.app-token.outputs.token }}
-      app-slug: ${{ steps.app-token.outputs.app-slug }}
 ```
 
-A GitHub App token also lets the action attribute the release commit to the app's own bot
-account, through `app-slug`. See [the Action reference](docs/action.md) for every input and
+A GitHub App token also gets the release commit signed by GitHub, see
+[signed release commits](docs/commands.md#signed-release-commits). See
+[the Action reference](docs/action.md) for every input and
 output, the `draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
 [Bootstrap](docs/action.md#bootstrap) for the first release before any binary exists.
 
@@ -130,9 +130,6 @@ labels:
   alpha: "release: alpha"
   beta: "release: beta"
   rc: "release: rc"
-author:
-  name: release-me
-  email: release-me[bot]@users.noreply.github.com
 files:
   - path: cmd/cli/version.go
     updater: marker
@@ -149,7 +146,7 @@ files:
 | `changelog-source` | Which commits become changelog entries. | `first-parent` | No |
 | `labels.pending` / `labels.tagged` | Label names `pr`, `release` and `check` use. | `release: pending` / `release: tagged` | No |
 | `labels.alpha` / `labels.beta` / `labels.rc` | Pre-release type labels. | `release: alpha` / `release: beta` / `release: rc` | No |
-| `author.name` / `author.email` | Git identity `pr` commits the release branch as. | `release-me` / `release-me[bot]@users.noreply.github.com` | No |
+| `author.name` / `author.email` | Ignored, still accepted; `check` warns when set. | `release-me` / `release-me[bot]@users.noreply.github.com` | No |
 | `files` | Files `pr` bumps to the next version. | none | No |
 | `major-tag` | Moves the major tag on every stable release. | `false` | No |
 | `versioning` | How components' versions relate to each other. | `independent` | No |

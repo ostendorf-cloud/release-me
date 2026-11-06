@@ -11,11 +11,10 @@ runner's os and arch, verifies the checksum, then runs `release-me run`. Inputs:
 (required), `component`, `dry-run`, `verbose`, `download-token` for the download step on a
 private fork, defaulting to the calling workflow's own token, `version` to pin a different
 release than the one the action resolves on its own, or `source` to build from the checkout
-with `go build` instead, and `author-name`, `author-email`, `app-slug` to attribute the
-release commit. An explicit `author-name` or `author-email` wins for that field; with
-`app-slug` set, the action resolves the app's bot account, `<slug>[bot]`, and its id through
-the API with `download-token`, and attributes the commit to it. Nothing set leaves the tool's
-own configured or default identity in place. `source` only builds this repository's own code:
+with `go build` instead. `author-name`, `author-email` and `app-slug` are still accepted but
+ignored: the release commit is created through the GitHub API under the token's own identity,
+see [signed release commits](commands.md#signed-release-commits). `source` only builds this
+repository's own code:
 it is `go build`'s working directory for `uses: ./action` from inside this repository, not the
 caller's checkout for `uses: ostendorf-cloud/release-me/action@ref`.
 

@@ -24,9 +24,11 @@ The type assigned to text that does not parse as a conventional commit, default 
 
 ## `token-env`
 
-The environment variable holding the GitHub token, default `GITHUB_TOKEN`. It governs API
-calls only; `pr`'s push to the release branch authenticates through the git credentials the
-checkout's `origin` remote already carries, the same as any other push.
+The environment variable holding the GitHub token, default `GITHUB_TOKEN`. It governs every API
+call, the release commit `pr` creates included, so the kind of token decides whether GitHub
+signs that commit: see [signed release commits](commands.md#signed-release-commits). Reading
+and publishing the release branch go through the git credentials the checkout's
+`origin` remote already carries.
 
 ## `changelog`
 
@@ -53,11 +55,12 @@ cannot be empty.
 
 ## `author`
 
-`author.name` and `author.email`: the git identity `pr` commits the release branch as, default
-`release-me` and `release-me[bot]@users.noreply.github.com`. Passed to the commit through the
-git subprocess's environment, never written into git config. A `GIT_AUTHOR_NAME`,
-`GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` or `GIT_COMMITTER_EMAIL` already set in the
-environment wins over these values. `check --verbose` logs the resolved author.
+`author.name` and `author.email`: accepted, default `release-me` and
+`release-me[bot]@users.noreply.github.com`, but ignored. The forge creates the release commit
+under the token's own identity, since GitHub signs it only when no author is passed, see
+[signed release commits](commands.md#signed-release-commits). The keys still load, so an
+existing configuration keeps working, and `check` warns about each one that is set, naming it
+as ignored. `GIT_AUTHOR_*` and `GIT_COMMITTER_*` in the environment change nothing either.
 
 ## `files`
 

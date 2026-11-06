@@ -7,6 +7,7 @@ package forgetest
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 
@@ -78,6 +79,13 @@ type CreateCommentCall struct {
 	Owner, Repo string
 	Number      int
 	Body        string
+}
+
+// CommitBranchCall records one call to CommitBranch, whether or not it
+// succeeded.
+type CommitBranchCall struct {
+	Owner, Repo string
+	Commit      forge.BranchCommit
 }
 
 // Fake is a forge.Forge backed by fixed, pre-configured responses. It
@@ -163,6 +171,36 @@ type Fake struct {
 	MovedTags           []MoveTagCall
 	CreatedReleases     []CreateReleaseCall
 	CreatedComments     []CreateCommentCall
+	CommitBranchCalls   []CommitBranchCall
+
+	// GitDir, when set, is a git directory, typically a bare repository
+	// standing in for the forge's own, that CommitBranch writes each
+	// commit and branch move into for real, through git plumbing, so a
+	// test can read the branch back the way "git fetch" would. The parent
+	// commit must be reachable from it, for example through the objects
+	// of the repository under test listed in its
+	// objects/info/alternates. Left empty, CommitBranch records the call
+	// and returns a SHA derived from the call count, touching nothing.
+	GitDir string
+
+	// CommitBranchErr, when set, is returned by CommitBranch after
+	// recording the call, writing nothing.
+	CommitBranchErr error
+
+	// CommitSignatureCalls records the SHA of every call to
+	// CommitSignature.
+	CommitSignatureCalls []string
+
+	// Unsigned makes CommitSignature report every commit unsigned, the
+	// outcome GitHub gives a commit a personal access token creates. Left
+	// false, every commit is reported verified, the outcome of a GitHub
+	// App installation token, the only one FakeAuthor and FakeCommitter
+	// model.
+	Unsigned bool
+
+	// CommitSignatureErr, when set, is returned by CommitSignature after
+	// recording the call.
+	CommitSignatureErr error
 
 	// CreateCommentErr, when set, is returned by CreateComment instead of
 	// recording a call.
@@ -336,6 +374,32 @@ func (f *Fake) CreateComment(_ context.Context, owner, repo string, number int, 
 	}
 	f.CreatedComments = append(f.CreatedComments, CreateCommentCall{Owner: owner, Repo: repo, Number: number, Body: body})
 	return nil
+}
+
+// CommitBranch implements forge.Forge, creating objects in GitDir without
+// publishing a branch. The command layer uses the same transport as production.
+func (f *Fake) CommitBranch(ctx context.Context, owner, repo string, c forge.BranchCommit) (string, error) {
+	f.CommitBranchCalls = append(f.CommitBranchCalls, CommitBranchCall{Owner: owner, Repo: repo, Commit: c})
+	if f.CommitBranchErr != nil {
+		return "", f.CommitBranchErr
+	}
+	if f.GitDir == "" {
+		return fmt.Sprintf("%040x", len(f.CommitBranchCalls)), nil
+	}
+	return commitInto(ctx, f.GitDir, c)
+}
+
+// CommitSignature implements forge.Forge: verified, reason "valid",
+// unless Unsigned is set, then unverified with reason "unsigned".
+func (f *Fake) CommitSignature(_ context.Context, _, _, sha string) (forge.Signature, error) {
+	f.CommitSignatureCalls = append(f.CommitSignatureCalls, sha)
+	if f.CommitSignatureErr != nil {
+		return forge.Signature{}, f.CommitSignatureErr
+	}
+	if f.Unsigned {
+		return forge.Signature{Verified: false, Reason: "unsigned"}, nil
+	}
+	return forge.Signature{Verified: true, Reason: "valid"}, nil
 }
 
 // CompareURL implements forge.Forge, in the shape GitHub's compare view

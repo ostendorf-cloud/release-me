@@ -203,13 +203,18 @@ type Labels struct {
 	Rc      string
 }
 
-// Author is the "author" key: the git identity pr commits the release
-// branch as. A GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME or
-// GIT_COMMITTER_EMAIL already set in the process environment wins over
-// these values.
+// Author is the "author" key, still accepted so an existing configuration
+// keeps loading, but no longer applied: pr creates the release commit
+// through the forge, which signs it only when no author or committer is
+// passed, so the commit carries the token's own identity instead. check
+// warns when either field is set, which Set records.
 type Author struct {
 	Name  string
 	Email string
+	// Set names every key of the "author" block release-me.yaml sets,
+	// "author.name" and "author.email", in that order, nil when the
+	// block is left out: the defaults alone are never reported as set.
+	Set []string
 }
 
 // Config is the release-me.yaml configuration.
@@ -617,9 +622,11 @@ func Load(path string) (cfg Config, err error) {
 	if r.Author != nil {
 		if r.Author.Name != nil {
 			cfg.Author.Name = *r.Author.Name
+			cfg.Author.Set = append(cfg.Author.Set, "author.name")
 		}
 		if r.Author.Email != nil {
 			cfg.Author.Email = *r.Author.Email
+			cfg.Author.Set = append(cfg.Author.Set, "author.email")
 		}
 	}
 	if r.Files != nil {

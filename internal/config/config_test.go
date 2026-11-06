@@ -55,7 +55,7 @@ func TestDefaultSetsTheAuthor(t *testing.T) {
 	t.Parallel()
 	got := config.Default().Author
 	want := config.Author{Name: "release-me", Email: "release-me[bot]@users.noreply.github.com"}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Author = %+v, want %+v", got, want)
 	}
 }
@@ -153,7 +153,7 @@ files:
 					Pending: "needs-release", Tagged: "released",
 					Alpha: "needs-alpha", Beta: "needs-beta", Rc: "needs-rc",
 				},
-				Author:                   config.Author{Name: "renovate", Email: "renovate@example.com"},
+				Author:                   config.Author{Name: "renovate", Email: "renovate@example.com", Set: []string{"author.name", "author.email"}},
 				MajorTag:                 true,
 				Versioning:               config.DefaultVersioning,
 				ReleasePullRequest:       config.ReleasePullRequestShared,
@@ -225,7 +225,7 @@ files:
 					Pending: config.DefaultPendingLabel, Tagged: config.DefaultTaggedLabel,
 					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
 				},
-				Author:                   config.Author{Name: "renovate", Email: config.DefaultAuthorEmail},
+				Author:                   config.Author{Name: "renovate", Email: config.DefaultAuthorEmail, Set: []string{"author.name"}},
 				Versioning:               config.DefaultVersioning,
 				ReleasePullRequest:       config.ReleasePullRequestPerComponent,
 				ReleasePullRequestLayout: config.DefaultReleasePullRequestLayout,
