@@ -220,34 +220,57 @@ func TestAssembleEntriesAppliesTheOverrideBlockInSquashMode(t *testing.T) {
 
 func TestAssembleAllEntriesAppliesTheOverrideBlockToTheWholeGroup(t *testing.T) {
 	t.Parallel()
-	raw := []history.Entry{
-		{SHA: "a", PullRequestNumber: 5, Subject: "feat(widget): add the widget"},
-		{SHA: "b", PullRequestNumber: 5, Subject: "fix(widget): correct a bug"},
-		{SHA: "c", Subject: "fix: direct hotfix"},
+	cases := []struct {
+		name string
+		raw  []history.Entry
+	}{
+		{
+			name: "one commit links itself and uses the pull request issue references",
+			raw: []history.Entry{
+				{SHA: "a", PullRequestNumber: 5, Subject: "feat(widget): add the widget", Body: "Closes #13"},
+			},
+		},
+		{
+			name: "newest first commits link the oldest commit and use the pull request issue references",
+			raw: []history.Entry{
+				{SHA: "b", PullRequestNumber: 5, Subject: "fix(widget): correct a bug", Body: "Fixes #14"},
+				{SHA: "a", PullRequestNumber: 5, Subject: "feat(widget): add the widget", Body: "Closes #13"},
+			},
+		},
 	}
-	f := &forgetest.Fake{Responses: map[int]forgetest.Response{
-		5: {PullRequest: forge.PullRequest{
-			Title: "ignored: all mode never uses the pull request title anyway",
-			Body:  "```release-me\nfeat: the override replaces both commits\n```",
-			URL:   "https://github.com/owner/repo/pull/5",
-		}},
-	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			raw := tc.raw
+			raw = append(raw, history.Entry{SHA: "c", Subject: "fix: direct hotfix"})
+			f := &forgetest.Fake{Responses: map[int]forgetest.Response{
+				5: {PullRequest: forge.PullRequest{
+					Title: "ignored: all mode never uses the pull request title anyway",
+					Body:  "Closes #7\n\n```release-me\nfeat: the override replaces the whole group\n```",
+					URL:   "https://github.com/owner/repo/pull/5",
+				}},
+			}}
 
-	changes, entries, err := assembleAllEntries(context.Background(), f, "owner", "repo", raw, "other")
-	if err != nil {
-		t.Fatalf("assembleAllEntries() error = %v", err)
-	}
+			changes, entries, err := assembleAllEntries(context.Background(), f, "owner", "repo", raw, "other")
+			if err != nil {
+				t.Fatalf("assembleAllEntries() error = %v", err)
+			}
 
-	wantChanges := []version.Change{{Type: "feat"}, {Type: "fix"}}
-	wantEntries := []changelog.Entry{
-		{Type: "feat", Description: "the override replaces both commits", PullRequestNumber: 5, URL: "https://github.com/owner/repo/pull/5"},
-		{Type: "fix", Description: "direct hotfix"},
-	}
-	if !reflect.DeepEqual(changes, wantChanges) {
-		t.Fatalf("changes = %+v, want %+v", changes, wantChanges)
-	}
-	if !reflect.DeepEqual(entries, wantEntries) {
-		t.Fatalf("entries = %+v, want %+v, want the override replacing both commits #5 introduced, the direct commit untouched", entries, wantEntries)
+			wantChanges := []version.Change{{Type: "feat"}, {Type: "fix"}}
+			wantEntries := []changelog.Entry{
+				{
+					Type: "feat", Description: "the override replaces the whole group", PullRequestNumber: 5, URL: "https://github.com/owner/repo/pull/5",
+					CommitSHA: "a", Issues: []changelog.Issue{{Number: 7}},
+				},
+				{Type: "fix", Description: "direct hotfix", CommitSHA: "c"},
+			}
+			if !reflect.DeepEqual(changes, wantChanges) {
+				t.Fatalf("changes = %+v, want %+v", changes, wantChanges)
+			}
+			if !reflect.DeepEqual(entries, wantEntries) {
+				t.Fatalf("entries = %+v, want %+v, want the override replacing every commit #5 introduced, the direct commit untouched", entries, wantEntries)
+			}
+		})
 	}
 }
 

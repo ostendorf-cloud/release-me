@@ -135,7 +135,7 @@ func familyReleases(cfg config.Config, members []familyMember, logger *slog.Logg
 		if m.ownHasTag {
 			fromTag = m.ownTag
 		}
-		releases[m.comp.Name] = release{version: result, entries: m.entries, hiddenTypes: m.comp.HiddenTypes, fromTag: fromTag}
+		releases[m.comp.Name] = release{version: result, entries: m.entries, options: changelogOptions(m.comp), fromTag: fromTag}
 	}
 	return releases, true
 }

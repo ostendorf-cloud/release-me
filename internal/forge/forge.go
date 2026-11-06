@@ -137,4 +137,14 @@ type Forge interface {
 	// built from owner, repo and the refs alone, never read from the
 	// forge, so it makes no request and works before head exists.
 	CompareURL(owner, repo, base, head string) string
+
+	// CommitURL returns the web address of commit sha, for a changelog
+	// entry to link to. Like CompareURL it is built from its arguments
+	// alone and makes no request.
+	CommitURL(owner, repo, sha string) string
+
+	// IssueURL returns the web address of issue number, for a changelog
+	// entry's issue reference to link to. Like CompareURL it is built from
+	// its arguments alone and makes no request.
+	IssueURL(owner, repo string, number int) string
 }

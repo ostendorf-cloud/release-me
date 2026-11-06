@@ -344,6 +344,18 @@ func (f *Fake) CompareURL(owner, repo, base, head string) string {
 	return "https://github.com/" + owner + "/" + repo + "/compare/" + base + "..." + head
 }
 
+// CommitURL implements forge.Forge, in the shape GitHub's commit page has:
+// "https://github.com/<owner>/<repo>/commit/<sha>".
+func (f *Fake) CommitURL(owner, repo, sha string) string {
+	return "https://github.com/" + owner + "/" + repo + "/commit/" + sha
+}
+
+// IssueURL implements forge.Forge, in the shape GitHub's issue page has:
+// "https://github.com/<owner>/<repo>/issues/<number>".
+func (f *Fake) IssueURL(owner, repo string, number int) string {
+	return "https://github.com/" + owner + "/" + repo + "/issues/" + strconv.Itoa(number)
+}
+
 func (f *Fake) setPRLabels(number int, labels []string) {
 	if f.PRLabels == nil {
 		f.PRLabels = map[int][]string{}

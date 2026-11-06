@@ -13,7 +13,7 @@ func TestSectionsRendersNoHeading(t *testing.T) {
 	t.Parallel()
 	entries := []changelog.Entry{{Type: "feat", Description: "add the next command"}}
 
-	got := changelog.Sections(entries, nil)
+	got := changelog.Sections(entries, changelog.Options{})
 	want := "### Features\n\n- add the next command"
 	if got != want {
 		t.Fatalf("Sections() = %q, want %q", got, want)
@@ -24,7 +24,7 @@ func TestSectionsReturnsEmptyWhenNoEntryIsVisible(t *testing.T) {
 	t.Parallel()
 	entries := []changelog.Entry{{Type: "chore", Description: "bump a dependency"}}
 
-	got := changelog.Sections(entries, []string{"chore"})
+	got := changelog.Sections(entries, changelog.Options{HiddenTypes: []string{"chore"}})
 	if got != "" {
 		t.Fatalf("Sections() = %q, want empty", got)
 	}
@@ -40,7 +40,7 @@ func TestSectionsRendersSubEntriesIndentedUnderTheirParent(t *testing.T) {
 		},
 	}}
 
-	got := changelog.Sections(entries, nil)
+	got := changelog.Sections(entries, changelog.Options{})
 	want := "### Features\n\n" +
 		"- add the next command ([#5](https://example.com/pull/5))\n" +
 		"  - wire up the flag\n" +
@@ -60,7 +60,7 @@ func TestSectionsDropsAHiddenTypeSubEntry(t *testing.T) {
 		},
 	}}
 
-	got := changelog.Sections(entries, []string{"chore"})
+	got := changelog.Sections(entries, changelog.Options{HiddenTypes: []string{"chore"}})
 	want := "### Features\n\n- add the next command\n  - wire up the flag"
 	if got != want {
 		t.Fatalf("Sections() = %q, want %q", got, want)
@@ -79,7 +79,7 @@ func TestSectionsRendersAHiddenTypeParentWhenASubEntryIsVisible(t *testing.T) {
 		},
 	}}
 
-	got := changelog.Sections(entries, []string{"chore"})
+	got := changelog.Sections(entries, changelog.Options{HiddenTypes: []string{"chore"}})
 	want := "### Features\n\n" +
 		"- merge widget work ([#10](https://example.com/pull/10))\n" +
 		"  - add the widget\n" +
@@ -96,7 +96,7 @@ func TestSectionsDropsAHiddenTypeParentWithNoVisibleSubEntry(t *testing.T) {
 		SubEntries: []changelog.Entry{{Type: "docs", Description: "update a comment"}},
 	}}
 
-	got := changelog.Sections(entries, []string{"chore", "docs"})
+	got := changelog.Sections(entries, changelog.Options{HiddenTypes: []string{"chore", "docs"}})
 	if got != "" {
 		t.Fatalf("Sections() = %q, want empty: neither the parent nor its sub entry is visible", got)
 	}
@@ -106,14 +106,14 @@ func TestSectionsIsDateFreeSoTwoRendersOnDifferentDaysMatch(t *testing.T) {
 	t.Parallel()
 	entries := []changelog.Entry{{Type: "feat", Description: "add the next command"}}
 
-	a := changelog.Sections(entries, nil)
-	b := changelog.Sections(entries, nil)
+	a := changelog.Sections(entries, changelog.Options{})
+	b := changelog.Sections(entries, changelog.Options{})
 	if a != b {
 		t.Fatalf("Sections() is not stable: %q != %q", a, b)
 	}
 
 	// Render embeds the date; Sections, used for comparison, never does.
-	renderedToday := changelog.Render("0.1.0", fixtureDate, "", entries, nil)
+	renderedToday := changelog.Render("0.1.0", fixtureDate, "", entries, changelog.Options{})
 	if a == renderedToday {
 		t.Fatalf("Sections() unexpectedly equals the dated Render() output")
 	}

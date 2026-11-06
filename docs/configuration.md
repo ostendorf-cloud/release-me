@@ -17,6 +17,39 @@ Hides entries of these types from the changelog, default `chore`, `docs`, `ci`, 
 `refactor`, `test`, `build`, `other`. Only `feat`, `fix`, `perf`, `revert` and a breaking
 change ever render a section; a type outside those five never renders, hidden or not.
 
+## `changelog-commit-links`
+
+Links each entry's commit after the pull request link, default `false`, the shape
+release-please renders:
+
+```markdown
+- handle the empty case ([#12](https://github.com/owner/repo/pull/12)) ([8fa6c1b](https://github.com/owner/repo/commit/8fa6c1b0d3e2f4a5b6c7d8e9f0a1b2c3d4e5f6a7))
+```
+
+The commit is the one the entry comes from: the merge commit for a pull request in
+`first-parent` and `nested`, the squash commit in `squash`, each commit's own in `all`, where an
+[override block](overrides.md#override-block) links the oldest commit of its pull request. A
+`nested` sub item links its own commit. There is no per-component override.
+
+## `changelog-issue-references`
+
+Links the issues an entry closes, default `false`, after every other link:
+
+```markdown
+- handle the empty case ([#12](https://github.com/owner/repo/pull/12)), refs [#7](https://github.com/owner/repo/issues/7)
+```
+
+An issue counts when the entry's text names it after one of GitHub's closing keywords, `close`,
+`closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` or `resolved`, any case, an
+optional `:` after it: a pull request's title and body, a commit's message. A plain mention, or
+an issue in another repository, `owner/repo#7`, is no reference. It renders as `refs`, the way
+release-please renders it, not `closes`. The release pull request body carries the changelog,
+and a closing keyword there would close the issue again when that pull request merges. There is
+no per-component override.
+
+`release-me migrate` turns both keys on, since release-please's default changelog carries both
+links.
+
 ## `fallback-type`
 
 The type assigned to text that does not parse as a conventional commit, default `other`.

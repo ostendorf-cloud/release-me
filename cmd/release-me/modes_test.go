@@ -217,7 +217,7 @@ func TestComputeReleaseInNestedMode(t *testing.T) {
 	// the hidden chore type must not swallow the rendered changelog: the
 	// merge's line still renders, as the heading of its visible sub
 	// commits, under the section one of them belongs to.
-	rendered := changelog.Sections(rel.entries, rel.hiddenTypes)
+	rendered := changelog.Sections(rel.entries, rel.options)
 	if !strings.Contains(rendered, "merge widget work") {
 		t.Fatalf("Sections() = %q, want the merge entry rendered despite its hidden own type", rendered)
 	}

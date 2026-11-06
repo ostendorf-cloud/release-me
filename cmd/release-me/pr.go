@@ -224,7 +224,7 @@ func doPRComponent(
 		}
 	}
 
-	entriesBody := changelog.Sections(entries, rel.hiddenTypes)
+	entriesBody := changelog.Sections(entries, rel.options)
 	if entriesBody == "" {
 		entriesBody = noUserFacingChangesLine
 	}
@@ -406,7 +406,7 @@ func doPRLocked(
 		if rel, ok := releases[m.comp.Name]; ok {
 			entries = rel.entries
 		}
-		entriesBody := changelog.Sections(entries, m.comp.HiddenTypes)
+		entriesBody := changelog.Sections(entries, changelogOptions(m.comp))
 		if entriesBody == "" {
 			entriesBody = noUserFacingChangesLine
 		}
@@ -548,7 +548,7 @@ func lockedPreReleaseEntries(
 		versionStr = vStr
 		out[m.comp.Name] = release{
 			version: version.Result{Version: vStr, Bump: rel.version.Bump, Reason: rel.version.Reason},
-			entries: entries, hiddenTypes: m.comp.HiddenTypes, fromTag: fromTag,
+			entries: entries, options: changelogOptions(m.comp), fromTag: fromTag,
 		}
 	}
 	return versionStr, out, nil

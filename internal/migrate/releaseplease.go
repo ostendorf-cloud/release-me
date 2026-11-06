@@ -177,6 +177,9 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 	if err != nil {
 		return Result{}, err
 	}
+	// release-please's default changelog links every entry's commit and
+	// the issues it closes; release-me's does neither unless asked to.
+	st := style{commitLinks: true, issueReferences: true}
 	// release-please groups every package into one release pull request
 	// unless separate-pull-requests is true; release-me's own default is one
 	// per component, so the grouped default is written out. locked always
@@ -208,11 +211,18 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 		}
 	}
 
-	out, err := render(components, versioning, sharedPR, pending, tagged)
+	out, err := render(components, versioning, st, sharedPR, pending, tagged)
 	if err != nil {
 		return Result{}, err
 	}
 	return Result{YAML: out, Warnings: warnings, Tags: tags}, nil
+}
+
+// style is the top-level changelog style keys the translation writes,
+// carried over from release-please's settings.
+type style struct {
+	commitLinks     bool
+	issueReferences bool
 }
 
 // component is one translated release-please package.
@@ -513,13 +523,19 @@ func repoPath(pkgPath, file string) string {
 // the implicit main component and needs no components key; everything else
 // is a components mapping in release-please's package order, carrying only
 // the keys whose value differs from what release-me would derive.
-func render(components []component, versioning string, sharedPR bool, pending, tagged string) ([]byte, error) {
+func render(components []component, versioning string, st style, sharedPR bool, pending, tagged string) ([]byte, error) {
 	doc := &yaml.Node{Kind: yaml.MappingNode}
 	add := func(m *yaml.Node, key string, value *yaml.Node) {
 		m.Content = append(m.Content, scalar(key), value)
 	}
 
 	add(doc, "changelog-source", scalar("all"))
+	if st.commitLinks {
+		add(doc, "changelog-commit-links", boolean(true))
+	}
+	if st.issueReferences {
+		add(doc, "changelog-issue-references", boolean(true))
+	}
 	if versioning != "" {
 		add(doc, "versioning", scalar(versioning))
 	}

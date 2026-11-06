@@ -63,9 +63,9 @@ func TestTopSection(t *testing.T) {
 func TestTopSectionMatchesSectionsForARoundTrippedEntry(t *testing.T) {
 	t.Parallel()
 	entries := []changelog.Entry{{Type: "feat", Description: "add the next command"}}
-	body := changelog.Sections(entries, nil)
+	body := changelog.Sections(entries, changelog.Options{})
 
-	rendered := changelog.Render("0.1.0", fixtureDate, "", entries, nil)
+	rendered := changelog.Render("0.1.0", fixtureDate, "", entries, changelog.Options{})
 	changelogFile := changelog.Prepend("", rendered)
 
 	got, ok := changelog.TopSection(changelogFile)
@@ -152,7 +152,7 @@ func TestHeadingVersionMatchesTheVersionRenderPrepended(t *testing.T) {
 	t.Parallel()
 	entries := []changelog.Entry{{Type: "feat", Description: "add the next command"}}
 
-	rendered := changelog.Render("0.1.0-alpha.1", fixtureDate, "", entries, nil)
+	rendered := changelog.Render("0.1.0-alpha.1", fixtureDate, "", entries, changelog.Options{})
 	changelogFile := changelog.Prepend("", rendered)
 
 	got, ok := changelog.HeadingVersion(changelogFile)

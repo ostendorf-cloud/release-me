@@ -307,6 +307,19 @@ func (f *Forge) CompareURL(owner, repo, base, head string) string {
 	return fmt.Sprintf("%s/%s/%s/compare/%s...%s", webURL(f.client.BaseURL()), owner, repo, base, head)
 }
 
+// CommitURL implements forge.Forge: "<web URL>/<owner>/<repo>/commit/<sha>",
+// on the same web host CompareURL links.
+func (f *Forge) CommitURL(owner, repo, sha string) string {
+	return fmt.Sprintf("%s/%s/%s/commit/%s", webURL(f.client.BaseURL()), owner, repo, sha)
+}
+
+// IssueURL implements forge.Forge: "<web URL>/<owner>/<repo>/issues/<number>",
+// on the same web host CompareURL links. GitHub redirects it to the pull
+// request when number is one.
+func (f *Forge) IssueURL(owner, repo string, number int) string {
+	return fmt.Sprintf("%s/%s/%s/issues/%d", webURL(f.client.BaseURL()), owner, repo, number)
+}
+
 // webURL derives the web address a GitHub instance serves its pages on
 // from the address its REST API answers on: a GitHub Enterprise Server's
 // "https://<host>/api/v3/" serves its pages on "https://<host>", and an

@@ -143,6 +143,8 @@ files:
 | `initial-version` | Version used when no tag exists yet. | `0.1.0` | No |
 | `bump-minor-pre-major` | Turns a major bump into a minor one below `1.0.0`. | `false` | No |
 | `hidden-types` | Entry types hidden from the changelog. | `chore, docs, ci, style, refactor, test, build, other` | No |
+| `changelog-commit-links` | Links each changelog entry's commit. | `false` | No |
+| `changelog-issue-references` | Links the issues each changelog entry closes. | `false` | No |
 | `fallback-type` | Type assigned to text that does not parse as a conventional commit. | `other` | No |
 | `token-env` | Environment variable holding the GitHub token. | `GITHUB_TOKEN` | No |
 | `changelog` | Changelog file path. | `CHANGELOG.md` | No |

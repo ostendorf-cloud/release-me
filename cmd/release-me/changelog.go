@@ -60,7 +60,7 @@ func runChangelog(args []string, stdout, stderr io.Writer) int {
 			}
 			comp, rel := r.comp, r.rel
 			link := compareURL(f, owner, repoName, rel.fromTag, comp.TagPrefix+rel.version.Version)
-			printBlock(stdout, comp.Name, multi, changelog.Render(rel.version.Version, time.Now(), link, rel.entries, rel.hiddenTypes))
+			printBlock(stdout, comp.Name, multi, changelog.Render(rel.version.Version, time.Now(), link, rel.entries, rel.options))
 		}
 		return 0
 	}
@@ -80,7 +80,7 @@ func runChangelog(args []string, stdout, stderr io.Writer) int {
 			continue
 		}
 		link := compareURL(f, owner, repoName, rel.fromTag, comp.TagPrefix+rel.version.Version)
-		printBlock(stdout, comp.Name, multi, changelog.Render(rel.version.Version, time.Now(), link, rel.entries, rel.hiddenTypes))
+		printBlock(stdout, comp.Name, multi, changelog.Render(rel.version.Version, time.Now(), link, rel.entries, rel.options))
 	}
 	return 0
 }

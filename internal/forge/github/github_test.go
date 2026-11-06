@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
 	gogithub "github.com/google/go-github/v93/github"
@@ -819,7 +820,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestCompareURLLinksTheWebHostOfTheAPIBaseURL(t *testing.T) {
+func TestWebLinksUseTheWebHostOfTheAPIBaseURL(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
@@ -854,6 +855,14 @@ func TestCompareURLLinksTheWebHostOfTheAPIBaseURL(t *testing.T) {
 			}
 			if got := f.CompareURL("ostendorf-cloud", "duxt", "duxt@v0.8.1", "duxt@v0.9.0"); got != tc.want {
 				t.Fatalf("CompareURL() = %q, want %q", got, tc.want)
+			}
+			// CommitURL and IssueURL link the same web host.
+			host := strings.TrimSuffix(tc.want, "/ostendorf-cloud/duxt/compare/duxt@v0.8.1...duxt@v0.9.0")
+			if got, want := f.CommitURL("ostendorf-cloud", "duxt", "8fa6c1b"), host+"/ostendorf-cloud/duxt/commit/8fa6c1b"; got != want {
+				t.Fatalf("CommitURL() = %q, want %q", got, want)
+			}
+			if got, want := f.IssueURL("ostendorf-cloud", "duxt", 73), host+"/ostendorf-cloud/duxt/issues/73"; got != want {
+				t.Fatalf("IssueURL() = %q, want %q", got, want)
 			}
 		})
 	}

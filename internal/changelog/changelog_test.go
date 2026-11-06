@@ -135,7 +135,7 @@ func TestRender(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := changelog.Render(tc.version, fixtureDate, tc.compareURL, tc.entries, tc.hiddenTypes)
+			got := changelog.Render(tc.version, fixtureDate, tc.compareURL, tc.entries, changelog.Options{HiddenTypes: tc.hiddenTypes})
 			if got != tc.want {
 				t.Fatalf("Render() =\n%s\nwant\n%s", got, tc.want)
 			}
