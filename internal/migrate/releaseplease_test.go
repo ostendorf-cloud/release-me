@@ -342,6 +342,61 @@ func TestFromReleasePleaseFindsTheExpectedTagForAManifestKeyWrittenWithDotSlash(
 	}
 }
 
+func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
+	t.Parallel()
+	includeV := func(c config.ResolvedComponent) bool { return c.IncludeVInReleaseName }
+	cases := []struct {
+		name       string
+		configJSON string
+		wantYAML   string
+		get        func(config.ResolvedComponent) bool
+		want       []bool
+	}{
+		{
+			name: "writes include-v-in-release-name once when every package drops the v",
+			configJSON: `{"include-v-in-release-name": false, "packages": {
+			  "api": {"component": "api", "release-type": "go"}, "web": {"component": "web", "release-type": "go"}}}`,
+			wantYAML: "\ninclude-v-in-release-name: false\ncomponents:\n",
+			get:      includeV, want: []bool{false, false},
+		},
+		{
+			name: "writes include-v-in-release-name on the one package that drops the v",
+			configJSON: `{"packages": {
+			  "api": {"component": "api", "release-type": "go", "include-v-in-release-name": false},
+			  "web": {"component": "web", "release-type": "go"}}}`,
+			wantYAML: "    tag-prefix: api-v\n    include-v-in-release-name: false\n",
+			get:      includeV, want: []bool{false, true},
+		},
+		{
+			name:       "leaves out include-v-in-release-name at release-me's default",
+			configJSON: `{"include-v-in-release-name": true, "packages": {".": {"release-type": "go"}}}`,
+			get:        includeV, want: []bool{true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			if tc.wantYAML != "" && !strings.Contains(string(got.YAML), tc.wantYAML) {
+				t.Fatalf("YAML =\n%s\nwant it to contain\n%s", got.YAML, tc.wantYAML)
+			}
+			if len(got.Warnings) != 0 {
+				t.Fatalf("Warnings = %q, want none", got.Warnings)
+			}
+			var values []bool
+			for _, c := range load(t, got.YAML).Resolve() {
+				values = append(values, tc.get(c))
+			}
+			if !slices.Equal(values, tc.want) {
+				t.Fatalf("resolved per component = %v, want %v", values, tc.want)
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	t.Parallel()
 	configJSON := `{

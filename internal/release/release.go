@@ -349,10 +349,7 @@ func releaseShared(
 			}
 		}
 		tag := comp.TagPrefix + versionStr
-		name := tag
-		if comp.Multi {
-			name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
-		}
+		name := comp.releaseName(versionStr)
 
 		alreadyTagged := false
 		if err := f.CreateTag(ctx, owner, repoName, tag, sha); err != nil {
@@ -419,7 +416,8 @@ func releaseShared(
 // declares more than one component. Multi false, the implicit "main"
 // component a repository without "components" carries, keeps today's bare
 // tag prefix and release name instead of the generic "<name>/v" prefix and
-// "<name> vX.Y.Z" release name a configured component carries.
+// "<name> vX.Y.Z" release name a configured component carries. Both
+// names drop the "v" under OmitVInReleaseName.
 type Component struct {
 	Name      string
 	Branch    string
@@ -429,6 +427,28 @@ type Component struct {
 	// release moves the major tag, TagPrefix plus the released major
 	// number, to the release commit. A pre-release never moves it.
 	MajorTag bool
+	// OmitVInReleaseName is comp's resolved "include-v-in-release-name"
+	// key turned off: the release is named "X.Y.Z", or "<name> X.Y.Z",
+	// without the "v". False, the zero value, keeps the "v".
+	OmitVInReleaseName bool
+}
+
+// releaseName returns the name of comp's release at versionStr:
+// the tag itself for the implicit "main" component,
+// "<name> vX.Y.Z" for a configured one, each without the "v" under
+// OmitVInReleaseName.
+func (comp Component) releaseName(versionStr string) string {
+	switch {
+	case comp.Multi && comp.OmitVInReleaseName:
+		return fmt.Sprintf("%s %s", comp.Name, versionStr)
+	case comp.Multi:
+		return fmt.Sprintf("%s v%s", comp.Name, versionStr)
+	case comp.OmitVInReleaseName:
+		// The implicit main component always has tag prefix "v".
+		return versionStr
+	default:
+		return comp.TagPrefix + versionStr
+	}
 }
 
 // Labels names the labels Run reads and writes: Pending and Tagged on
@@ -567,13 +587,7 @@ func Run(
 			if !ok {
 				return nil, fmt.Errorf("release: component %s: pull request #%d: version %q does not parse", comp.Name, pr.Number, versionStr)
 			}
-			tag := comp.TagPrefix + versionStr
-			name := tag
-			if comp.Multi {
-				name = fmt.Sprintf("%s v%s", comp.Name, versionStr)
-			}
-
-			result, err := releaseOne(ctx, f, owner, repoName, comp.Name, comp.TagPrefix, pr, tag, name, ver, labels, draftUntilAssetsAttach, dryRun, comp.MajorTag)
+			result, err := releaseOne(ctx, f, owner, repoName, comp, pr, ver, labels, draftUntilAssetsAttach, dryRun)
 			if err != nil {
 				return nil, err
 			}
@@ -636,14 +650,17 @@ func resumeOne(
 	}, true, nil
 }
 
-// releaseOne tags and releases pr, swapping its label, for the component
-// componentName names. draftUntilAssetsAttach decides whether
-// CreateRelease drafts the release or publishes it immediately; see Run.
+// releaseOne tags and releases pr, swapping its label, for comp at ver.
+// draftUntilAssetsAttach decides whether CreateRelease drafts the release
+// or publishes it immediately; see Run.
 func releaseOne(
-	ctx context.Context, f forge.Forge, owner, repoName, componentName, tagPrefix string,
-	pr forge.PullRequest, tag, releaseName string, ver version.Semver, labels Labels, draftUntilAssetsAttach, dryRun, majorTagEnabled bool,
+	ctx context.Context, f forge.Forge, owner, repoName string, comp Component,
+	pr forge.PullRequest, ver version.Semver, labels Labels, draftUntilAssetsAttach, dryRun bool,
 ) (Result, error) {
+	componentName, tagPrefix, majorTagEnabled := comp.Name, comp.TagPrefix, comp.MajorTag
 	versionStr := ver.String()
+	tag := tagPrefix + versionStr
+	releaseName := comp.releaseName(versionStr)
 	if dryRun {
 		result := Result{
 			PullRequestNumber: pr.Number, Name: componentName, Version: versionStr, Tag: tag,

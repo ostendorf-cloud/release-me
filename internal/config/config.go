@@ -4,7 +4,8 @@
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
 // changelog, changelog-source, labels, author, major-tag, versioning,
-// draft-until-assets-attach, comment-mention and components.
+// draft-until-assets-attach, include-v-in-release-name, comment-mention
+// and components.
 package config
 
 import (
@@ -267,6 +268,13 @@ type Config struct {
 	// applies to the whole repository, there is no per-component
 	// override. See docs/adr/0001-draft-releases-until-assets-attach.md.
 	DraftUntilAssetsAttach bool
+	// IncludeVInReleaseName is the top-level "include-v-in-release-name"
+	// key, default true: the GitHub release is named "vX.Y.Z", or
+	// "<name> vX.Y.Z" for a configured component. False drops the "v",
+	// "X.Y.Z" and "<name> X.Y.Z". The tag keeps its prefix either way. A
+	// component overrides it through its own "include-v-in-release-name"
+	// key.
+	IncludeVInReleaseName bool
 	// CommentMention is the top-level "comment-mention" key: the mention
 	// prefix a write-access commenter's "release-as" or "release-notes"
 	// command on the release pull request must start with, default
@@ -280,8 +288,9 @@ type Config struct {
 
 // Component is one entry of the "components" key: a name mapped to a path
 // and optional overrides of the top-level initial-version,
-// bump-minor-pre-major, hidden-types, files, major-tag and
-// changelog-source, plus its own tag-prefix and changelog path. A nil
+// bump-minor-pre-major, hidden-types, files, major-tag, changelog-source
+// and include-v-in-release-name, plus its own tag-prefix and changelog
+// path. A nil
 // field was left out of release-me.yaml and falls back to the top-level
 // value, the same left-out-versus-zero-value distinction Load applies to
 // the top level itself.
@@ -294,6 +303,9 @@ type Component struct {
 	Files             *[]File
 	MajorTag          *bool
 	ChangelogSource   *string
+	// IncludeVInReleaseName is the component's
+	// "include-v-in-release-name" key.
+	IncludeVInReleaseName *bool
 	// TagPrefix is the component's "tag-prefix" key, nil when it was left
 	// out and the component keeps the derived "<name>/v".
 	TagPrefix *string
@@ -317,7 +329,8 @@ type ResolvedComponent struct {
 	// is false for the single implicit "main" component, which keeps
 	// today's tag prefix "v" and release name instead of the generic
 	// "<name>/v" prefix and "<name> vX.Y.Z" release name a configured
-	// component carries.
+	// component carries, with the "v" dropped when
+	// include-v-in-release-name is false.
 	Multi             bool
 	InitialVersion    string
 	BumpMinorPreMajor bool
@@ -327,6 +340,9 @@ type ResolvedComponent struct {
 	// ChangelogSource is one of the ChangelogSource* constants: which
 	// commits become this component's changelog entries.
 	ChangelogSource string
+	// IncludeVInReleaseName is true when this component's release name
+	// carries the "v" before the version.
+	IncludeVInReleaseName bool
 }
 
 // Resolve returns the components a command should loop over, in
@@ -337,17 +353,18 @@ type ResolvedComponent struct {
 func (cfg Config) Resolve() []ResolvedComponent {
 	if len(cfg.Components) == 0 {
 		return []ResolvedComponent{{
-			Name:              "main",
-			Path:              ".",
-			TagPrefix:         "v",
-			Branch:            "release-me/main",
-			ChangelogPath:     cfg.ChangelogPath,
-			InitialVersion:    cfg.InitialVersion,
-			BumpMinorPreMajor: cfg.BumpMinorPreMajor,
-			HiddenTypes:       cfg.HiddenTypes,
-			Files:             cfg.Files,
-			MajorTag:          cfg.MajorTag,
-			ChangelogSource:   cfg.ChangelogSource,
+			Name:                  "main",
+			Path:                  ".",
+			TagPrefix:             "v",
+			Branch:                "release-me/main",
+			ChangelogPath:         cfg.ChangelogPath,
+			InitialVersion:        cfg.InitialVersion,
+			BumpMinorPreMajor:     cfg.BumpMinorPreMajor,
+			HiddenTypes:           cfg.HiddenTypes,
+			Files:                 cfg.Files,
+			MajorTag:              cfg.MajorTag,
+			ChangelogSource:       cfg.ChangelogSource,
+			IncludeVInReleaseName: cfg.IncludeVInReleaseName,
 		}}
 	}
 
@@ -364,18 +381,19 @@ func (cfg Config) Resolve() []ResolvedComponent {
 	out := make([]ResolvedComponent, 0, len(cfg.Components))
 	for _, c := range cfg.Components {
 		rc := ResolvedComponent{
-			Name:              c.Name,
-			Path:              c.Path,
-			TagPrefix:         c.tagPrefix(),
-			Branch:            branch(c.Name),
-			ChangelogPath:     c.changelogPath(),
-			Multi:             true,
-			InitialVersion:    cfg.InitialVersion,
-			BumpMinorPreMajor: cfg.BumpMinorPreMajor,
-			HiddenTypes:       cfg.HiddenTypes,
-			Files:             cfg.Files,
-			MajorTag:          cfg.MajorTag,
-			ChangelogSource:   cfg.ChangelogSource,
+			Name:                  c.Name,
+			Path:                  c.Path,
+			TagPrefix:             c.tagPrefix(),
+			Branch:                branch(c.Name),
+			ChangelogPath:         c.changelogPath(),
+			Multi:                 true,
+			InitialVersion:        cfg.InitialVersion,
+			BumpMinorPreMajor:     cfg.BumpMinorPreMajor,
+			HiddenTypes:           cfg.HiddenTypes,
+			Files:                 cfg.Files,
+			MajorTag:              cfg.MajorTag,
+			ChangelogSource:       cfg.ChangelogSource,
+			IncludeVInReleaseName: cfg.IncludeVInReleaseName,
 		}
 		if c.InitialVersion != nil {
 			rc.InitialVersion = *c.InitialVersion
@@ -394,6 +412,9 @@ func (cfg Config) Resolve() []ResolvedComponent {
 		}
 		if c.ChangelogSource != nil {
 			rc.ChangelogSource = *c.ChangelogSource
+		}
+		if c.IncludeVInReleaseName != nil {
+			rc.IncludeVInReleaseName = *c.IncludeVInReleaseName
 		}
 		out = append(out, rc)
 	}
@@ -470,6 +491,7 @@ type raw struct {
 	ReleasePullRequestLayout *string    `yaml:"release-pull-request-layout"`
 	ReleasePullRequestGuide  *bool      `yaml:"release-pull-request-guide"`
 	DraftUntilAssetsAttach   *bool      `yaml:"draft-until-assets-attach"`
+	IncludeVInReleaseName    *bool      `yaml:"include-v-in-release-name"`
 	CommentMention           *string    `yaml:"comment-mention"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
@@ -482,15 +504,16 @@ type raw struct {
 // rawComponent mirrors Component with pointer fields, the yaml shape of one
 // "components" entry.
 type rawComponent struct {
-	Path              *string    `yaml:"path"`
-	InitialVersion    *string    `yaml:"initial-version"`
-	BumpMinorPreMajor *bool      `yaml:"bump-minor-pre-major"`
-	HiddenTypes       *[]string  `yaml:"hidden-types"`
-	Files             *[]rawFile `yaml:"files"`
-	MajorTag          *bool      `yaml:"major-tag"`
-	ChangelogSource   *string    `yaml:"changelog-source"`
-	TagPrefix         *string    `yaml:"tag-prefix"`
-	Changelog         *string    `yaml:"changelog"`
+	Path                  *string    `yaml:"path"`
+	InitialVersion        *string    `yaml:"initial-version"`
+	BumpMinorPreMajor     *bool      `yaml:"bump-minor-pre-major"`
+	HiddenTypes           *[]string  `yaml:"hidden-types"`
+	Files                 *[]rawFile `yaml:"files"`
+	MajorTag              *bool      `yaml:"major-tag"`
+	ChangelogSource       *string    `yaml:"changelog-source"`
+	IncludeVInReleaseName *bool      `yaml:"include-v-in-release-name"`
+	TagPrefix             *string    `yaml:"tag-prefix"`
+	Changelog             *string    `yaml:"changelog"`
 }
 
 // Default is the configuration applied when release-me.yaml is absent.
@@ -512,6 +535,7 @@ func Default() Config {
 		ReleasePullRequestLayout: DefaultReleasePullRequestLayout,
 		ReleasePullRequestGuide:  true,
 		CommentMention:           DefaultCommentMention,
+		IncludeVInReleaseName:    true,
 	}
 }
 
@@ -671,6 +695,9 @@ func Load(path string) (cfg Config, err error) {
 	if r.DraftUntilAssetsAttach != nil {
 		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach
 	}
+	if r.IncludeVInReleaseName != nil {
+		cfg.IncludeVInReleaseName = *r.IncludeVInReleaseName
+	}
 	if r.CommentMention != nil {
 		if *r.CommentMention == "" {
 			return Config{}, fmt.Errorf("config: parse %s: comment-mention is empty", path)
@@ -780,6 +807,7 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 			Name: name, Path: *rc.Path, InitialVersion: rc.InitialVersion,
 			BumpMinorPreMajor: rc.BumpMinorPreMajor, HiddenTypes: rc.HiddenTypes, MajorTag: rc.MajorTag,
 			ChangelogSource: rc.ChangelogSource, TagPrefix: rc.TagPrefix, Changelog: rc.Changelog,
+			IncludeVInReleaseName: rc.IncludeVInReleaseName,
 		}
 		if rc.Files != nil {
 			files, err := decodeFiles(path, *rc.Files)
