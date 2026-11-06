@@ -28,7 +28,7 @@ const (
 type manager struct {
 	file  string
 	parse func(content []byte) (Package, error)
-	set   func(content, name, version string) (string, error)
+	set   func(content, name, version string, eligible func(string) bool) (string, error)
 	// linksLocal reports whether a dependency range resolves to the local
 	// package at localVersion when Options.LocalRangesOnly is set; nil for
 	// a manager that always links a local dependency.
@@ -38,8 +38,8 @@ type manager struct {
 // managers maps every package manager "workspaces" accepts to its
 // manifest.
 var managers = map[string]manager{
-	Node:  {file: "package.json", parse: parseNode, set: setNodeDependency, linksLocal: nodeLinksLocal},
-	Cargo: {file: "Cargo.toml", parse: parseCargo, set: setCargoDependency},
+	Node:  {file: "package.json", parse: parseNode, set: setNodeDependencyWhere, linksLocal: nodeLinksLocal},
+	Cargo: {file: "Cargo.toml", parse: parseCargo, set: setCargoDependencyWhere},
 }
 
 // Options tunes which dependencies link two members.
@@ -103,7 +103,7 @@ func SetDependency(manager, content, name, version string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("workspace: unknown package manager %q", manager)
 	}
-	return m.set(content, name, version)
+	return m.set(content, name, version, nil)
 }
 
 // Member is one component's manifest of one package manager.
@@ -199,8 +199,13 @@ const semverPattern = `\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`
 // SetLocalDependency rewrites the declarations of name that link to the
 // original localVersion under opts, leaving registry declarations alone.
 func SetLocalDependency(manager, content, name, version, localVersion string, opts Options) (string, error) {
-	if manager == Node && opts.LocalRangesOnly {
-		return setNodeDependencyWhere(content, name, version, func(rng string) bool { return nodeLinksLocal(rng, localVersion) })
+	m, ok := managers[manager]
+	if !ok {
+		return "", fmt.Errorf("workspace: unknown package manager %q", manager)
 	}
-	return SetDependency(manager, content, name, version)
+	var eligible func(string) bool
+	if opts.LocalRangesOnly && m.linksLocal != nil {
+		eligible = func(rng string) bool { return m.linksLocal(rng, localVersion) }
+	}
+	return m.set(content, name, version, eligible)
 }

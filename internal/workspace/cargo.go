@@ -209,6 +209,13 @@ func moveCargoRequirement(req, version string) (string, bool) {
 // table, capturing the text up to the value and the value itself.
 var cargoVersionField = regexp.MustCompile(`(\bversion\s*=\s*)"([^"]*)"`)
 
+// setCargoDependencyWhere adapts setCargoDependency to the manager.set
+// signature: Cargo has no linksLocal, so eligible is always nil and every
+// declaration moves.
+func setCargoDependencyWhere(content, name, version string, _ func(string) bool) (string, error) {
+	return setCargoDependency(content, name, version)
+}
+
 // setCargoDependency moves every declaration of the crate name to
 // version: a plain requirement string, the version of an inline table, or
 // the version line of a "[dependencies.<name>]" table. A declaration
