@@ -342,6 +342,67 @@ func TestFromReleasePleaseFindsTheExpectedTagForAManifestKeyWrittenWithDotSlash(
 	}
 }
 
+func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
+	t.Parallel()
+	skip := func(c config.ResolvedComponent) bool { return c.SkipGitHubRelease }
+	cases := []struct {
+		name       string
+		configJSON string
+		wantYAML   string
+		get        func(config.ResolvedComponent) bool
+		want       []bool
+	}{
+		{
+			name:       "writes skip-github-release once for a root package",
+			configJSON: `{"skip-github-release": true, "packages": {".": {"release-type": "go"}}}`,
+			wantYAML:   "\nskip-github-release: true\n",
+			get:        skip, want: []bool{true},
+		},
+		{
+			name: "writes skip-github-release once at the top level when every package carries it",
+			configJSON: `{"skip-github-release": true, "packages": {
+			  "api": {"component": "api", "release-type": "go"}, "web": {"component": "web", "release-type": "go"}}}`,
+			wantYAML: "\nskip-github-release: true\ncomponents:\n",
+			get:      skip, want: []bool{true, true},
+		},
+		{
+			name: "writes skip-github-release on the one package that carries it",
+			configJSON: `{"packages": {
+			  "api": {"component": "api", "release-type": "go", "skip-github-release": true},
+			  "web": {"component": "web", "release-type": "go"}}}`,
+			wantYAML: "    path: api\n    tag-prefix: api-v\n    skip-github-release: true\n",
+			get:      skip, want: []bool{true, false},
+		},
+		{
+			name:       "leaves out skip-github-release at release-me's default",
+			configJSON: `{"skip-github-release": false, "packages": {".": {"release-type": "go"}}}`,
+			get:        skip, want: []bool{false},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			if tc.wantYAML != "" && !strings.Contains(string(got.YAML), tc.wantYAML) {
+				t.Fatalf("YAML =\n%s\nwant it to contain\n%s", got.YAML, tc.wantYAML)
+			}
+			if len(got.Warnings) != 0 {
+				t.Fatalf("Warnings = %q, want none", got.Warnings)
+			}
+			var values []bool
+			for _, c := range load(t, got.YAML).Resolve() {
+				values = append(values, tc.get(c))
+			}
+			if !slices.Equal(values, tc.want) {
+				t.Fatalf("resolved per component = %v, want %v", values, tc.want)
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	t.Parallel()
 	configJSON := `{

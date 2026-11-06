@@ -56,10 +56,34 @@ type rpPackage struct {
 
 // packageKeys are the release-please settings that may appear on a package
 // and as top-level defaults, and that this translation carries over.
-var packageKeys = []string{
+var packageKeys = append([]string{
 	"release-type", "package-name", "component", "include-component-in-tag", "include-v-in-tag",
 	"tag-separator", "changelog-path", "bump-minor-pre-major", "bump-patch-for-minor-pre-major",
 	"initial-version", "extra-files",
+}, releaseFlagKeys()...)
+
+// releaseFlag is a boolean release-please package setting release-me reads
+// under the same key, top level and per component, and release-me's own
+// default for it: a value equal to the default is left out of
+// release-me.yaml.
+type releaseFlag struct {
+	key string
+	def bool
+}
+
+// releaseFlags are the release-flag settings this translation carries
+// over, in the order release-me.yaml lists them.
+var releaseFlags = []releaseFlag{
+	{key: "skip-github-release", def: false},
+}
+
+// releaseFlagKeys returns the key of every entry in releaseFlags.
+func releaseFlagKeys() []string {
+	keys := make([]string, 0, len(releaseFlags))
+	for _, f := range releaseFlags {
+		keys = append(keys, f.key)
+	}
+	return keys
 }
 
 // topLevelKeys are the release-please settings that only exist at the top
@@ -228,6 +252,9 @@ type component struct {
 	bumpMinorPreMajor bool
 	initialVersion    string
 	files             []file
+	// flags holds every releaseFlags key's value for this package: the
+	// one release-please was given, else release-me's default.
+	flags map[string]bool
 }
 
 // file is one release-me "files" entry.
@@ -323,6 +350,16 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		changelog:         repoPath(p.path, changelogPath),
 		bumpMinorPreMajor: bumpMinor,
 		initialVersion:    initialVersion,
+		flags:             make(map[string]bool, len(releaseFlags)),
+	}
+	for _, flag := range releaseFlags {
+		value := flag.def
+		if raw, ok := p.settings[flag.key]; ok {
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return component{}, fmt.Errorf("migrate: package %s: %s: %w", p.path, flag.key, err)
+			}
+		}
+		c.flags[flag.key] = value
 	}
 
 	// A version file the release type implies is carried over only where it
@@ -540,13 +577,24 @@ func render(components []component, versioning string, sharedPR bool, pending, t
 	if shared {
 		add(doc, "bump-minor-pre-major", boolean(true))
 	}
+	// A release flag every component carries with the same value, other
+	// than release-me's default, is written once at the top level too.
+	topFlags := make(map[string]bool, len(releaseFlags))
+	for _, flag := range releaseFlags {
+		value := components[0].flags[flag.key]
+		same := slices.IndexFunc(components, func(c component) bool { return c.flags[flag.key] != value }) == -1
+		if same && value != flag.def {
+			add(doc, flag.key, boolean(value))
+			topFlags[flag.key] = true
+		}
+	}
 
 	if len(components) == 1 && components[0].path == "." && components[0].tagPrefix == "v" {
 		c := components[0]
 		if c.changelog != "CHANGELOG.md" {
 			add(doc, "changelog", scalar(c.changelog))
 		}
-		addSettings(doc, c, shared, add)
+		addSettings(doc, c, shared, topFlags, add)
 	} else {
 		comps := &yaml.Node{Kind: yaml.MappingNode}
 		for _, c := range components {
@@ -558,7 +606,7 @@ func render(components []component, versioning string, sharedPR bool, pending, t
 			if c.changelog != stdpath.Join(c.path, "CHANGELOG.md") {
 				add(m, "changelog", scalar(c.changelog))
 			}
-			addSettings(m, c, shared, add)
+			addSettings(m, c, shared, topFlags, add)
 			add(comps, c.name, m)
 		}
 		add(doc, "components", comps)
@@ -578,14 +626,23 @@ func render(components []component, versioning string, sharedPR bool, pending, t
 }
 
 // addSettings writes the settings release-me reads per component or at the
-// top level alike: initial-version, bump-minor-pre-major and files.
-// bump-minor-pre-major is left out where the top level already carries it.
-func addSettings(m *yaml.Node, c component, shared bool, add func(*yaml.Node, string, *yaml.Node)) {
+// top level alike: initial-version, bump-minor-pre-major, the release
+// flags and files. bump-minor-pre-major and a release flag are left out
+// where the top level already carries them, shared and topFlags, and a
+// release flag also where it is release-me's default.
+func addSettings(
+	m *yaml.Node, c component, shared bool, topFlags map[string]bool, add func(*yaml.Node, string, *yaml.Node),
+) {
 	if c.initialVersion != "" {
 		add(m, "initial-version", scalar(c.initialVersion))
 	}
 	if c.bumpMinorPreMajor && !shared {
 		add(m, "bump-minor-pre-major", boolean(true))
+	}
+	for _, flag := range releaseFlags {
+		if value := c.flags[flag.key]; !topFlags[flag.key] && value != flag.def {
+			add(m, flag.key, boolean(value))
+		}
 	}
 	if len(c.files) > 0 {
 		list := &yaml.Node{Kind: yaml.SequenceNode}

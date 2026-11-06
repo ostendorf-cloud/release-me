@@ -61,7 +61,8 @@ outputs:
       immediately, no action required. True drafts it instead, since GitHub's immutable
       releases setting, when on, rejects a change to a published release, so release-me never
       publishes one itself; attach any assets and publish each tag yourself, for example with
-      "gh release upload" and "gh release edit --draft=false".
+      "gh release upload" and "gh release edit --draft=false". A component with
+      skip-github-release is listed too, its tag without a GitHub release.
     value: ${{ steps.release-me.outputs.tags }}
   released:
     description: >-

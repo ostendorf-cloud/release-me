@@ -87,9 +87,9 @@ func recordPR(ctx context.Context, dryRun bool, pr forge.PullRequest, branch str
 // <tag>" shape run-release-me.sh greps for, to fill the composite action's
 // "tags" output, and records r for the other outputs when ctx carries a
 // *runOutputs: every tag this run tagged, including one already tagged by
-// an earlier, interrupted run, since its release still needs assets
-// attached and publishing. Does nothing in dry-run: CreateRelease was
-// never called, so there is no release yet for anything to act on.
+// an earlier, interrupted run. A later step can attach assets and publish
+// a draft, or create the release when skip-github-release is set. Does
+// nothing in dry-run: no tag or release was created.
 func reportReleased(ctx context.Context, w io.Writer, dryRun bool, r tagrelease.Result) {
 	if dryRun {
 		return

@@ -157,6 +157,7 @@ files:
 | `release-pull-request-layout` | How a release pull request with several components lays out each one: `headings`, `details` or `compact`. | `headings` | No |
 | `release-pull-request-guide` | Whether every release pull request body opens with the collapsed "How this release works" guide. | `true` | No |
 | `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
+| `skip-github-release` | Tags a merged release pull request without creating a GitHub release. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
 | `components` | Maps a name to a path and optional per-component overrides. | none, one implicit `main` component | No |
 

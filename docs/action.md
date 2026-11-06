@@ -38,7 +38,9 @@ happened even when the step fails, for a later step with `if: always()`: a `run`
 phase fails still lists in `prs` the pull request its `pr` phase opened.
 
 - `tags`: the newline-separated tags this run tagged a release for, one per released
-  component, empty when nothing was released or `dry-run` was set.
+  component, empty when nothing was released or `dry-run` was set. A component with
+  [`skip-github-release`](configuration.md#skip-github-release) is listed too, its tag without
+  a GitHub release.
 - `released`: `true` when this run tagged a release for any component, `false` otherwise and
   always in dry-run.
 - `components`: a JSON object keyed by every component this run handled, every configured

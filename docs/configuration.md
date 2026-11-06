@@ -223,6 +223,20 @@ See [release](commands.md#release) for what `true` changes, and
 setting needs: `publish.yaml`'s own webhook-triggered asset step for `false`, `release.yaml`
 attaching and publishing the release itself for `true`.
 
+## `skip-github-release`
+
+Tags a merged release pull request without creating a GitHub release, default `false`, for a
+repository whose own workflow creates the release from the tag, such as a GoReleaser step that
+reads the action's `tags` output. Everything else still happens: the tag, the
+[major tag](#major-tag), the label swap from `pending` to `tagged`, the `released-tag` marker
+and every action output, so a later step knows which tag to release. With
+[`draft-until-assets-attach`](#draft-until-assets-attach) on, a component that skips its
+release has no draft to attach assets to or to resume. A component overrides it through its
+own `skip-github-release` key.
+
+Unlike release-please, release-me creates the tag even with this key on. After migrating,
+remove any external tagging step that release-please needed for `skip-github-release`.
+
 ## `comment-mention`
 
 The mention prefix a comment on the release pull request names to issue a `release-as` or
@@ -232,7 +246,8 @@ The mention prefix a comment on the release pull request names to issue a `relea
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
-`hidden-types`, `files`, `major-tag`, `changelog-source` and `changelog`. A key left out of a
+`hidden-types`, `files`, `major-tag`, `changelog-source`, `skip-github-release` and
+`changelog`. A key left out of a
 component falls back to the top-level setting above. A repository without `components` is one
 component named `main` at path `.`, tag prefix `v`, branch `release-me/main`, the default
 shape a repository with no configuration at all already has. A configured component gets tag

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -463,6 +464,59 @@ components:
 	}
 	if got[1].MajorTag {
 		t.Fatalf("frontend MajorTag = %v, want false from its own override", got[1].MajorTag)
+	}
+}
+
+// releaseKeysConfig carries two components, the second one overriding
+// every GitHub release key the top level sets.
+const releaseKeysConfig = `components:
+  api:
+    path: services/api
+  web:
+    path: web
+`
+
+func TestResolveAppliesTheGitHubReleaseKeysFromTheTopLevelAndPerComponentOverride(t *testing.T) {
+	t.Parallel()
+	skip := func(c config.ResolvedComponent) bool { return c.SkipGitHubRelease }
+	cases := []struct {
+		name    string
+		content string
+		get     func(config.ResolvedComponent) bool
+		want    []bool
+	}{
+		{name: "skip-github-release is off by default", get: skip, want: []bool{false}},
+		{
+			name: "skip-github-release applies to the implicit main component", content: "skip-github-release: true\n",
+			get: skip, want: []bool{true},
+		},
+		{
+			name:    "a component overrides the top-level skip-github-release",
+			content: "skip-github-release: true\n" + releaseKeysConfig + "    skip-github-release: false\n",
+			get:     skip, want: []bool{true, false},
+		},
+		{
+			name:    "a component turns skip-github-release on for itself alone",
+			content: releaseKeysConfig + "    skip-github-release: true\n",
+			get:     skip, want: []bool{false, true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg, err := config.Load(writeFile(t, tc.content))
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			resolved := cfg.Resolve()
+			got := make([]bool, 0, len(resolved))
+			for _, c := range resolved {
+				got = append(got, tc.get(c))
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("resolved per component = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
