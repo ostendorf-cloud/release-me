@@ -86,7 +86,11 @@ Everything else is derived:
   `version`, `Chart.yaml` with `helm`, `Cargo.toml` with `toml` and key `package.version`,
   `pyproject.toml` with `toml` and key `project.version`, or `tool.poetry.version` where the
   version sits under `[tool.poetry]` instead, a Go constant with `go` and the constant's name
-  as key.
+  as key. A language version file takes the updater named after it, no key: `python` for
+  `setup.py`, `setup.cfg` or an `__init__.py` holding `__version__`, `ruby` for a
+  `version.rb`, `elixir` for `mix.exs`, `ocaml` for an `.opam` file or `dune-project`, `r` for
+  `DESCRIPTION`, `bazel` for `MODULE.bazel`, `dart` for `pubspec.yaml`, `sfdx` for
+  `sfdx-project.json`.
 
 Done when every key the plan writes is either answered by the human or derived above.
 

@@ -167,9 +167,24 @@ release-me continues from the existing tags and changelogs. A single root packag
 `vX.Y.Z` tags becomes the implicit `main` component instead. It also carries over:
 
 - `bump-minor-pre-major` and `initial-version`;
-- the version file of a `node` (`package.json`) or `helm` (`Chart.yaml`) package where that
-  file exists, `node` being release-please's default type, and every `extra-files` entry of
-  type `json`, `yaml` or `toml` with a plain `$.a.b` jsonpath;
+- the version files of the package's `release-type`, `node` being release-please's default,
+  each where it exists. A file release-please bumps only where it holds a version is left out
+  silently otherwise; a missing main version file is warned about:
+  - `node`: `package.json`; `expo`: the same plus `app.json`'s `expo.version` and
+    `expo.ios.buildNumber`, with a warning for `expo.android.versionCode`, which release-please
+    computes from the Expo SDK version;
+  - `python`: `setup.cfg`, `setup.py`, `pyproject.toml`, and the `__init__.py` and
+    `version.py` of the project `pyproject.toml` names, at the package root or under `src/`;
+  - `ruby`: its `version-file`, default `lib/<name>/version.rb`, a `-` in the name nesting a
+    directory; `elixir`: `mix.exs`; `r`: `DESCRIPTION`, the changelog defaulting to `NEWS.md`;
+  - `ocaml`: the `.opam` and `.opam.locked` file named after the package, `dune-project` and
+    `esy.json`, with a warning that any other `.opam` file is not searched for;
+  - `bazel`: its `version-file`, default `MODULE.bazel`; `php`: `composer.json`, with a
+    warning for a `VERSION` file;
+  - `dart`: `pubspec.yaml`; `sfdx`: `sfdx-project.json`; `helm`: `Chart.yaml`;
+  - `terraform-module` and `krm-blueprint` searched the package for their files, which a
+    warning asks to mark with `release-me: version` and list instead;
+- every `extra-files` entry of type `json`, `yaml` or `toml` with a plain `$.a.b` jsonpath;
 - `label` and `release-label` as the `pending` and `tagged` labels, with the pre-release types
   turned off, since release-please has none;
 - a `linked-versions` plugin over every component as `versioning: locked`: both release every

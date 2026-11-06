@@ -92,6 +92,28 @@ fails `pr`, naming the path and the key.
 - `json`, `yaml` and `toml` replace the value at `key`, a dotted path of object keys, mapping
   keys or table-and-key, such as `tool.poetry.version`.
 
+- One updater per release-please release type whose version file none of the above fits, each
+  named after it and taking no `key`. Each bumps the first match only, and a file without one
+  is an error:
+  - `python`: the first `__version__ = "..."` or `version = ...` line, the shape of an
+    `__init__.py`, a `version.py`, `setup.py`'s `version="..."` keyword and `setup.cfg`'s bare
+    `version = 1.2.3` alike. A bare value must start with a digit, so `version=get_version()`
+    or `version = attr: pkg.__version__` is never taken for one. A `pyproject.toml` takes
+    `toml`.
+  - `ruby`: a `version.rb`'s `VERSION = "..."` constant, a trailing `.freeze` kept.
+  - `elixir`: a `mix.exs`'s `@version "..."` attribute, else its `version: "..."` keyword.
+  - `ocaml`: an `.opam` or `.opam.locked` file's top-level `version: "..."`, or a
+    `dune-project`'s `(version ...)` stanza.
+  - `r`: a `DESCRIPTION` file's `Version:` field, a development suffix such as `.9000`
+    included.
+  - `bazel`: the `version` attribute of a `MODULE.bazel`'s `module()` call, never a
+    `bazel_dep()`'s.
+  - `dart`: a `pubspec.yaml`'s top-level `version`. A numeric build number counts up by one,
+    `1.4.0+12` becoming `1.5.0+13`, as release-please bumps it.
+  - `sfdx`: the `versionNumber` of an `sfdx-project.json`'s default package directory, written
+    as the version followed by `.NEXT`. Other package directories and dependencies are left
+    alone.
+
 Every file entry is validated when release-me.yaml loads: an unknown `updater`, a `key`
 missing where the updater requires one, and a `key` given to an updater that takes none are
 all errors.
