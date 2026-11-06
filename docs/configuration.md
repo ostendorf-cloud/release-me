@@ -223,6 +223,18 @@ See [release](commands.md#release) for what `true` changes, and
 setting needs: `publish.yaml`'s own webhook-triggered asset step for `false`, `release.yaml`
 attaching and publishing the release itself for `true`.
 
+## `draft`
+
+Creates each GitHub release as a draft and leaves it one, default `false`, for a human to
+review and publish. The tag, the label swap, the `released-tag` marker and the action outputs
+still happen as for a published release, so a later step can attach assets to the draft. It
+differs from [`draft-until-assets-attach`](#draft-until-assets-attach) in one way: a draft
+left on purpose is never resumed, so a later run does not print its `released-tag` marker
+again while it waits for a human. With both on, the release drafts and resumes the way
+`draft-until-assets-attach` does. The asset workflow then publishes it automatically in the
+same run, so `draft` adds no human approval gate to that workflow. A component overrides it
+through its own `draft` key.
+
 ## `comment-mention`
 
 The mention prefix a comment on the release pull request names to issue a `release-as` or
@@ -232,9 +244,10 @@ The mention prefix a comment on the release pull request names to issue a `relea
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
-`hidden-types`, `files`, `major-tag`, `changelog-source` and `changelog`. A key left out of a
-component falls back to the top-level setting above. A repository without `components` is one
-component named `main` at path `.`, tag prefix `v`, branch `release-me/main`, the default
+`hidden-types`, `files`, `major-tag`, `changelog-source`, `draft` and `changelog`. A key left
+out of a component falls back to the top-level setting above. A repository without
+`components` is one component named `main` at path `.`, tag prefix `v`, branch
+`release-me/main`, the default
 shape a repository with no configuration at all already has. A configured component gets tag
 prefix `<name>/v`, branch `release-me/<name>`, or `release-me/main` when the release pull
 request is shared, changelog `<path>/CHANGELOG.md`, and a release title `<name> vX.Y.Z`. A

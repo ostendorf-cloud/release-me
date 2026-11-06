@@ -152,6 +152,9 @@ type Fake struct {
 	// concerned, and is reported as forge.ErrReleaseNotFound.
 	ReleaseDrafts map[string]bool
 
+	// IsReleaseDraftCalls records tags looked up, including missing releases.
+	IsReleaseDraftCalls []string
+
 	// NextNumber is the pull request number CreatePullRequest assigns next.
 	NextNumber int
 
@@ -317,6 +320,7 @@ func (f *Fake) CreateRelease(_ context.Context, owner, repo, tag, name, body str
 
 // IsReleaseDraft implements forge.Forge.
 func (f *Fake) IsReleaseDraft(_ context.Context, _, _, tag string) (bool, error) {
+	f.IsReleaseDraftCalls = append(f.IsReleaseDraftCalls, tag)
 	draft, ok := f.ReleaseDrafts[tag]
 	if !ok {
 		return false, forge.ErrReleaseNotFound

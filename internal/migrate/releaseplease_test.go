@@ -342,6 +342,67 @@ func TestFromReleasePleaseFindsTheExpectedTagForAManifestKeyWrittenWithDotSlash(
 	}
 }
 
+func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
+	t.Parallel()
+	draft := func(c config.ResolvedComponent) bool { return c.Draft }
+	cases := []struct {
+		name       string
+		configJSON string
+		wantYAML   string
+		get        func(config.ResolvedComponent) bool
+		want       []bool
+	}{
+		{
+			name:       "writes draft once for a root package",
+			configJSON: `{"draft": true, "packages": {".": {"release-type": "go"}}}`,
+			wantYAML:   "\ndraft: true\n",
+			get:        draft, want: []bool{true},
+		},
+		{
+			name: "writes draft on the one package that carries it",
+			configJSON: `{"packages": {
+			  "api": {"component": "api", "release-type": "go"},
+			  "web": {"component": "web", "release-type": "go", "draft": true}}}`,
+			wantYAML: "    path: web\n    tag-prefix: web-v\n    draft: true\n",
+			get:      draft, want: []bool{false, true},
+		},
+		{
+			name: "writes draft once at the top level when every package carries it",
+			configJSON: `{"draft": true, "packages": {
+			  "api": {"component": "api", "release-type": "go"}, "web": {"component": "web", "release-type": "go"}}}`,
+			wantYAML: "\ndraft: true\ncomponents:\n",
+			get:      draft, want: []bool{true, true},
+		},
+		{
+			name:       "leaves out draft at release-me's default",
+			configJSON: `{"draft": false, "packages": {".": {"release-type": "go"}}}`,
+			get:        draft, want: []bool{false},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			if tc.wantYAML != "" && !strings.Contains(string(got.YAML), tc.wantYAML) {
+				t.Fatalf("YAML =\n%s\nwant it to contain\n%s", got.YAML, tc.wantYAML)
+			}
+			if len(got.Warnings) != 0 {
+				t.Fatalf("Warnings = %q, want none", got.Warnings)
+			}
+			var values []bool
+			for _, c := range load(t, got.YAML).Resolve() {
+				values = append(values, tc.get(c))
+			}
+			if !slices.Equal(values, tc.want) {
+				t.Fatalf("resolved per component = %v, want %v", values, tc.want)
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	t.Parallel()
 	configJSON := `{
@@ -349,7 +410,7 @@ func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	  "pull-request-title-pattern": "chore: release ${version}",
 	  "plugins": ["node-workspace", {"type": "linked-versions", "groupName": "half", "components": ["a"]}],
 	  "packages": {
-	    "a": {"component": "a", "release-type": "python", "draft": true, "extra-files": [
+	    "a": {"component": "a", "release-type": "python", "draft-pull-request": true, "extra-files": [
 	      "src/version.py",
 	      {"type": "json", "path": "/manifest.json", "jsonpath": "$.app.version"},
 	      {"type": "xml", "path": "pom.xml", "xpath": "//version"}
@@ -373,7 +434,7 @@ func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 
 	for _, want := range []string{
 		"pull-request-title-pattern: no release-me equivalent, left out",
-		"package a: draft: no release-me equivalent, left out",
+		"package a: draft-pull-request: no release-me equivalent, left out",
 		"package a: release-type python: the files it bumps are not carried over, add them under files",
 		"package a: extra-files: src/version.py: release-please's version markers are not release-me's, " +
 			"mark the line with \"release-me: version\" and add it under files",

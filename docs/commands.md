@@ -125,6 +125,10 @@ publish step fail after an earlier run tagged and drafted it, so this reprints t
 `released-tag` marker for it, without creating anything again, letting the workflow's asset
 step retry. Off, the default, this never runs: a published release has nothing left to resume.
 
+With `draft: true`, the release starts a draft too, reported as `tagged and drafted <tag>`, but
+it is left for a human to publish: a later run never resumes it, the way it resumes one under
+`draft-until-assets-attach`. See [configuration](configuration.md#draft).
+
 With `major-tag: true`, every stable release additionally creates or force-moves the major
 tag, `vX` for the implicit `main` component or its tag prefix followed by `X` for a configured
 one, onto the same commit. A tag that does not exist yet is created; one that does is moved,
@@ -167,6 +171,8 @@ release-me continues from the existing tags and changelogs. A single root packag
 `vX.Y.Z` tags becomes the implicit `main` component instead. It also carries over:
 
 - `bump-minor-pre-major` and `initial-version`;
+- `draft`, at the top level when every package carries the same value, on the component
+  otherwise;
 - the version file of a `node` (`package.json`) or `helm` (`Chart.yaml`) package where that
   file exists, `node` being release-please's default type, and every `extra-files` entry of
   type `json`, `yaml` or `toml` with a plain `$.a.b` jsonpath;
