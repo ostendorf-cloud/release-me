@@ -122,10 +122,10 @@ func TestWorkspaceIgnoresSelfDependenciesAndReleasesCyclesOnce(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := workspace.Links(tc.members); !reflect.DeepEqual(got, tc.wantLinks) {
+			if got := workspace.Links(tc.members, workspace.Options{}); !reflect.DeepEqual(got, tc.wantLinks) {
 				t.Fatalf("Links() = %+v, want %+v", got, tc.wantLinks)
 			}
-			if got := workspace.Dependents(tc.members, tc.released); !reflect.DeepEqual(got, tc.wantDependents) {
+			if got := workspace.Dependents(tc.members, tc.released, workspace.Options{}); !reflect.DeepEqual(got, tc.wantDependents) {
 				t.Fatalf("Dependents(%q) = %q, want %q", tc.released, got, tc.wantDependents)
 			}
 		})
