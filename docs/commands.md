@@ -167,6 +167,8 @@ release-me continues from the existing tags and changelogs. A single root packag
 `vX.Y.Z` tags becomes the implicit `main` component instead. It also carries over:
 
 - `bump-minor-pre-major` and `initial-version`;
+- `versioning` as `versioning-strategy`, by name, with a warning for `service-pack` and
+  `dependency-manifest`, whose release-me form differs from release-please's Java one;
 - the version file of a `node` (`package.json`) or `helm` (`Chart.yaml`) package where that
   file exists, `node` being release-please's default type, and every `extra-files` entry of
   type `json`, `yaml` or `toml` with a plain `$.a.b` jsonpath;

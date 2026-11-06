@@ -14,13 +14,12 @@ import (
 func TestNextComputesTheReleasedVersion(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name              string
-		last              version.Semver
-		lastOK            bool
-		changes           []version.Change
-		initialVersion    string
-		bumpMinorPreMajor bool
-		want              version.Result
+		name    string
+		last    version.Semver
+		lastOK  bool
+		changes []version.Change
+		rules   version.Rules
+		want    version.Result
 	}{
 		{
 			name:    "bumps minor for a feature",
@@ -58,12 +57,12 @@ func TestNextComputesTheReleasedVersion(t *testing.T) {
 			want:    version.Result{Version: "2.0.0", Bump: version.BumpMajor, Reason: "breaking change"},
 		},
 		{
-			name:              "bumps minor for a breaking change below one pre major",
-			last:              version.Semver{Major: 0, Minor: 4, Patch: 1},
-			lastOK:            true,
-			changes:           []version.Change{{Type: "feat", Breaking: true}},
-			bumpMinorPreMajor: true,
-			want:              version.Result{Version: "0.5.0", Bump: version.BumpMinor, Reason: "breaking change, minor below 1.0.0"},
+			name:    "bumps minor for a breaking change below one pre major",
+			last:    version.Semver{Major: 0, Minor: 4, Patch: 1},
+			lastOK:  true,
+			changes: []version.Change{{Type: "feat", Breaking: true}},
+			rules:   version.Rules{BumpMinorPreMajor: true},
+			want:    version.Result{Version: "0.5.0", Bump: version.BumpMinor, Reason: "breaking change, minor below 1.0.0"},
 		},
 		{
 			name:    "keeps major for a breaking change below one without pre major",
@@ -73,6 +72,138 @@ func TestNextComputesTheReleasedVersion(t *testing.T) {
 			want:    version.Result{Version: "1.0.0", Bump: version.BumpMajor, Reason: "breaking change"},
 		},
 		{
+			name:    "bumps patch for a feature with always bump patch",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "feat"}},
+			rules:   version.Rules{Strategy: version.StrategyAlwaysBumpPatch},
+			want:    version.Result{Version: "1.2.4", Bump: version.BumpPatch, Reason: "feat, always-bump-patch"},
+		},
+		{
+			name:    "bumps patch for a breaking change with always bump patch",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "fix", Breaking: true}},
+			rules:   version.Rules{Strategy: version.StrategyAlwaysBumpPatch},
+			want:    version.Result{Version: "1.2.4", Bump: version.BumpPatch, Reason: "breaking change, always-bump-patch"},
+		},
+		{
+			name:    "bumps minor for a fix with always bump minor",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "fix"}},
+			rules:   version.Rules{Strategy: version.StrategyAlwaysBumpMinor},
+			want:    version.Result{Version: "1.3.0", Bump: version.BumpMinor, Reason: "fix, always-bump-minor"},
+		},
+		{
+			name:    "bumps major for a fix with always bump major",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "fix"}},
+			rules:   version.Rules{Strategy: version.StrategyAlwaysBumpMajor},
+			want:    version.Result{Version: "2.0.0", Bump: version.BumpMajor, Reason: "fix, always-bump-major"},
+		},
+		{
+			name:    "ignores the pre major rules with always bump major",
+			last:    version.Semver{Major: 0, Minor: 4, Patch: 1},
+			lastOK:  true,
+			changes: []version.Change{{Type: "feat", Breaking: true}},
+			rules:   version.Rules{Strategy: version.StrategyAlwaysBumpMajor, BumpMinorPreMajor: true},
+			want:    version.Result{Version: "1.0.0", Bump: version.BumpMajor, Reason: "breaking change, always-bump-major"},
+		},
+		{
+			name:    "keeps the last version for a service pack",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "feat", Breaking: true}},
+			rules:   version.Rules{Strategy: version.StrategyServicePack},
+			want:    version.Result{Version: "1.2.3", Bump: version.BumpServicePack, Reason: "breaking change, service-pack"},
+		},
+		{
+			name:    "uses the initial version for a first release with service pack",
+			changes: []version.Change{{Type: "fix"}},
+			rules:   version.Rules{InitialVersion: "1.0.0", Strategy: version.StrategyServicePack},
+			want:    version.Result{Version: "1.0.0", Bump: version.BumpInitial, Reason: "initial version"},
+		},
+		{
+			name:   "bumps major for a dependabot major update with dependency manifest",
+			last:   version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK: true,
+			changes: []version.Change{
+				{Type: "fix"}, {Type: "chore", Description: "bump github.com/spf13/cobra from 1.8.1 to 2.0.0"},
+			},
+			rules: version.Rules{Strategy: version.StrategyDependencyManifest},
+			want: version.Result{
+				Version: "2.0.0", Bump: version.BumpMajor, Reason: "dependency github.com/spf13/cobra major update",
+			},
+		},
+		{
+			name:    "bumps minor for a dependabot minor update with dependency manifest",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "build", Description: "Bump golang.org/x/mod from v0.21.0 to v0.22.0"}},
+			rules:   version.Rules{Strategy: version.StrategyDependencyManifest},
+			want:    version.Result{Version: "1.3.0", Bump: version.BumpMinor, Reason: "dependency golang.org/x/mod minor update"},
+		},
+		{
+			name:    "bumps patch for a dependabot patch update with dependency manifest",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "chore", Description: "bump gopkg.in/yaml.v3 from 3.0.0 to 3.0.1"}},
+			rules:   version.Rules{Strategy: version.StrategyDependencyManifest},
+			want:    version.Result{Version: "1.2.4", Bump: version.BumpPatch, Reason: "dependency gopkg.in/yaml.v3 patch update"},
+		},
+		{
+			name:    "bumps minor for a renovate minor update with dependency manifest",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "chore", Description: "update dependency eslint to v9.4.0"}},
+			rules:   version.Rules{Strategy: version.StrategyDependencyManifest},
+			want:    version.Result{Version: "1.3.0", Bump: version.BumpMinor, Reason: "dependency eslint minor update"},
+		},
+		{
+			name:    "bumps major for a renovate major update with dependency manifest",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "deps", Description: "update module github.com/google/go-github to v68"}},
+			rules:   version.Rules{Strategy: version.StrategyDependencyManifest},
+			want: version.Result{
+				Version: "2.0.0", Bump: version.BumpMajor, Reason: "dependency github.com/google/go-github major update",
+			},
+		},
+		{
+			name:    "keeps a feature's minor over a dependency patch update with dependency manifest",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "chore", Description: "update dependency vite to v5.4.11"}, {Type: "feat"}},
+			rules:   version.Rules{Strategy: version.StrategyDependencyManifest},
+			want:    version.Result{Version: "1.3.0", Bump: version.BumpMinor, Reason: "feat"},
+		},
+		{
+			name:    "applies the pre major rules to a dependency major update with dependency manifest",
+			last:    version.Semver{Major: 0, Minor: 4, Patch: 1},
+			lastOK:  true,
+			changes: []version.Change{{Type: "chore", Description: "bump react from 18.3.1 to 19.0.0"}},
+			rules:   version.Rules{Strategy: version.StrategyDependencyManifest, BumpMinorPreMajor: true},
+			want: version.Result{
+				Version: "0.5.0", Bump: version.BumpMinor, Reason: "dependency react major update, minor below 1.0.0",
+			},
+		},
+		{
+			name:    "bumps by the changes with the default strategy",
+			last:    version.Semver{Major: 1, Minor: 2, Patch: 3},
+			lastOK:  true,
+			changes: []version.Change{{Type: "feat"}},
+			rules:   version.Rules{Strategy: version.StrategyDefault},
+			want:    version.Result{Version: "1.3.0", Bump: version.BumpMinor, Reason: "feat"},
+		},
+		{
+			name:    "uses the initial version for a first release with always bump major",
+			changes: []version.Change{{Type: "fix"}},
+			rules:   version.Rules{InitialVersion: "0.1.0", Strategy: version.StrategyAlwaysBumpMajor},
+			want:    version.Result{Version: "0.1.0", Bump: version.BumpInitial, Reason: "initial version"},
+		},
+		{
 			name:    "picks the highest bump among multiple changes",
 			last:    version.Semver{Major: 1, Minor: 0, Patch: 0},
 			lastOK:  true,
@@ -80,17 +211,17 @@ func TestNextComputesTheReleasedVersion(t *testing.T) {
 			want:    version.Result{Version: "1.1.0", Bump: version.BumpMinor, Reason: "feat"},
 		},
 		{
-			name:           "uses the initial version when no tag exists and a change bumps",
-			lastOK:         false,
-			changes:        []version.Change{{Type: "chore"}, {Type: "feat"}},
-			initialVersion: "0.3.0",
-			want:           version.Result{Version: "0.3.0", Bump: version.BumpInitial, Reason: "initial version"},
+			name:    "uses the initial version when no tag exists and a change bumps",
+			lastOK:  false,
+			changes: []version.Change{{Type: "chore"}, {Type: "feat"}},
+			rules:   version.Rules{InitialVersion: "0.3.0"},
+			want:    version.Result{Version: "0.3.0", Bump: version.BumpInitial, Reason: "initial version"},
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, released, _ := version.Next(tc.last, tc.lastOK, tc.changes, tc.initialVersion, tc.bumpMinorPreMajor)
+			got, released, _ := version.Next(tc.last, tc.lastOK, tc.changes, tc.rules)
 			if !released {
 				t.Fatal("released = false, want true")
 			}
@@ -104,11 +235,40 @@ func TestNextComputesTheReleasedVersion(t *testing.T) {
 func TestNextReportsNoRelease(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		last    version.Semver
-		lastOK  bool
-		changes []version.Change
+		name     string
+		last     version.Semver
+		lastOK   bool
+		changes  []version.Change
+		strategy version.Strategy
 	}{
+		{
+			name:     "no change bumps the version with always bump major",
+			last:     version.Semver{Major: 1, Minor: 0, Patch: 0},
+			lastOK:   true,
+			changes:  []version.Change{{Type: "chore"}, {Type: "docs"}},
+			strategy: version.StrategyAlwaysBumpMajor,
+		},
+		{
+			name:     "a dependency update bumps nothing without dependency manifest",
+			last:     version.Semver{Major: 1, Minor: 0, Patch: 0},
+			lastOK:   true,
+			changes:  []version.Change{{Type: "chore", Description: "bump react from 18.3.1 to 19.0.0"}},
+			strategy: version.StrategyDefault,
+		},
+		{
+			name:     "a chore that is no dependency update bumps nothing with dependency manifest",
+			last:     version.Semver{Major: 1, Minor: 0, Patch: 0},
+			lastOK:   true,
+			changes:  []version.Change{{Type: "chore", Description: "update the dependency list in the README"}},
+			strategy: version.StrategyDependencyManifest,
+		},
+		{
+			name:     "no change bumps the version with service pack",
+			last:     version.Semver{Major: 1, Minor: 0, Patch: 0},
+			lastOK:   true,
+			changes:  []version.Change{{Type: "docs"}},
+			strategy: version.StrategyServicePack,
+		},
 		{
 			name:    "no change bumps the version on a tagged repository",
 			last:    version.Semver{Major: 1, Minor: 0, Patch: 0},
@@ -133,11 +293,26 @@ func TestNextReportsNoRelease(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, released, _ := version.Next(tc.last, tc.lastOK, tc.changes, "0.1.0", false)
+			_, released, _ := version.Next(tc.last, tc.lastOK, tc.changes, version.Rules{
+				InitialVersion: "0.1.0", Strategy: tc.strategy,
+			})
 			if released {
 				t.Fatal("released = true, want false")
 			}
 		})
+	}
+}
+
+func TestNextLetsAReleaseAsFooterWinOverAnAlwaysBumpStrategy(t *testing.T) {
+	t.Parallel()
+	last := version.Semver{Major: 1, Minor: 2, Patch: 3}
+	changes := []version.Change{{Type: "fix"}, {ReleaseAs: "3.0.0"}}
+
+	got, released, _ := version.Next(last, true, changes, version.Rules{Strategy: version.StrategyAlwaysBumpMinor})
+
+	want := version.Result{Version: "3.0.0", Bump: version.BumpForced, Reason: "Release-As footer"}
+	if !released || got != want {
+		t.Fatalf("Next() = %+v, %v, want %+v, true", got, released, want)
 	}
 }
 
@@ -156,7 +331,7 @@ func TestChangedReportsWhetherAnyChangeBumpsTheVersion(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := version.Changed(tc.changes); got != tc.want {
+			if got := version.Changed(tc.changes, version.StrategyDefault); got != tc.want {
 				t.Fatalf("Changed(%+v) = %v, want %v", tc.changes, got, tc.want)
 			}
 		})
@@ -231,7 +406,7 @@ func TestNextLetsAReleaseAsFooterWinOverTheComputedBump(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, released, refused := version.Next(tc.last, tc.lastOK, tc.changes, "0.1.0", false)
+			got, released, refused := version.Next(tc.last, tc.lastOK, tc.changes, version.Rules{InitialVersion: "0.1.0"})
 			if got != tc.want || released != tc.wantReleased {
 				t.Fatalf("Next() = %+v, %v, want %+v, %v", got, released, tc.want, tc.wantReleased)
 			}

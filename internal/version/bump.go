@@ -6,6 +6,8 @@ package version
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -21,16 +23,88 @@ const (
 	BumpInitial Bump = "initial"
 	// BumpForced is a version a "Release-As" footer forces, see ReleaseAs.
 	BumpForced Bump = "forced"
+	// BumpServicePack is a service pack of the last version, see
+	// StrategyServicePack: Result.Version is that last version itself, for
+	// the caller to give its next "sp.N" pre-release identifier.
+	BumpServicePack Bump = "service-pack"
 )
 
 // Change is the bump-relevant part of one history entry.
 type Change struct {
 	Type     string
 	Breaking bool
+	// Description is the entry's description, the text after the type and
+	// scope, which StrategyDependencyManifest reads a dependency update
+	// from.
+	Description string
 	// ReleaseAs is the value of the entry's "Release-As" footer, "" when
 	// it carries none. A Change may carry only ReleaseAs, no Type: it then
 	// forces a version without bumping one.
 	ReleaseAs string
+}
+
+// Rules are the configured bump rules Next applies on top of the changes.
+type Rules struct {
+	// InitialVersion is the version a component's first release gets.
+	InitialVersion string
+	// BumpMinorPreMajor turns a major bump into a minor one below 1.0.0.
+	BumpMinorPreMajor bool
+	// Strategy picks how a release bumps the version, StrategyDefault
+	// when "".
+	Strategy Strategy
+}
+
+// Strategy names how a release bumps the version, release-please's
+// versioning strategies of the same names.
+type Strategy string
+
+// The strategies Rules.Strategy accepts.
+const (
+	// StrategyDefault bumps by the highest change: major for a breaking
+	// change, minor for a feat, patch for a fix, perf or revert, with the
+	// pre-major rules applied below 1.0.0.
+	StrategyDefault Strategy = "default"
+	// StrategyAlwaysBumpPatch, StrategyAlwaysBumpMinor and
+	// StrategyAlwaysBumpMajor bump the patch, minor or major of every
+	// release, whatever its changes are. The changes still decide whether
+	// there is a release at all; the pre-major rules do not apply.
+	StrategyAlwaysBumpPatch Strategy = "always-bump-patch"
+	StrategyAlwaysBumpMinor Strategy = "always-bump-minor"
+	StrategyAlwaysBumpMajor Strategy = "always-bump-major"
+	// StrategyServicePack releases a service pack of the last version
+	// instead of bumping it: Next returns BumpServicePack with the last
+	// version unchanged, and the caller, which can read the tags, turns
+	// it into "X.Y.Z-sp.N", N counting up from the last service pack tag
+	// of that version.
+	StrategyServicePack Strategy = "service-pack"
+	// StrategyDependencyManifest bumps like StrategyDefault, and on top
+	// of that by every dependency update among the changes, see
+	// dependencyBump: a dependency's major update bumps the major, a minor
+	// update the minor, any other update the patch, whatever the type of
+	// the change carrying it.
+	StrategyDependencyManifest Strategy = "dependency-manifest"
+)
+
+// Strategies lists every Strategy, in the order a configuration error
+// names them.
+var Strategies = []Strategy{
+	StrategyDefault, StrategyAlwaysBumpPatch, StrategyAlwaysBumpMinor, StrategyAlwaysBumpMajor,
+	StrategyServicePack, StrategyDependencyManifest,
+}
+
+// fixedBump returns the bump an always-bump strategy gives every release.
+// ok is false for StrategyDefault, which bumps by the changes.
+func (s Strategy) fixedBump() (bump Bump, ok bool) {
+	switch s {
+	case StrategyAlwaysBumpPatch:
+		return BumpPatch, true
+	case StrategyAlwaysBumpMinor:
+		return BumpMinor, true
+	case StrategyAlwaysBumpMajor:
+		return BumpMajor, true
+	default:
+		return BumpNone, false
+	}
 }
 
 // Result is the computed next version.
@@ -43,67 +117,85 @@ type Result struct {
 // Next computes the next version from changes since the last tag.
 //
 // lastOK is false when no version tag exists yet; Next then returns
-// initialVersion, still only once at least one change bumps the version.
+// rules.InitialVersion, still only once at least one change bumps the version.
 // released is false when there is nothing to release: either no changes at
-// all, or no change of a type that bumps the version.
+// all, or no change of a type that bumps the version. An always-bump
+// rules.Strategy replaces the bump the changes compute, never whether
+// there is a release.
 //
 // A usable "Release-As" footer among changes, see ReleaseAs, wins outright
 // over the computed bump and the initial version, and releases even when
 // no change bumps the version. refused lists every footer value ReleaseAs
 // could not use, whatever Next returns otherwise: Next never logs, so the
 // caller reports them, once per computation.
-func Next(
-	last Semver, lastOK bool, changes []Change, initialVersion string, bumpMinorPreMajor bool,
-) (result Result, released bool, refused []Refusal) {
+func Next(last Semver, lastOK bool, changes []Change, rules Rules) (result Result, released bool, refused []Refusal) {
 	forced, ok, refused := ReleaseAs(last, lastOK, changes)
 	if ok {
 		return Result{Version: forced.String(), Bump: BumpForced, Reason: "Release-As footer"}, true, refused
 	}
 
-	bump, reason := highestBump(changes)
+	bump, reason := highestBump(changes, rules.Strategy)
 	if bump == BumpNone {
 		return Result{}, false, refused
 	}
 
 	if !lastOK {
-		return Result{Version: initialVersion, Bump: BumpInitial, Reason: "initial version"}, true, refused
+		return Result{Version: rules.InitialVersion, Bump: BumpInitial, Reason: "initial version"}, true, refused
 	}
 
-	next := last
+	if rules.Strategy == StrategyServicePack {
+		return Result{Version: last.String(), Bump: BumpServicePack, Reason: reason + ", " + string(rules.Strategy)}, true, refused
+	}
+	if fixed, ok := rules.Strategy.fixedBump(); ok {
+		return Result{Version: bumped(last, fixed).String(), Bump: fixed, Reason: reason + ", " + string(rules.Strategy)}, true, refused
+	}
+
+	if bump == BumpMajor && rules.BumpMinorPreMajor && last.Major < 1 {
+		bump = BumpMinor
+		reason += ", minor below 1.0.0"
+	}
+	return Result{Version: bumped(last, bump).String(), Bump: bump, Reason: reason}, true, refused
+}
+
+// bumped returns last with bump applied: the bumped part counted up, every
+// part below it reset to 0. BumpNone, BumpInitial and BumpForced return
+// last unchanged.
+func bumped(last Semver, bump Bump) Semver {
 	switch bump {
 	case BumpMajor:
-		if bumpMinorPreMajor && last.Major < 1 {
-			next = Semver{Major: last.Major, Minor: last.Minor + 1}
-			bump = BumpMinor
-			reason += ", minor below 1.0.0"
-		} else {
-			next = Semver{Major: last.Major + 1}
-		}
+		return Semver{Major: last.Major + 1}
 	case BumpMinor:
-		next = Semver{Major: last.Major, Minor: last.Minor + 1}
+		return Semver{Major: last.Major, Minor: last.Minor + 1}
 	case BumpPatch:
-		next = Semver{Major: last.Major, Minor: last.Minor, Patch: last.Patch + 1}
-	case BumpNone, BumpInitial, BumpForced:
-		// unreachable: highestBump never returns these
+		return Semver{Major: last.Major, Minor: last.Minor, Patch: last.Patch + 1}
+	case BumpNone, BumpInitial, BumpForced, BumpServicePack:
+		return last
+	default:
+		return last
 	}
-	return Result{Version: next.String(), Bump: bump, Reason: reason}, true, refused
 }
 
 // Changed reports whether changes contains at least one change that bumps
-// the version. Next returns released true for exactly these changes,
-// regardless of the previous version: callers that need to know whether a
-// component has anything to release, without computing its next version
-// yet, can use Changed instead.
-func Changed(changes []Change) bool {
-	bump, _ := highestBump(changes)
+// the version under strategy, a dependency update counting under
+// StrategyDependencyManifest only. Next returns released true for exactly
+// these changes, regardless of the previous version: callers that need to
+// know whether a component has anything to release, without computing its
+// next version yet, can use Changed instead.
+func Changed(changes []Change, strategy Strategy) bool {
+	bump, _ := highestBump(changes, strategy)
 	return bump != BumpNone
 }
 
-func highestBump(changes []Change) (bump Bump, reason string) {
+func highestBump(changes []Change, strategy Strategy) (bump Bump, reason string) {
 	bump = BumpNone
 	for _, c := range changes {
 		var b Bump
 		var r string
+		if strategy == StrategyDependencyManifest {
+			if db, name, ok := dependencyBump(c.Description); ok && severity(db) > severity(bump) {
+				bump, reason = db, "dependency "+name+" "+string(db)+" update"
+			}
+		}
 		switch {
 		case c.Breaking:
 			b, r = BumpMajor, "breaking change"
@@ -133,11 +225,62 @@ func severity(b Bump) int {
 		return 2
 	case BumpPatch:
 		return 1
-	case BumpNone, BumpInitial, BumpForced:
+	case BumpNone, BumpInitial, BumpForced, BumpServicePack:
 		return 0
 	default:
 		return 0
 	}
+}
+
+// The dependency update descriptions dependencyBump reads: Renovate's
+// "update dependency <name> to v<version>", "update module" for a Go
+// module, and Dependabot's "bump <name> from <old> to <new>".
+var (
+	renovateUpdate   = regexp.MustCompile(`(?i)^update (?:dependency|module) (\S+) to v?(\d+(?:\.\d+){0,2})\b`)
+	dependabotUpdate = regexp.MustCompile(`(?i)^bump (\S+) from v?(\d+(?:\.\d+){0,2})\S* to v?(\d+(?:\.\d+){0,2})\b`)
+)
+
+// dependencyBump reads description as a dependency update and returns the
+// bump that update is, with the dependency's name. ok is false for a
+// description that is no dependency update. Dependabot names both
+// versions, so the bump is the highest part that changed between them.
+// Renovate names only the new one, so the bump follows its shape, the
+// rule release-please's dependency-manifest strategy applies: "X.0.0" is
+// a major update, "X.Y.0" a minor one, anything else a patch one.
+func dependencyBump(description string) (bump Bump, name string, ok bool) {
+	if m := dependabotUpdate.FindStringSubmatch(description); m != nil {
+		from, to := versionParts(m[2]), versionParts(m[3])
+		switch {
+		case from[0] != to[0]:
+			return BumpMajor, m[1], true
+		case from[1] != to[1]:
+			return BumpMinor, m[1], true
+		default:
+			return BumpPatch, m[1], true
+		}
+	}
+	if m := renovateUpdate.FindStringSubmatch(description); m != nil {
+		to := versionParts(m[2])
+		switch {
+		case to[1] == 0 && to[2] == 0:
+			return BumpMajor, m[1], true
+		case to[2] == 0:
+			return BumpMinor, m[1], true
+		default:
+			return BumpPatch, m[1], true
+		}
+	}
+	return BumpNone, "", false
+}
+
+// versionParts splits a "X", "X.Y" or "X.Y.Z" version into its three
+// numbers, a missing part 0.
+func versionParts(v string) [3]int {
+	var parts [3]int
+	for i, p := range strings.SplitN(v, ".", 3) {
+		parts[i], _ = strconv.Atoi(p)
+	}
+	return parts
 }
 
 // Refusal is one "Release-As" footer value ReleaseAs could not use, with

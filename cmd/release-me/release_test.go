@@ -46,7 +46,7 @@ func TestAssembleEntries(t *testing.T) {
 					URL:   "https://github.com/owner/repo/pull/5",
 				}},
 			},
-			wantChanges: []version.Change{{Type: "feat"}},
+			wantChanges: []version.Change{{Type: "feat", Description: "add the real next command"}},
 			wantEntries: []changelog.Entry{{
 				Type:              "feat",
 				Scope:             "cli",
@@ -60,7 +60,7 @@ func TestAssembleEntries(t *testing.T) {
 			raw: []history.Entry{
 				{PullRequestNumber: 7, Subject: "Merge pull request #7 from owner/fix-branch", Body: "fix: stop the panic on empty history"},
 			},
-			wantChanges: []version.Change{{Type: "fix"}},
+			wantChanges: []version.Change{{Type: "fix", Description: "stop the panic on empty history"}},
 			wantEntries: []changelog.Entry{{
 				Type:              "fix",
 				Description:       "stop the panic on empty history",
@@ -72,7 +72,7 @@ func TestAssembleEntries(t *testing.T) {
 			raw: []history.Entry{
 				{Subject: "fix: stop the panic on empty history"},
 			},
-			wantChanges: []version.Change{{Type: "fix"}},
+			wantChanges: []version.Change{{Type: "fix", Description: "stop the panic on empty history"}},
 			wantEntries: []changelog.Entry{{Type: "fix", Description: "stop the panic on empty history"}},
 		},
 		{
@@ -87,7 +87,9 @@ func TestAssembleEntries(t *testing.T) {
 					URL:   "https://github.com/owner/repo/pull/5",
 				}},
 			},
-			wantChanges: []version.Change{{Type: "feat"}, {Type: "fix"}},
+			wantChanges: []version.Change{
+				{Type: "feat", Description: "add the next command"}, {Type: "fix", Description: "stop the panic on empty history"},
+			},
 			wantEntries: []changelog.Entry{
 				{Type: "feat", Scope: "cli", Description: "add the next command", PullRequestNumber: 5, URL: "https://github.com/owner/repo/pull/5"},
 				{Type: "fix", Description: "stop the panic on empty history", PullRequestNumber: 5, URL: "https://github.com/owner/repo/pull/5"},
@@ -157,7 +159,7 @@ func TestAssembleEntriesInSquashModeKeepsTheSubjectAsTitleWhenTheForgeCannotReso
 		t.Fatalf("assembleEntries() error = %v", err)
 	}
 
-	wantChanges := []version.Change{{Type: "feat"}}
+	wantChanges := []version.Change{{Type: "feat", Description: "add thing"}}
 	wantEntries := []changelog.Entry{{Type: "feat", Description: "add thing", PullRequestNumber: 12}}
 	if !reflect.DeepEqual(changes, wantChanges) {
 		t.Fatalf("changes = %+v, want %+v", changes, wantChanges)
@@ -238,7 +240,9 @@ func TestAssembleAllEntriesAppliesTheOverrideBlockToTheWholeGroup(t *testing.T) 
 		t.Fatalf("assembleAllEntries() error = %v", err)
 	}
 
-	wantChanges := []version.Change{{Type: "feat"}, {Type: "fix"}}
+	wantChanges := []version.Change{
+		{Type: "feat", Description: "the override replaces both commits"}, {Type: "fix", Description: "direct hotfix"},
+	}
 	wantEntries := []changelog.Entry{
 		{Type: "feat", Description: "the override replaces both commits", PullRequestNumber: 5, URL: "https://github.com/owner/repo/pull/5"},
 		{Type: "fix", Description: "direct hotfix"},

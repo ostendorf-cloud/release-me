@@ -14,6 +14,7 @@ import (
 
 	"github.com/ostendorf-cloud/release-me/internal/config"
 	"github.com/ostendorf-cloud/release-me/internal/migrate"
+	"github.com/ostendorf-cloud/release-me/internal/version"
 )
 
 // files is a ReadFile over a fixed set of repository files.
@@ -189,6 +190,117 @@ func TestFromReleasePleaseMapsSeparatePullRequestsToReleasePullRequest(t *testin
 				}
 			}
 		})
+	}
+}
+
+func TestFromReleasePleaseCarriesOverTheAlwaysBumpStrategies(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		configJSON string
+		wantTop    version.Strategy
+		wantComps  []version.Strategy
+	}{
+		{
+			name: "a top-level strategy every package inherits is written once at the top level",
+			configJSON: `{"versioning": "always-bump-minor", "release-type": "go",
+			  "packages": {"web": {"component": "web"}, "api": {"component": "api"}}}`,
+			wantTop:   version.StrategyAlwaysBumpMinor,
+			wantComps: []version.Strategy{version.StrategyAlwaysBumpMinor, version.StrategyAlwaysBumpMinor},
+		},
+		{
+			name: "a package's own strategy stays on its component",
+			configJSON: `{"release-type": "go", "packages": {
+			  "web": {"component": "web", "versioning": "always-bump-patch"}, "api": {"component": "api"}}}`,
+			wantComps: []version.Strategy{version.StrategyAlwaysBumpPatch, ""},
+		},
+		{
+			name: "two packages with different strategies keep their own",
+			configJSON: `{"release-type": "go", "packages": {
+			  "web": {"component": "web", "versioning": "always-bump-patch"},
+			  "api": {"component": "api", "versioning": "always-bump-major"}}}`,
+			wantComps: []version.Strategy{version.StrategyAlwaysBumpPatch, version.StrategyAlwaysBumpMajor},
+		},
+		{
+			name:       "the default strategy writes nothing",
+			configJSON: `{"versioning": "default", "packages": {".": {"release-type": "go"}}}`,
+			wantComps:  []version.Strategy{""},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			cfg := load(t, got.YAML)
+			if cfg.VersioningStrategy != tc.wantTop {
+				t.Fatalf("VersioningStrategy = %q, want %q\n%s", cfg.VersioningStrategy, tc.wantTop, got.YAML)
+			}
+			var comps []version.Strategy
+			for _, c := range cfg.Resolve() {
+				comps = append(comps, c.VersioningStrategy)
+			}
+			if !reflect.DeepEqual(comps, tc.wantComps) {
+				t.Fatalf("components = %q, want %q\n%s", comps, tc.wantComps, got.YAML)
+			}
+			if len(got.Warnings) != 0 {
+				t.Fatalf("Warnings = %q, want none, the strategy carries over", got.Warnings)
+			}
+		})
+	}
+}
+
+func TestFromReleasePleaseCarriesOverTheJavaVersioningStrategiesWithAWarning(t *testing.T) {
+	t.Parallel()
+	configJSON := `{"release-type": "simple", "separate-pull-requests": true, "packages": {
+	  "core": {"component": "core", "versioning": "service-pack"},
+	  "bom": {"component": "bom", "versioning": "dependency-manifest"}}}`
+
+	got, err := migrate.FromReleasePlease([]byte(configJSON), nil, files(nil))
+	if err != nil {
+		t.Fatalf("FromReleasePlease() error = %v", err)
+	}
+
+	var strategies []version.Strategy
+	for _, c := range load(t, got.YAML).Resolve() {
+		strategies = append(strategies, c.VersioningStrategy)
+	}
+	if want := []version.Strategy{version.StrategyServicePack, version.StrategyDependencyManifest}; !reflect.DeepEqual(strategies, want) {
+		t.Fatalf("strategies = %q, want %q\n%s", strategies, want, got.YAML)
+	}
+	for _, want := range []string{
+		"package core: versioning service-pack: release-me releases X.Y.Z-sp.N as a GitHub pre-release, " +
+			"semver orders it below X.Y.Z",
+		"package bom: versioning dependency-manifest: release-me reads the dependency update from the " +
+			"Renovate or Dependabot title, not from a Java manifest",
+	} {
+		if !slices.Contains(got.Warnings, want) {
+			t.Errorf("Warnings = %q, want it to contain %q", got.Warnings, want)
+		}
+	}
+}
+
+func TestFromReleasePleaseLeavesOutAServicePackInALockedFamily(t *testing.T) {
+	t.Parallel()
+	configJSON := `{"versioning": "service-pack", "release-type": "simple",
+	  "plugins": [{"type": "linked-versions", "groupName": "family", "components": ["a", "b"]}],
+	  "packages": {"a": {"component": "a"}, "b": {"component": "b"}}}`
+
+	got, err := migrate.FromReleasePlease([]byte(configJSON), nil, files(nil))
+	if err != nil {
+		t.Fatalf("FromReleasePlease() error = %v", err)
+	}
+
+	cfg := load(t, got.YAML)
+	if cfg.Versioning != config.VersioningLocked || cfg.VersioningStrategy != "" {
+		t.Fatalf("Versioning = %q, VersioningStrategy = %q, want locked and the default", cfg.Versioning, cfg.VersioningStrategy)
+	}
+	want := "package a: versioning service-pack: release-me releases service packs only with " +
+		"versioning independent, not in the locked family linked-versions became, left out"
+	if !slices.Contains(got.Warnings, want) {
+		t.Fatalf("Warnings = %q, want it to contain %q", got.Warnings, want)
 	}
 }
 

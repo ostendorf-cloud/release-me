@@ -103,12 +103,59 @@ func computeReleaseWith(
 		return release{}, false, fmt.Errorf("release-me: component %s: %w", comp.Name, err)
 	}
 
-	result, released, refused := version.Next(last, hasTag, changes, comp.InitialVersion, comp.BumpMinorPreMajor)
+	result, released, refused := version.Next(last, hasTag, changes, comp.Rules())
 	warnRefusedReleaseAs(logger, comp.Name, refused)
 	if !released {
 		return release{}, false, nil
 	}
-	return release{version: result, entries: entries, hiddenTypes: comp.HiddenTypes, fromTag: since}, true, nil
+	rel := release{version: result, entries: entries, hiddenTypes: comp.HiddenTypes, fromTag: since}
+	if result.Bump == version.BumpServicePack {
+		return servicePackRelease(ctx, dir, cfg, comp, attr, last, rel)
+	}
+	return rel, true, nil
+}
+
+// servicePackType is the pre-release identifier type a service pack
+// carries, "X.Y.Z-sp.N".
+const servicePackType = "sp"
+
+// servicePackRelease turns rel, which version.Next computed as a service
+// pack of last, the component's last stable version, into the next one:
+// "X.Y.Z-sp.N", N counting up from the highest service pack tag of last,
+// the counter preReleaseVersion keeps for a pre-release type. With an
+// earlier service pack of last tagged, its entries are those since that
+// tag, and released is false when none of them bumps the version: the
+// changes since the stable tag already shipped in that service pack.
+func servicePackRelease(
+	ctx context.Context, dir string, cfg config.Config, comp config.ResolvedComponent, attr *attribution,
+	last version.Semver, rel release,
+) (release, bool, error) {
+	v, since, err := preReleaseVersion(ctx, dir, comp.TagPrefix, []string{comp.TagPrefix}, last, servicePackType)
+	if err != nil {
+		return release{}, false, fmt.Errorf("release-me: component %s: %w", comp.Name, err)
+	}
+	rel.version.Version = v.String()
+	if since == "" {
+		return rel, true, nil
+	}
+
+	raw, err := walkEntries(ctx, dir, since, comp.ChangelogSource)
+	if err != nil {
+		return release{}, false, fmt.Errorf("release-me: component %s: history since %s: %w", comp.Name, since, err)
+	}
+	raw, err = attr.filter(ctx, raw, comp)
+	if err != nil {
+		return release{}, false, fmt.Errorf("release-me: component %s: %w", comp.Name, err)
+	}
+	changes, entries, err := assembleEntries(ctx, attr.forge, attr.owner, attr.repoName, raw, cfg.FallbackType, comp.ChangelogSource, attr.subCommits)
+	if err != nil {
+		return release{}, false, fmt.Errorf("release-me: component %s: %w", comp.Name, err)
+	}
+	if !version.Changed(changes, comp.VersioningStrategy) {
+		return release{}, false, nil
+	}
+	rel.entries, rel.fromTag = entries, since
+	return rel, true, nil
 }
 
 // walkEntries reads the raw history entries for since, exclusive, to HEAD,
@@ -192,7 +239,7 @@ func processEntry(
 		// commit body for one, still counts.
 		msg.ReleaseAs = conventional.Parse(entryText(e), fallbackType).ReleaseAs
 	}
-	changes := []version.Change{{Type: msg.Type, Breaking: msg.Breaking, ReleaseAs: msg.ReleaseAs}}
+	changes := []version.Change{{Type: msg.Type, Breaking: msg.Breaking, Description: msg.Description, ReleaseAs: msg.ReleaseAs}}
 	entry := changelog.Entry{
 		Type:              msg.Type,
 		Scope:             msg.Scope,
@@ -232,7 +279,7 @@ func nestedSubEntries(ctx context.Context, subs subCommitReader, sha, fallbackTy
 	entries := make([]changelog.Entry, 0, len(commits))
 	for _, s := range commits {
 		msg := conventional.Parse(entryText(s), fallbackType)
-		changes = append(changes, version.Change{Type: msg.Type, Breaking: msg.Breaking, ReleaseAs: msg.ReleaseAs})
+		changes = append(changes, version.Change{Type: msg.Type, Breaking: msg.Breaking, Description: msg.Description, ReleaseAs: msg.ReleaseAs})
 		entries = append(entries, changelog.Entry{
 			Type: msg.Type, Scope: msg.Scope, Description: msg.Description, Breaking: msg.Breaking,
 		})
@@ -309,7 +356,7 @@ func assembleAllEntries(ctx context.Context, f forge.Forge, owner, repoName stri
 // "" for a commit belonging to none.
 func parseCommit(e history.Entry, fallbackType string, number int, url string) (version.Change, changelog.Entry) {
 	msg := conventional.Parse(entryText(e), fallbackType)
-	return version.Change{Type: msg.Type, Breaking: msg.Breaking, ReleaseAs: msg.ReleaseAs}, changelog.Entry{
+	return version.Change{Type: msg.Type, Breaking: msg.Breaking, Description: msg.Description, ReleaseAs: msg.ReleaseAs}, changelog.Entry{
 		Type:              msg.Type,
 		Scope:             msg.Scope,
 		Description:       msg.Description,
@@ -337,7 +384,7 @@ func overrideEntries(override conventional.Override, number int, url, fallbackTy
 	entries := make([]changelog.Entry, 0, len(override.Entries))
 	for _, line := range override.Entries {
 		msg := conventional.Parse(line, fallbackType)
-		changes = append(changes, version.Change{Type: msg.Type, Breaking: msg.Breaking})
+		changes = append(changes, version.Change{Type: msg.Type, Breaking: msg.Breaking, Description: msg.Description})
 		entries = append(entries, changelog.Entry{
 			Type:              msg.Type,
 			Scope:             msg.Scope,

@@ -88,7 +88,7 @@ func familyVersion(cfg config.Config, members []familyMember, logger *slog.Logge
 	for _, m := range members {
 		changes = append(changes, m.changes...)
 	}
-	result, released, refused := version.Next(highest, highestOK, changes, cfg.InitialVersion, cfg.BumpMinorPreMajor)
+	result, released, refused := version.Next(highest, highestOK, changes, cfg.Rules())
 	warnRefusedReleaseAs(logger, string(cfg.Versioning)+" family", refused)
 	return result, released
 }
@@ -126,7 +126,7 @@ func familyReleases(cfg config.Config, members []familyMember, logger *slog.Logg
 
 	releases = make(map[string]release, len(members))
 	for _, m := range members {
-		if cfg.Versioning == config.VersioningLinked && !version.Changed(m.changes) {
+		if cfg.Versioning == config.VersioningLinked && !version.Changed(m.changes, cfg.VersioningStrategy) {
 			if _, forces, _ := version.ReleaseAs(highest, highestOK, m.changes); !forces {
 				continue
 			}

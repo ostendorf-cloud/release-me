@@ -9,7 +9,57 @@ The version when no tag exists yet, default `0.1.0`.
 
 ## `bump-minor-pre-major`
 
-Turns a major bump into a minor one below `1.0.0`, default `false`.
+Turns a major bump into a minor one below `1.0.0`, default `false`. A component overrides it
+through its own `bump-minor-pre-major` key; a `locked` or `linked` family computes its one
+shared version with the top-level value.
+
+## `versioning-strategy`
+
+How a release bumps the version, default `default`:
+
+| Value | Version of a release |
+| --- | --- |
+| `default` | Bumped by its highest change: major for a breaking change, minor for a `feat`, patch for a `fix`, `perf` or `revert`. |
+| `always-bump-patch` | The patch bumped, whatever its changes are. |
+| `always-bump-minor` | The minor bumped. |
+| `always-bump-major` | The major bumped. |
+| `service-pack` | A service pack of the last version, `X.Y.Z-sp.N`. |
+| `dependency-manifest` | Bumped as `default`, and at least as far as a dependency update among its changes. |
+
+The changes still decide whether there is a release at all: a range of only hidden types, a
+`chore` alone for one, releases nothing under any strategy but `dependency-manifest`, where a
+dependency update counts. A [Release-As footer](overrides.md#release-as-footer), a
+[comment command](overrides.md#comment-commands) and `initial-version` for a first release win
+over the strategy, the same as over the default bump. `bump-minor-pre-major` applies to
+`default` and `dependency-manifest` only: an always-bump strategy bumps the part it names below
+`1.0.0` too, as in release-please. `next` names the strategy in its reason,
+`1.3.0 (fix, always-bump-minor)`. Any other value is a configuration error. A component
+overrides it through its own `versioning-strategy` key; a `locked` or `linked` family computes
+its one shared version with the top-level value.
+
+The key is release-please's `versioning`, renamed because release-me's own
+[`versioning`](#versioning) already names how a family's versions relate. release-please's
+`service-pack` and `dependency-manifest` are Java specific; release-me carries over what each
+means for any repository:
+
+- `service-pack` ships a maintenance release of the last version without moving it:
+  `1.2.3-sp.1`, then `1.2.3-sp.2`, `N` counting up from the last `sp` tag of `1.2.3`, the
+  counter a [pre-release](commands.md#pre-releases) type keeps. Each service pack collects the
+  entries since the previous one, and there is no release until a change since it bumps the
+  version. Semver orders `1.2.3-sp.1` below `1.2.3`, so release-me treats it as the pre-release
+  it is to semver: the GitHub release is a pre-release, the major tag stays, and the next
+  stable tag still counts from `1.2.3`. A pre-release label on its release pull request
+  replaces `sp` with that type, `1.2.3-rc.1`. It applies with `versioning: independent` only;
+  `linked` and `locked` refuse it, since a family shares one version line.
+- `dependency-manifest` raises the bump to the largest dependency update among the changes,
+  whatever their type, so `chore(deps): bump react from 18.3.1 to 19.0.0` releases a major
+  one. release-please reads the update from a Java manifest; release-me reads it from the
+  title Dependabot and Renovate give the change: Dependabot's `bump <name> from <old> to <new>`
+  bumps by the highest part that changed, Renovate's `update dependency <name> to v<new>` and
+  `update module <name> to v<new>`, which name no old version, by the new version's shape, as
+  release-please does: `X.0.0` major, `X.Y.0` minor, anything else patch. The reason names the
+  dependency, `2.0.0 (dependency react major update)`. The changelog entry keeps its own
+  type, so a hidden `chore` stays hidden.
 
 ## `hidden-types`
 
@@ -232,17 +282,17 @@ The mention prefix a comment on the release pull request names to issue a `relea
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
-`hidden-types`, `files`, `major-tag`, `changelog-source` and `changelog`. A key left out of a
-component falls back to the top-level setting above. A repository without `components` is one
-component named `main` at path `.`, tag prefix `v`, branch `release-me/main`, the default
-shape a repository with no configuration at all already has. A configured component gets tag
-prefix `<name>/v`, branch `release-me/<name>`, or `release-me/main` when the release pull
-request is shared, changelog `<path>/CHANGELOG.md`, and a release title `<name> vX.Y.Z`. A
-name holds ASCII letters, digits, `-`, `_` and `.` only, does not start with `.` or `-`, does
-not end with `.` or `.lock` and does not contain `..`; anything else is a configuration error
-naming the component and the character, since the name has to survive the tag prefix, the
-branch, the shared pull request title release reads back, the
-[Release-Component footer](overrides.md#release-component-footer) and the compare link.
+`versioning-strategy`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
+`changelog`. A key left out of a component falls back to the top-level setting above. A
+repository without `components` is one component named `main` at path `.`, tag prefix `v`,
+branch `release-me/main`, the default shape a repository with no configuration at all already
+has. A configured component gets tag prefix `<name>/v`, branch `release-me/<name>`, or
+`release-me/main` when the release pull request is shared, changelog `<path>/CHANGELOG.md`, and
+a release title `<name> vX.Y.Z`. A name holds ASCII letters, digits, `-`, `_` and `.` only,
+does not start with `.` or `-`, does not end with `.` or `.lock` and does not contain `..`;
+anything else is a configuration error naming the component and the character, since the name
+has to survive the tag prefix, the branch, the shared pull request title release reads back,
+the [Release-Component footer](overrides.md#release-component-footer) and the compare link.
 
 `tag-prefix` replaces the derived prefix, for a component whose existing tags follow another
 scheme, such as `api@v1.4.0`: release-me continues from its last such tag instead of starting

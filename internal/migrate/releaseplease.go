@@ -59,7 +59,7 @@ type rpPackage struct {
 var packageKeys = []string{
 	"release-type", "package-name", "component", "include-component-in-tag", "include-v-in-tag",
 	"tag-separator", "changelog-path", "bump-minor-pre-major", "bump-patch-for-minor-pre-major",
-	"initial-version", "extra-files",
+	"initial-version", "extra-files", "versioning",
 }
 
 // topLevelKeys are the release-please settings that only exist at the top
@@ -177,6 +177,17 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 	if err != nil {
 		return Result{}, err
 	}
+	if versioning == "locked" {
+		// release-me's service pack counts on one component's own tags,
+		// so a locked family, one shared version line, refuses it.
+		for i := range components {
+			if components[i].strategy == "service-pack" {
+				warn("package %s: versioning service-pack: release-me releases service packs only with "+
+					"versioning independent, not in the locked family linked-versions became, left out", components[i].path)
+				components[i].strategy = ""
+			}
+		}
+	}
 	// release-please groups every package into one release pull request
 	// unless separate-pull-requests is true; release-me's own default is one
 	// per component, so the grouped default is written out. locked always
@@ -226,8 +237,11 @@ type component struct {
 	tagPrefix         string
 	changelog         string
 	bumpMinorPreMajor bool
-	initialVersion    string
-	files             []file
+	// strategy is release-me's versioning-strategy, "" for release-please's
+	// default.
+	strategy       string
+	initialVersion string
+	files          []file
 }
 
 // file is one release-me "files" entry.
@@ -242,9 +256,9 @@ type file struct {
 // its release type and extra-files bump.
 func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any)) (component, error) {
 	var (
-		releaseType, packageName, componentName, separator, changelogPath, initialVersion string
-		includeComponent, includeV                                                        = true, true
-		bumpMinor, bumpPatchForMinor                                                      bool
+		releaseType, packageName, componentName, separator, changelogPath, initialVersion, versioning string
+		includeComponent, includeV                                                                    = true, true
+		bumpMinor, bumpPatchForMinor                                                                  bool
 	)
 	separator = "-"
 	changelogPath = "CHANGELOG.md"
@@ -253,6 +267,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		"tag-separator": &separator, "changelog-path": &changelogPath, "initial-version": &initialVersion,
 		"include-component-in-tag": &includeComponent, "include-v-in-tag": &includeV,
 		"bump-minor-pre-major": &bumpMinor, "bump-patch-for-minor-pre-major": &bumpPatchForMinor,
+		"versioning": &versioning,
 	} {
 		raw, ok := p.settings[key]
 		if !ok {
@@ -269,6 +284,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		warn("package %s: bump-patch-for-minor-pre-major: release-me bumps a feat to a minor below 1.0.0, "+
 			"left out", p.path)
 	}
+	strategy := translateVersioning(p.path, versioning, warn)
 
 	// release-please names a package after its component, else its package
 	// name, a node package's scope stripped, else the name package.json
@@ -322,6 +338,7 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		tagPrefix:         prefix,
 		changelog:         repoPath(p.path, changelogPath),
 		bumpMinorPreMajor: bumpMinor,
+		strategy:          strategy,
 		initialVersion:    initialVersion,
 	}
 
@@ -357,6 +374,31 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 		c.files = append(c.files, files...)
 	}
 	return c, nil
+}
+
+// translateVersioning maps release-please's "versioning" strategy to
+// release-me's versioning-strategy, "" for the default one. Every
+// strategy release-me has carries over by name, a difference a reader
+// should know about warned; any other has no release-me equivalent and is
+// warned about.
+func translateVersioning(pkgPath, versioning string, warn func(string, ...any)) string {
+	switch versioning {
+	case "", "default":
+		return ""
+	case "always-bump-patch", "always-bump-minor", "always-bump-major":
+		return versioning
+	case "service-pack":
+		warn("package %s: versioning service-pack: release-me releases X.Y.Z-sp.N as a GitHub pre-release, "+
+			"semver orders it below X.Y.Z", pkgPath)
+		return versioning
+	case "dependency-manifest":
+		warn("package %s: versioning dependency-manifest: release-me reads the dependency update from the "+
+			"Renovate or Dependabot title, not from a Java manifest", pkgPath)
+		return versioning
+	default:
+		warn("package %s: versioning %s: no release-me equivalent, left out", pkgPath, versioning)
+	}
+	return ""
 }
 
 // translateExtraFiles carries over the extra-files entries a typed updater
@@ -534,11 +576,19 @@ func render(components []component, versioning string, sharedPR bool, pending, t
 	}
 	add(doc, "labels", labels)
 
-	// bump-minor-pre-major carried by every component is written once, at
-	// the top level, instead of repeated per component.
-	shared := slices.IndexFunc(components, func(c component) bool { return !c.bumpMinorPreMajor }) == -1
-	if shared {
+	// A pre-major rule carried by every component is written once, at the
+	// top level, instead of repeated per component.
+	shared := sharedRules{
+		bumpMinorPreMajor: !slices.ContainsFunc(components, func(c component) bool { return !c.bumpMinorPreMajor }),
+	}
+	if !slices.ContainsFunc(components, func(c component) bool { return c.strategy != components[0].strategy }) {
+		shared.strategy = components[0].strategy
+	}
+	if shared.bumpMinorPreMajor {
 		add(doc, "bump-minor-pre-major", boolean(true))
+	}
+	if shared.strategy != "" {
+		add(doc, "versioning-strategy", scalar(shared.strategy))
 	}
 
 	if len(components) == 1 && components[0].path == "." && components[0].tagPrefix == "v" {
@@ -577,15 +627,27 @@ func render(components []component, versioning string, sharedPR bool, pending, t
 	return buf.Bytes(), nil
 }
 
+// sharedRules names the pre-major rules and the versioning strategy every
+// component carries, which render writes once at the top level.
+type sharedRules struct {
+	bumpMinorPreMajor bool
+	// strategy is "" when the components differ or all carry the default.
+	strategy string
+}
+
 // addSettings writes the settings release-me reads per component or at the
-// top level alike: initial-version, bump-minor-pre-major and files.
-// bump-minor-pre-major is left out where the top level already carries it.
-func addSettings(m *yaml.Node, c component, shared bool, add func(*yaml.Node, string, *yaml.Node)) {
+// top level alike: initial-version, bump-minor-pre-major,
+// versioning-strategy and files. A rule is left out where the top level
+// already carries it.
+func addSettings(m *yaml.Node, c component, shared sharedRules, add func(*yaml.Node, string, *yaml.Node)) {
 	if c.initialVersion != "" {
 		add(m, "initial-version", scalar(c.initialVersion))
 	}
-	if c.bumpMinorPreMajor && !shared {
+	if c.bumpMinorPreMajor && !shared.bumpMinorPreMajor {
 		add(m, "bump-minor-pre-major", boolean(true))
+	}
+	if c.strategy != "" && shared.strategy == "" {
+		add(m, "versioning-strategy", scalar(c.strategy))
 	}
 	if len(c.files) > 0 {
 		list := &yaml.Node{Kind: yaml.SequenceNode}

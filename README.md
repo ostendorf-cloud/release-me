@@ -142,6 +142,7 @@ files:
 | --- | --- | --- | --- |
 | `initial-version` | Version used when no tag exists yet. | `0.1.0` | No |
 | `bump-minor-pre-major` | Turns a major bump into a minor one below `1.0.0`. | `false` | No |
+| `versioning-strategy` | How a release bumps the version: `default`, `always-bump-patch`/`-minor`/`-major`, `service-pack` or `dependency-manifest`. | `default` | No |
 | `hidden-types` | Entry types hidden from the changelog. | `chore, docs, ci, style, refactor, test, build, other` | No |
 | `fallback-type` | Type assigned to text that does not parse as a conventional commit. | `other` | No |
 | `token-env` | Environment variable holding the GitHub token. | `GITHUB_TOKEN` | No |
