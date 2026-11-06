@@ -124,11 +124,11 @@ func familyReleases(cfg config.Config, members []familyMember, logger *slog.Logg
 	}
 	highest, highestOK := familyLastVersion(members)
 
+	// A release-as key forces every member, the way release-please's
+	// top-level release-as applies to every package.
+	forcedByKey := result.Reason == version.ReasonReleaseAsKey
 	releases = make(map[string]release, len(members))
 	for _, m := range members {
-		// A release-as key forces every member, the way release-please's
-		// top-level release-as applies to every package.
-		forcedByKey := result.Reason == version.ReasonReleaseAsKey
 		if cfg.Versioning == config.VersioningLinked && !forcedByKey && !version.Changed(m.changes) {
 			if _, forces, _ := version.ReleaseAs(highest, highestOK, m.changes); !forces {
 				continue
