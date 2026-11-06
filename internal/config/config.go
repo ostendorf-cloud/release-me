@@ -4,7 +4,7 @@
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, hidden-types, fallback-type, token-env, files,
 // changelog, changelog-source, labels, author, major-tag, versioning,
-// draft-until-assets-attach, comment-mention and components.
+// draft-until-assets-attach, comment-mention, workspaces and components.
 package config
 
 import (
@@ -19,6 +19,7 @@ import (
 
 	"github.com/ostendorf-cloud/release-me/internal/conventional"
 	"github.com/ostendorf-cloud/release-me/internal/updater"
+	"github.com/ostendorf-cloud/release-me/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -272,6 +273,13 @@ type Config struct {
 	// command on the release pull request must start with, default
 	// DefaultCommentMention. There is no per-component override.
 	CommentMention string
+	// Workspaces is the top-level "workspaces" key: the package managers,
+	// workspace.Managers, whose manifests link components to each other. A
+	// component released this run moves every other component's dependency
+	// on it to its new version and releases that dependent too. Empty
+	// unless configured, which needs "components" and a shared release pull
+	// request.
+	Workspaces []string
 	// Components is the "components" key, in the order release-me.yaml
 	// declares them, or nil when the key is absent: a repository without
 	// it is one component at the repository root, as Resolve reports.
@@ -471,6 +479,7 @@ type raw struct {
 	ReleasePullRequestGuide  *bool      `yaml:"release-pull-request-guide"`
 	DraftUntilAssetsAttach   *bool      `yaml:"draft-until-assets-attach"`
 	CommentMention           *string    `yaml:"comment-mention"`
+	Workspaces               *[]string  `yaml:"workspaces"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -696,7 +705,43 @@ func Load(path string) (cfg Config, err error) {
 			return Config{}, err
 		}
 	}
+	if r.Workspaces != nil {
+		workspaces, err := validateWorkspaces(path, cfg, *r.Workspaces)
+		if err != nil {
+			return Config{}, err
+		}
+		cfg.Workspaces = workspaces
+	}
 	return cfg, nil
+}
+
+// validateWorkspaces rejects a "workspaces" entry naming no known package
+// manager or naming one twice, and the key itself where no dependent can
+// release with its dependency: without "components" there is one
+// component, and with one release pull request per component a dependent's
+// pull request would ask for a dependency version whose own pull request
+// may not have merged yet.
+func validateWorkspaces(path string, cfg Config, managers []string) ([]string, error) {
+	out := make([]string, 0, len(managers))
+	for _, m := range managers {
+		switch {
+		case !slices.Contains(workspace.Managers, m):
+			return nil, fmt.Errorf("config: parse %s: workspaces: %q is none of %s",
+				path, m, strings.Join(workspace.Managers, ", "))
+		case slices.Contains(out, m):
+			return nil, fmt.Errorf("config: parse %s: workspaces: %q is listed twice", path, m)
+		}
+		out = append(out, m)
+	}
+	if len(out) > 0 && len(cfg.Components) == 0 {
+		return nil, fmt.Errorf("config: parse %s: workspaces: links components to each other, "+
+			"a repository without components has one", path)
+	}
+	if len(out) > 0 && !cfg.SharedPullRequest() {
+		return nil, fmt.Errorf("config: parse %s: workspaces: a dependent releases together with its dependency, "+
+			"set release-pull-request: shared or versioning: locked", path)
+	}
+	return out, nil
 }
 
 // decodeFiles converts the yaml shape of a "files" key into []File,

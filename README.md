@@ -158,6 +158,7 @@ files:
 | `release-pull-request-guide` | Whether every release pull request body opens with the collapsed "How this release works" guide. | `true` | No |
 | `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
+| `workspaces` | Package managers whose local dependencies release a dependent with its dependency. | none | No |
 | `components` | Maps a name to a path and optional per-component overrides. | none, one implicit `main` component | No |
 
 See [the configuration reference](docs/configuration.md) for every key's full behavior, the

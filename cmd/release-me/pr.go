@@ -398,6 +398,25 @@ func doPRLocked(
 		}
 	}
 
+	// Every component releases at versionStr in a locked family, so a
+	// workspace dependency adds no member, only the manifest updates and
+	// the entries naming them.
+	var depFiles []fileUpdate
+	var depEntries map[string][]changelog.Entry
+	if len(cfg.Workspaces) > 0 {
+		all := make([]config.ResolvedComponent, 0, len(members))
+		versions := make(map[string]string, len(members))
+		for _, m := range members {
+			all = append(all, m.comp)
+			versions[m.comp.Name] = versionStr
+		}
+		manifests, err := readWorkspace(dir, cfg, all)
+		if err != nil {
+			return err
+		}
+		depFiles, depEntries = workspaceUpdates(manifests, versions, logger)
+	}
+
 	changelogs := make([]changelogUpdate, 0, len(members))
 	bodyParts := make([]releasepr.ComponentChangelog, 0, len(members))
 	var files []fileUpdate
@@ -406,6 +425,7 @@ func doPRLocked(
 		if rel, ok := releases[m.comp.Name]; ok {
 			entries = rel.entries
 		}
+		entries = append(slices.Clone(entries), depEntries[m.comp.Name]...)
 		entriesBody := changelog.Sections(entries, m.comp.HiddenTypes)
 		if entriesBody == "" {
 			entriesBody = noUserFacingChangesLine
@@ -417,6 +437,7 @@ func doPRLocked(
 		bodyParts = append(bodyParts, releasepr.ComponentChangelog{Name: m.comp.Name, Version: versionStr, Section: entriesBody})
 		files = append(files, filesAt(m.comp.Files, versionStr)...)
 	}
+	files = append(files, depFiles...)
 
 	plan, err := planReleaseBranch(ctx, dir, changelogs, files, branch)
 	if err != nil {
@@ -736,6 +757,12 @@ type changelogUpdate struct {
 type fileUpdate struct {
 	file    config.File
 	version string
+	// apply, when set, replaces file.Updater: the update a workspace
+	// dependency bump makes to a dependent's manifest, which no configured
+	// updater describes. file.Path still names the file; what names the
+	// update in an error.
+	apply func(content string) (string, error)
+	what  string
 }
 
 // filesAt pairs every file in files with version.
@@ -802,6 +829,15 @@ func planReleaseBranch(ctx context.Context, dir string, changelogs []changelogUp
 				return nil, fmt.Errorf("release-me: read %s: %w", file.Path, err)
 			}
 			content = string(raw)
+		}
+		if fu.apply != nil {
+			newContent, err := fu.apply(content)
+			if err != nil {
+				plan.cleanup()
+				return nil, fmt.Errorf("release-me: file %s: %s: %w", file.Path, fu.what, err)
+			}
+			plan.desiredFiles[file.Path] = newContent
+			continue
 		}
 		entry, ok := updater.Updaters[file.Updater]
 		if !ok {

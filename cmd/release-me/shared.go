@@ -143,6 +143,11 @@ func doPRShared(
 		}
 	}
 
+	depFiles, err := applyWorkspaceUpdates(dir, cfg, all, members, logger)
+	if err != nil {
+		return err
+	}
+
 	titled := make([]tagrelease.TitleRelease, 0, len(members))
 	for _, m := range members {
 		titled = append(titled, tagrelease.TitleRelease{Name: m.comp.Name, Version: m.versionStr})
@@ -165,6 +170,7 @@ func doPRShared(
 		})
 		files = append(files, filesAt(m.comp.Files, m.versionStr)...)
 	}
+	files = append(files, depFiles...)
 
 	plan, err := planReleaseBranch(ctx, dir, changelogs, files, branch)
 	if err != nil {
@@ -245,9 +251,32 @@ func sharedMembers(
 			return nil, version.Semver{}, false, err
 		}
 		releases, released := familyReleases(cfg, family, logger)
+		var dependents []string
+		if released {
+			var names []string
+			for name := range releases {
+				names = append(names, name)
+			}
+			if dependents, err = sharedDependents(dir, cfg, all, names); err != nil {
+				return nil, version.Semver{}, false, err
+			}
+		}
 		prefixes := familyTagPrefixes(family)
+		var familyResult version.Result
+		for _, rel := range releases {
+			familyResult = rel.version
+			break
+		}
 		for _, fm := range family {
 			rel, ok := releases[fm.comp.Name]
+			if released && !ok && slices.Contains(dependents, fm.comp.Name) {
+				// A dependent joins the family's release at the family's
+				// version, the one version line linked shares.
+				rel, ok = release{version: familyResult, hiddenTypes: fm.comp.HiddenTypes}, true
+				if fm.ownHasTag {
+					rel.fromTag = fm.ownTag
+				}
+			}
 			if !released || !ok {
 				printLine(stdout, fm.comp.Name, true, "nothing to release")
 				continue
@@ -262,7 +291,23 @@ func sharedMembers(
 	if err != nil {
 		return nil, version.Semver{}, false, err
 	}
+	var released []string
 	for _, r := range results {
+		if r.released {
+			released = append(released, r.comp.Name)
+		}
+	}
+	dependents, err := sharedDependents(dir, cfg, all, released)
+	if err != nil {
+		return nil, version.Semver{}, false, err
+	}
+	for _, r := range results {
+		if !r.released && slices.Contains(dependents, r.comp.Name) {
+			if r.rel, err = dependencyRelease(ctx, dir, r.comp); err != nil {
+				return nil, version.Semver{}, false, err
+			}
+			r.released = true
+		}
 		if !r.released {
 			printLine(stdout, r.comp.Name, true, "nothing to release")
 			continue
@@ -270,6 +315,45 @@ func sharedMembers(
 		members = append(members, newSharedMember(r.comp, r.rel, []string{r.comp.TagPrefix}))
 	}
 	return members, version.Semver{}, false, nil
+}
+
+// applyWorkspaceUpdates adds every member's workspace dependency entries to
+// its entries, once every member's version is final, and returns the
+// manifest updates moving each dependent to its dependencies' versions,
+// none without "workspaces".
+func applyWorkspaceUpdates(
+	dir string, cfg config.Config, all []config.ResolvedComponent, members []sharedMember, logger *slog.Logger,
+) ([]fileUpdate, error) {
+	if len(cfg.Workspaces) == 0 {
+		return nil, nil
+	}
+	manifests, err := readWorkspace(dir, cfg, all)
+	if err != nil {
+		return nil, err
+	}
+	versions := make(map[string]string, len(members))
+	for _, m := range members {
+		versions[m.comp.Name] = m.versionStr
+	}
+	files, entries := workspaceUpdates(manifests, versions, logger)
+	for i := range members {
+		m := &members[i]
+		m.entries = append(slices.Clone(m.entries), entries[m.comp.Name]...)
+	}
+	return files, nil
+}
+
+// sharedDependents returns every component that releases with released
+// through "workspaces", none without the key.
+func sharedDependents(dir string, cfg config.Config, all []config.ResolvedComponent, released []string) ([]string, error) {
+	if len(cfg.Workspaces) == 0 || len(released) == 0 {
+		return nil, nil
+	}
+	manifests, err := readWorkspace(dir, cfg, all)
+	if err != nil {
+		return nil, err
+	}
+	return workspaceDependents(manifests, released), nil
 }
 
 // newSharedMember starts a sharedMember at its computed release.

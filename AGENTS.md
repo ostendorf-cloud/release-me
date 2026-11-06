@@ -14,6 +14,8 @@ and are not repeated here.
 - `internal/version/`: bump rules and pre-releases.
 - `internal/changelog/`: sections and rendering.
 - `internal/updater/`: marker and typed file updaters.
+- `internal/workspace/`: package manifests, the local dependencies between components and
+  their rewrite.
 - `internal/releasepr/`: branch, body, labels and the notes block of a release pull request.
 - `internal/release/`: tag, release and major tag.
 - `internal/migrate/`: another release tool's configuration translated into `release-me.yaml`.

@@ -342,12 +342,67 @@ func TestFromReleasePleaseFindsTheExpectedTagForAManifestKeyWrittenWithDotSlash(
 	}
 }
 
+func TestFromReleasePleaseMapsWorkspacePluginsToWorkspaces(t *testing.T) {
+	t.Parallel()
+	packages := `"packages": {"packages/core": {"component": "core"}, "packages/web": {"component": "web"}}`
+	cases := []struct {
+		name       string
+		configJSON string
+		want       []string
+		sharedPR   bool
+		warnings   []string
+	}{
+		{
+			name:       "a plugin named by its type",
+			configJSON: `{"plugins": ["node-workspace"], ` + packages + `}`,
+			want:       []string{"node"}, sharedPR: true,
+		},
+		{
+			name:       "a plugin object with an option release-me has no equivalent for",
+			configJSON: `{"plugins": [{"type": "node-workspace", "updatePeerDependencies": true}], ` + packages + `}`,
+			want:       []string{"node"}, sharedPR: true,
+			warnings: []string{"plugins: node-workspace: updatePeerDependencies: no release-me equivalent, left out"},
+		},
+		{
+			name:       "separate pull requests become one shared pull request",
+			configJSON: `{"separate-pull-requests": true, "plugins": ["node-workspace"], ` + packages + `}`,
+			want:       []string{"node"}, sharedPR: true,
+			warnings: []string{"separate-pull-requests: release-me releases a workspace dependent together with its " +
+				"dependency, so release-pull-request is shared"},
+		},
+		{
+			name:       "a single package has nothing to link",
+			configJSON: `{"plugins": ["node-workspace"], "packages": {"packages/core": {"component": "core"}}}`,
+			warnings:   []string{"workspaces: node: a single package has no workspace dependency to move, left out"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			cfg := load(t, got.YAML)
+			if !reflect.DeepEqual(cfg.Workspaces, tc.want) || cfg.SharedPullRequest() != tc.sharedPR {
+				t.Fatalf("Workspaces = %q, SharedPullRequest() = %v, want %q and %v, YAML:\n%s",
+					cfg.Workspaces, cfg.SharedPullRequest(), tc.want, tc.sharedPR, got.YAML)
+			}
+			for _, want := range tc.warnings {
+				if !slices.Contains(got.Warnings, want) {
+					t.Errorf("Warnings = %q, want it to contain %q", got.Warnings, want)
+				}
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	t.Parallel()
 	configJSON := `{
 	  "label": "autorelease: pending,release",
 	  "pull-request-title-pattern": "chore: release ${version}",
-	  "plugins": ["node-workspace", {"type": "linked-versions", "groupName": "half", "components": ["a"]}],
+	  "plugins": ["sentence-case", {"type": "linked-versions", "groupName": "half", "components": ["a"]}],
 	  "packages": {
 	    "a": {"component": "a", "release-type": "python", "draft": true, "extra-files": [
 	      "src/version.py",
@@ -379,7 +434,7 @@ func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 			"mark the line with \"release-me: version\" and add it under files",
 		`package a: extra-files: pom.xml: type "xml" at "" has no typed updater, add it under files`,
 		".release-please-manifest.json: c: no package configured at this path, left out",
-		"plugins: node-workspace: no release-me equivalent, left out",
+		"plugins: sentence-case: no release-me equivalent, left out",
 		"plugins: linked-versions: release-me links every component or none, left out",
 		`label: release-me carries one label, kept "autorelease: pending"`,
 	} {

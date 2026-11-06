@@ -174,6 +174,9 @@ release-me continues from the existing tags and changelogs. A single root packag
   turned off, since release-please has none;
 - a `linked-versions` plugin over every component as `versioning: locked`: both release every
   component at the family's version, changed or not;
+- a `node-workspace` plugin as [`workspaces`](configuration.md#workspaces) `node`, warning
+  about each plugin option, and turning `separate-pull-requests: true` into a shared release
+  pull request with a warning, since a dependent releases together with its dependency;
 - `separate-pull-requests`, default `false` in release-please: more than one package without it,
   or with `false`, becomes `release-pull-request: shared`, one release pull request for every
   package as release-please opened; `true` keeps release-me's default of one per component.
