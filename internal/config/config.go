@@ -203,7 +203,8 @@ type ChangelogStyle struct {
 
 // ChangelogSection is one entry of the "changelog-sections" key: the entry
 // type it is about, the section heading that type renders under, and
-// whether it is hidden instead. Section is "" only for a hidden type.
+// whether it is hidden instead. Section may be "" for a hidden type and
+// is ignored whenever Hidden is true.
 type ChangelogSection struct {
 	Type    string
 	Section string

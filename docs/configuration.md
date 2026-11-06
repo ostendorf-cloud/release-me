@@ -53,7 +53,7 @@ changelog-sections:
   where that heading first appears.
 - A type the list names decides its own visibility: listed with a `section`, it renders even
   when `hidden-types` names it; listed with `hidden: true`, it never renders. `section` is
-  required unless `hidden` is `true`.
+  required unless `hidden` is `true`, and ignored when it is `true`.
 - A type the list leaves out renders nowhere, the same as a type outside the default sections
   today. A breaking change always renders under `Breaking Changes`, first, unless its type is
   hidden.
