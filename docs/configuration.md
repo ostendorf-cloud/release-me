@@ -38,6 +38,34 @@ word that already holds an upper case letter, such as `iOS` or `gRPC`, stays as 
 do `npm` and a description starting with a backtick or a digit. The pull request title or
 commit stays as it is; only the rendered line changes. There is no per-component override.
 
+## `changelog-date-format`
+
+The format of the date in each version heading, a strftime expression, default `%Y-%m-%d`:
+
+```yaml
+changelog-date-format: "%B %e, %Y"   # ## [v1.2.0](…) (November 4, 2026)
+```
+
+The directives are `%Y` (2026), `%y` (26), `%m` (11), `%d` (04), `%e` (4), `%B` (November), `%b`
+(Nov), `%A` (Wednesday), `%a` (Wed), `%j` (308, the day of the year) and `%%` for a literal `%`;
+names are English. Any other text renders as it is. Quote the value, YAML reads a leading `%`
+as a directive of its own.
+
+release-me reads the date back from an open release pull request, to keep it while nothing new
+lands, so the format has to read back: an unknown directive, a parenthesis or a line break, which
+end the heading's `(<date>)` early, and a format whose dates run together, such as `%e%m`, are
+configuration errors. Changing the format changes the next heading only: `CHANGELOG.md` keeps
+every earlier heading as it was written, and a release pull request opened before the change
+keeps its date, rendered in the new format on the next `pr` run. There is no per-component
+override.
+
+release-please's own `date-format` formats the date its generic updater writes into a file, not
+the changelog's, so `release-me migrate` leaves it out with a warning saying so.
+
+Custom-formatted pull request bodies record the canonical date in machine metadata outside
+the rendered body. Changing to another custom format, or back to the default, keeps that
+date until release content changes. Older bodies fall back to the current format and ISO.
+
 ## `fallback-type`
 
 The type assigned to text that does not parse as a conventional commit, default `other`.

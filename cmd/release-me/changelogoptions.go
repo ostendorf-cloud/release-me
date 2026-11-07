@@ -15,5 +15,6 @@ func changelogOptions(comp config.ResolvedComponent) changelog.Options {
 	return changelog.Options{
 		HiddenTypes:  comp.HiddenTypes,
 		SentenceCase: comp.ChangelogStyle.SentenceCase,
+		DateFormat:   comp.ChangelogStyle.DateFormat,
 	}
 }

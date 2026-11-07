@@ -75,6 +75,22 @@ var topLevelKeys = []string{
 	"bootstrap-sha", "last-release-sha", "pull-request-title-pattern", "group-pull-request-title-pattern",
 }
 
+// unsupportedReasons explains a release-please key the translation leaves
+// out where "no release-me equivalent" alone would mislead.
+var unsupportedReasons = map[string]string{
+	"date-format": "release-please formats the date its generic updater writes with it, not the " +
+		"changelog's, which release-me's changelog-date-format sets, left out",
+}
+
+// unsupported is the warning text for a release-please key the
+// translation leaves out.
+func unsupported(key string) string {
+	if reason, ok := unsupportedReasons[key]; ok {
+		return reason
+	}
+	return "no release-me equivalent, left out"
+}
+
 // FromReleasePlease translates release-please-config.json and
 // .release-please-manifest.json into release-me.yaml. Every package becomes
 // a component tagged and changelogged where release-please put them, so
@@ -105,7 +121,7 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 		case slices.Contains(topLevelKeys, kv.key):
 			topValues[kv.key] = kv.value
 		default:
-			warn("%s: no release-me equivalent, left out", kv.key)
+			warn("%s: %s", kv.key, unsupported(kv.key))
 		}
 	}
 	if _, ok := topValues["bootstrap-sha"]; ok {
@@ -139,7 +155,7 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 		}
 		for _, kv := range own {
 			if !slices.Contains(packageKeys, kv.key) {
-				warn("package %s: %s: no release-me equivalent, left out", entry.key, kv.key)
+				warn("package %s: %s: %s", entry.key, kv.key, unsupported(kv.key))
 				continue
 			}
 			settings[kv.key] = kv.value

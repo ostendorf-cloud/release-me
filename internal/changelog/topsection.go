@@ -37,12 +37,15 @@ func TopSection(content string) (body string, ok bool) {
 const headingVersionPattern = `\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`
 
 // headingLine matches a changelog section's heading line in either shape
-// RenderHeading writes: "## vX.Y.Z (YYYY-MM-DD)", the only shape before
-// the compare link, which older entries still carry, and
-// "## [vX.Y.Z](<compare URL>) (YYYY-MM-DD)". The groups are the linked
-// version, the compare URL, the unlinked version and the date.
+// RenderHeading writes: "## vX.Y.Z (<date>)", the only shape before the
+// compare link, which older entries still carry, and
+// "## [vX.Y.Z](<compare URL>) (<date>)". The date is any text up to the
+// closing parenthesis, in whatever "changelog-date-format" it was written
+// in: "YYYY-MM-DD" by default and for every heading written before the key
+// existed. The groups are the linked version, the compare URL, the
+// unlinked version and the date.
 var headingLine = regexp.MustCompile(
-	`^## (?:\[v(` + headingVersionPattern + `)\]\(([^()\s]+)\)|v(` + headingVersionPattern + `)) \((\d{4}-\d{2}-\d{2})\)`,
+	`^## (?:\[v(` + headingVersionPattern + `)\]\(([^()\s]+)\)|v(` + headingVersionPattern + `)) \(([^()\n]+)\)`,
 )
 
 // Heading is what a changelog section's heading line carries.
@@ -53,7 +56,8 @@ type Heading struct {
 	// CompareURL is the link the version is wrapped in, "" for a heading
 	// without one.
 	CompareURL string
-	// Date is the heading's date as written, "YYYY-MM-DD".
+	// Date is the heading's date as written, in the date format it was
+	// rendered in, "YYYY-MM-DD" by default.
 	Date string
 }
 

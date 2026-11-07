@@ -259,10 +259,13 @@ func TestExtractNotesDoesNotStopAtTripleBackticksMidLine(t *testing.T) {
 func TestExtractDate(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name   string
-		body   string
-		wantOK bool
-		want   string
+		name string
+		body string
+		// dateFormat is the configured changelog-date-format, "" for the
+		// default.
+		dateFormat string
+		wantOK     bool
+		want       string
 	}{
 		{name: "no details block", body: "Release v1.2.3\n", wantOK: false},
 		{
@@ -301,11 +304,37 @@ func TestExtractDate(t *testing.T) {
 			wantOK: true,
 			want:   "2026-03-14",
 		},
+		{
+			name: "reads a heading date in the configured format",
+			body: releasepr.Body(
+				"1.2.3", "v1.2.3", releasepr.Guide{Show: true, Labels: testLabels}, "", "", "## v1.2.3 (March 14, 2026)\n\n### Features\n\n- add the thing\n",
+			),
+			dateFormat: "%B %e, %Y",
+			wantOK:     true,
+			want:       "2026-03-14",
+		},
+		{
+			name: "reads a default heading date of a body rendered before the format was configured",
+			body: releasepr.Body(
+				"1.2.3", "v1.2.3", releasepr.Guide{Show: true, Labels: testLabels}, "", "", "## v1.2.3 (2026-03-14)\n\n### Features\n\n- add the thing\n",
+			),
+			dateFormat: "%d.%m.%Y",
+			wantOK:     true,
+			want:       "2026-03-14",
+		},
+		{
+			name: "a date neither format reads",
+			body: releasepr.Body(
+				"1.2.3", "v1.2.3", releasepr.Guide{Show: true, Labels: testLabels}, "", "", "## v1.2.3 (soon)\n\n### Features\n\n- add the thing\n",
+			),
+			dateFormat: "%d.%m.%Y",
+			wantOK:     false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			date, ok := releasepr.ExtractDate(tc.body)
+			date, ok := releasepr.ExtractDate(tc.body, tc.dateFormat)
 			if ok != tc.wantOK {
 				t.Fatalf("ExtractDate() ok = %v, want %v", ok, tc.wantOK)
 			}

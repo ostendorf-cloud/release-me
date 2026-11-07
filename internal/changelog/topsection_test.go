@@ -221,7 +221,7 @@ func TestParseHeading(t *testing.T) {
 func TestParseHeadingReadsBackWhatRenderHeadingWrote(t *testing.T) {
 	t.Parallel()
 	for _, compareURL := range []string{"", "https://github.com/o/r/compare/web@v2.0.0...web@v2.1.0-beta.1"} {
-		h, ok := changelog.ParseHeading(changelog.RenderHeading("2.1.0-beta.1", fixtureDate, compareURL))
+		h, ok := changelog.ParseHeading(changelog.RenderHeading("2.1.0-beta.1", fixtureDate, compareURL, ""))
 		want := changelog.Heading{Version: "2.1.0-beta.1", CompareURL: compareURL, Date: "2026-03-14"}
 		if !ok || h != want {
 			t.Fatalf("ParseHeading(RenderHeading(%q)) = (%+v, %v), want (%+v, true)", compareURL, h, ok, want)

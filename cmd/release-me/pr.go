@@ -245,11 +245,11 @@ func doPRComponent(
 
 	date := time.Now()
 	if existing != nil && !plan.changed {
-		if d, ok := releasepr.ExtractDate(existing.Body); ok {
+		if d, ok := releasepr.ExtractDate(existing.Body, cfg.ChangelogStyle.DateFormat); ok {
 			date = d
 		}
 	}
-	section := changelog.RenderHeading(versionStr, date, link) + "\n\n" + entriesBody + "\n"
+	section := changelog.RenderHeading(versionStr, date, link, cfg.ChangelogStyle.DateFormat) + "\n\n" + entriesBody + "\n"
 
 	title, err := renderTitle(cfg.TitlePatterns(),
 		releasepr.TitleValues{Version: versionStr, Component: comp.Name, Branch: base}, "component "+comp.Name)
@@ -257,7 +257,8 @@ func doPRComponent(
 		return err
 	}
 	body := releasepr.Body(versionStr, tag, bodyGuide(cfg), notes, versionOverride, section) +
-		releasepr.TitlePatternMarker(cfg.TitlePatterns()[0], releasepr.TitlePerComponent)
+		releasepr.TitlePatternMarker(cfg.TitlePatterns()[0], releasepr.TitlePerComponent) +
+		releasepr.DateMarker(date, cfg.ChangelogStyle.DateFormat)
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body && title == existing.Title:
@@ -456,14 +457,14 @@ func doPRLocked(
 	}
 	date := time.Now()
 	if existing != nil && !plan.changed {
-		if d, ok := releasepr.ExtractDate(existing.Body); ok {
+		if d, ok := releasepr.ExtractDate(existing.Body, cfg.ChangelogStyle.DateFormat); ok {
 			date = d
 		}
 	}
 	// The combined heading stays unlinked: every component carries a tag
 	// of its own, so there is no one compare view for the family. Each
 	// component's own CHANGELOG.md heading links its own.
-	section := changelog.RenderHeading(versionStr, date, "") + "\n\n" +
+	section := changelog.RenderHeading(versionStr, date, "", cfg.ChangelogStyle.DateFormat) + "\n\n" +
 		releasepr.RenderComponents(releasepr.Layout(cfg.ReleasePullRequestLayout), bodyParts) + "\n"
 
 	tags := make([]string, 0, len(members))
@@ -477,7 +478,8 @@ func doPRLocked(
 		return err
 	}
 	body := releasepr.Body(versionStr, strings.Join(tags, ", "), bodyGuide(cfg), notes, versionOverride, section) +
-		releasepr.TitlePatternMarker(cfg.SharedTitlePatterns()[0], cfg.SharedTitleKind())
+		releasepr.TitlePatternMarker(cfg.SharedTitlePatterns()[0], cfg.SharedTitleKind()) +
+		releasepr.DateMarker(date, cfg.ChangelogStyle.DateFormat)
 
 	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, "locked family", names, existing, plan, date, title, body, dryRun, stdout)
 }
@@ -929,7 +931,7 @@ func sameAsReleaseBranch(ctx context.Context, tmp string, changelogs []changelog
 // and compareURL parses again, which the comparison in sameAsReleaseBranch
 // relies on. The date is irrelevant to that, so any date does.
 func headingReadsBack(version, compareURL string) bool {
-	_, ok := changelog.ParseHeading(changelog.RenderHeading(version, time.Time{}, compareURL))
+	_, ok := changelog.ParseHeading(changelog.RenderHeading(version, time.Time{}, compareURL, ""))
 	return ok
 }
 
@@ -948,7 +950,7 @@ func (p *releasePlan) write(
 	}
 
 	for _, c := range p.changelogs {
-		section := changelog.RenderHeading(c.version, date, c.compareURL) + "\n\n" + c.entriesBody + "\n"
+		section := changelog.RenderHeading(c.version, date, c.compareURL, cfg.ChangelogStyle.DateFormat) + "\n\n" + c.entriesBody + "\n"
 		fullChangelogPath := filepath.Join(p.tmp, c.path)
 		// A configured changelog may name a directory that does not exist
 		// yet; os.WriteFile creates the file only.

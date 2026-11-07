@@ -19,6 +19,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ostendorf-cloud/release-me/internal/changelog"
 	"github.com/ostendorf-cloud/release-me/internal/conventional"
 	"github.com/ostendorf-cloud/release-me/internal/releasepr"
 	"github.com/ostendorf-cloud/release-me/internal/updater"
@@ -199,6 +200,10 @@ type ChangelogStyle struct {
 	// SentenceCase is "changelog-sentence-case", default false: upper case
 	// the first letter of every entry's description.
 	SentenceCase bool
+	// DateFormat is "changelog-date-format", "" by default for
+	// "%Y-%m-%d": the strftime expression a version heading's date
+	// renders in.
+	DateFormat string
 }
 
 // Labels is the "labels" key: the label names release-me expects on the
@@ -583,6 +588,7 @@ type raw struct {
 	Changelog                     *string    `yaml:"changelog"`
 	ChangelogSource               *string    `yaml:"changelog-source"`
 	ChangelogSentenceCase         *bool      `yaml:"changelog-sentence-case"`
+	ChangelogDateFormat           *string    `yaml:"changelog-date-format"`
 	Labels                        *rawLabels `yaml:"labels"`
 	Author                        *rawAuthor `yaml:"author"`
 	MajorTag                      *bool      `yaml:"major-tag"`
@@ -776,6 +782,12 @@ func Load(path string) (cfg Config, err error) {
 	}
 	if r.ChangelogSentenceCase != nil {
 		cfg.ChangelogStyle.SentenceCase = *r.ChangelogSentenceCase
+	}
+	if r.ChangelogDateFormat != nil {
+		if err := changelog.ValidateDateFormat(*r.ChangelogDateFormat); err != nil {
+			return Config{}, fmt.Errorf("config: parse %s: changelog-date-format %q %w", path, *r.ChangelogDateFormat, err)
+		}
+		cfg.ChangelogStyle.DateFormat = *r.ChangelogDateFormat
 	}
 	if r.Labels != nil {
 		if r.Labels.Pending != nil {

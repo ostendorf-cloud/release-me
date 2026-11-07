@@ -417,8 +417,12 @@ func untilClosingDetails(rest string) string {
 // block opens with, a locked family's combined one, or, for a shared
 // release pull request, the first component's own, in any layout. ok is
 // false when body carries no such block, or no heading with a parseable
-// date.
-func ExtractDate(body string) (date time.Time, ok bool) {
+// date. Canonical machine metadata wins; legacy headings are read in the
+// configured format, then in the default ISO format.
+func ExtractDate(body, dateFormat string) (date time.Time, ok bool) {
+	if date, ok := recordedDate(body); ok {
+		return date, true
+	}
 	preamble, components := ParseComponents(ExtractChangelog(body))
 	texts := []string{preamble}
 	for _, c := range components {
@@ -432,11 +436,13 @@ func ExtractDate(body string) (date time.Time, ok bool) {
 		if !ok {
 			continue
 		}
-		d, err := time.Parse("2006-01-02", h.Date)
-		if err != nil {
-			return time.Time{}, false
+		if d, err := changelog.ParseDate(h.Date, dateFormat); err == nil {
+			return d, true
 		}
-		return d, true
+		if d, err := changelog.ParseDate(h.Date, changelog.DefaultDateFormat); err == nil {
+			return d, true
+		}
+		return time.Time{}, false
 	}
 	return time.Time{}, false
 }
