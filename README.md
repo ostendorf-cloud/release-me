@@ -145,6 +145,7 @@ files:
 | `bump-patch-for-minor-pre-major` | Turns a minor bump into a patch one below `1.0.0`. | `false` | No |
 | `hidden-types` | Entry types hidden from the changelog. | `chore, docs, ci, style, refactor, test, build, other` | No |
 | `changelog-sentence-case` | Upper cases the first letter of every changelog entry. | `false` | No |
+| `changelog-sections` | Renames, reorders or adds changelog sections per type. | `Features`, `Bug Fixes`, `Performance`, `Reverts` | No |
 | `fallback-type` | Type assigned to text that does not parse as a conventional commit. | `other` | No |
 | `token-env` | Environment variable holding the GitHub token. | `GITHUB_TOKEN` | No |
 | `changelog` | Changelog file path. | `CHANGELOG.md` | No |

@@ -31,8 +31,28 @@ type Entry struct {
 	SubEntries []Entry
 }
 
+// Section is one changelog section after Breaking Changes: the heading it
+// renders under, "### <Heading>", and the entry types it collects.
+type Section struct {
+	Heading string
+	Types   []string
+}
+
+// DefaultSections are the sections Options.Sections falls back to when it is
+// nil, in render order: Features, Bug Fixes, Performance and Reverts.
+var DefaultSections = []Section{
+	{Heading: "Features", Types: []string{"feat"}},
+	{Heading: "Bug Fixes", Types: []string{"fix"}},
+	{Heading: "Performance", Types: []string{"perf"}},
+	{Heading: "Reverts", Types: []string{"revert"}},
+}
+
+// BreakingHeading is the heading every breaking entry renders under, always
+// the first section, whatever Options.Sections lists.
+const BreakingHeading = "Breaking Changes"
+
 // Options decides how Sections and Render turn entries into Markdown. The
-// zero value renders every section with nothing hidden.
+// zero value renders DefaultSections with nothing hidden.
 type Options struct {
 	// HiddenTypes drops an entry of one of these types: it produces no
 	// line of its own, see sectionFor for the one case where its sub
@@ -41,34 +61,51 @@ type Options struct {
 	// SentenceCase upper cases the first letter of every entry's
 	// description, see sentenceCase for the words it leaves alone.
 	SentenceCase bool
+	// Sections are the sections rendered after Breaking Changes, in this
+	// order. nil means DefaultSections; an empty, non-nil slice renders
+	// Breaking Changes only. An entry whose type no section lists renders
+	// nowhere unless it is breaking.
+	Sections []Section
 }
 
+// section is one rendered section: its heading and the entries it takes.
 type section struct {
 	heading string
 	match   func(Entry) bool
 }
 
-var sections = []section{
-	{heading: "Breaking Changes", match: func(e Entry) bool { return e.Breaking }},
-	{heading: "Features", match: func(e Entry) bool { return !e.Breaking && e.Type == "feat" }},
-	{heading: "Bug Fixes", match: func(e Entry) bool { return !e.Breaking && e.Type == "fix" }},
-	{heading: "Performance", match: func(e Entry) bool { return !e.Breaking && e.Type == "perf" }},
-	{heading: "Reverts", match: func(e Entry) bool { return !e.Breaking && e.Type == "revert" }},
+// sections returns the sections opts renders, in order: Breaking Changes,
+// then opts.Sections, or DefaultSections when that is nil.
+func (opts Options) sections() []section {
+	configured := opts.Sections
+	if configured == nil {
+		configured = DefaultSections
+	}
+	out := make([]section, 0, len(configured)+1)
+	out = append(out, section{heading: BreakingHeading, match: func(e Entry) bool { return e.Breaking }})
+	for _, s := range configured {
+		types := s.Types
+		out = append(out, section{heading: s.Heading, match: func(e Entry) bool {
+			return !e.Breaking && slices.Contains(types, e.Type)
+		}})
+	}
+	return out
 }
 
 // Sections renders the section bodies for one version's entries, with no
 // heading, so a caller can compare them independently of the version and
-// the date. It applies the same opts and section rules as Render: an
-// entry whose own type is in opts.HiddenTypes, or that belongs to none of
-// the five sections, breaking already counted as one, produces no line of
-// its own; its SubEntries can still earn it one, see sectionFor. Sections
-// returns "" when no entry is visible.
+// the date. It applies the same opts as Render: an entry whose own type is
+// in opts.HiddenTypes, or that belongs to none of the sections, breaking
+// already counted as one, produces no line of its own; its SubEntries can
+// still earn it one, see sectionFor. Sections returns "" when no entry is
+// visible.
 func Sections(entries []Entry, opts Options) string {
 	var body strings.Builder
-	for i, s := range sections {
+	all := opts.sections()
+	for i, s := range all {
 		var lines []string
 		for _, e := range entries {
-			if idx, ok := sectionFor(e, opts.HiddenTypes); ok && idx == i {
+			if idx, ok := sectionFor(e, all, opts.HiddenTypes); ok && idx == i {
 				lines = append(lines, renderEntry(e, opts)...)
 			}
 		}
@@ -84,26 +121,25 @@ func Sections(entries []Entry, opts Options) string {
 	return strings.TrimRight(body.String(), "\n")
 }
 
-// sectionFor decides which section e, and the line its own line renders
-// as, belongs under. e's own type decides it when that type is not in
-// hiddenTypes and matches one of the five sections, same as always. When
-// it is hidden, or belongs to none of them, SubEntries gets a second
-// chance: the first section, in Breaking Changes, Features, Bug Fixes,
-// Performance, Reverts order, that one of e's own non-hidden sub entries
-// matches. That keeps a merge whose own title is a hidden type, a chore,
-// say, from losing a feat or fix sub commit's entire section: the parent
-// line still renders, as the heading of its sub items, wherever the
+// sectionFor decides which of all, the sections in render order, e and the
+// line its own line renders as belong under. e's own type decides it when
+// that type is not in hiddenTypes and matches one of the sections. When it
+// is hidden, or belongs to none of them, SubEntries gets a second chance:
+// the first section, in render order, that one of e's own non-hidden sub
+// entries matches. That keeps a merge whose own title is a hidden type, a
+// chore, say, from losing a feat or fix sub commit's entire section: the
+// parent line still renders, as the heading of its sub items, wherever the
 // highest-priority visible one belongs. ok is false, no line at all, when
 // neither e nor any of its sub entries matches a section.
-func sectionFor(e Entry, hiddenTypes []string) (idx int, ok bool) {
+func sectionFor(e Entry, all []section, hiddenTypes []string) (idx int, ok bool) {
 	if !slices.Contains(hiddenTypes, e.Type) {
-		for i, s := range sections {
+		for i, s := range all {
 			if s.match(e) {
 				return i, true
 			}
 		}
 	}
-	for i, s := range sections {
+	for i, s := range all {
 		for _, sub := range e.SubEntries {
 			if !slices.Contains(hiddenTypes, sub.Type) && s.match(sub) {
 				return i, true
@@ -150,6 +186,15 @@ func renderEntry(e Entry, opts Options) []string {
 	for _, sub := range e.SubEntries {
 		if slices.Contains(opts.HiddenTypes, sub.Type) {
 			continue
+		}
+		if opts.Sections != nil {
+			visible := sub.Breaking
+			for _, section := range opts.Sections {
+				visible = visible || slices.Contains(section.Types, sub.Type)
+			}
+			if !visible {
+				continue
+			}
 		}
 		lines = append(lines, "  "+renderLine(sub, opts))
 	}

@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	stdpath "path"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -65,7 +66,7 @@ type rpPackage struct {
 var packageKeys = []string{
 	"release-type", "package-name", "component", "include-component-in-tag", "include-v-in-tag",
 	"tag-separator", "changelog-path", "bump-minor-pre-major", "bump-patch-for-minor-pre-major",
-	"initial-version", "extra-files", "version-file",
+	"initial-version", "extra-files", "version-file", "changelog-sections",
 }
 
 // topLevelKeys are the release-please settings that only exist at the top
@@ -274,6 +275,9 @@ type component struct {
 	bumpPatchForMinorPreMajor bool
 	initialVersion            string
 	files                     []file
+	// changelogSections is release-please's changelog-sections, nil when
+	// the package leaves the default sections.
+	changelogSections *[]config.ChangelogSection
 }
 
 // file is one release-me "files" entry.
@@ -428,6 +432,22 @@ func translatePackage(p rpPackage, readFile ReadFile, warn func(string, ...any))
 	case "go":
 	default:
 		warn("package %s: release-type %s: the files it bumps are not carried over, add them under files", p.path, releaseType)
+	}
+
+	if raw, ok := p.settings["changelog-sections"]; ok {
+		var sections []struct {
+			Type    string `json:"type"`
+			Section string `json:"section"`
+			Hidden  bool   `json:"hidden"`
+		}
+		if err := json.Unmarshal(raw, &sections); err != nil {
+			return component{}, fmt.Errorf("migrate: package %s: changelog-sections: %w", p.path, err)
+		}
+		translated := make([]config.ChangelogSection, 0, len(sections))
+		for _, s := range sections {
+			translated = append(translated, config.ChangelogSection{Type: s.Type, Section: s.Section, Hidden: s.Hidden})
+		}
+		c.changelogSections = &translated
 	}
 
 	if raw, ok := p.settings["extra-files"]; ok {
@@ -909,19 +929,28 @@ func render(components []component, top topLevel) ([]byte, error) {
 		add(doc, "changelog-sentence-case", boolean(true))
 	}
 
-	// A pre-major rule carried by every component is written once, at the
-	// top level, instead of repeated per component.
+	// bump-minor-pre-major and bump-patch-for-minor-pre-major carried by
+	// every component are written once, at the top level, instead of
+	// repeated per component. So is a changelog-sections list every
+	// component carries alike.
 	shared := sharedRules{
-		bumpMinorPreMajor: !slices.ContainsFunc(components, func(c component) bool { return !c.bumpMinorPreMajor }),
-		bumpPatchForMinorPreMajor: !slices.ContainsFunc(components, func(c component) bool {
+		bumpMinorPreMajor: slices.IndexFunc(components, func(c component) bool { return !c.bumpMinorPreMajor }) == -1,
+		bumpPatchForMinorPreMajor: slices.IndexFunc(components, func(c component) bool {
 			return !c.bumpPatchForMinorPreMajor
-		}),
+		}) == -1,
+		changelogSections: components[0].changelogSections != nil &&
+			slices.IndexFunc(components, func(c component) bool {
+				return !reflect.DeepEqual(c.changelogSections, components[0].changelogSections)
+			}) == -1,
 	}
 	if shared.bumpMinorPreMajor {
 		add(doc, "bump-minor-pre-major", boolean(true))
 	}
 	if shared.bumpPatchForMinorPreMajor {
 		add(doc, "bump-patch-for-minor-pre-major", boolean(true))
+	}
+	if shared.changelogSections {
+		add(doc, "changelog-sections", sectionsNode(*components[0].changelogSections, add))
 	}
 
 	if len(components) == 1 && components[0].path == "." && components[0].tagPrefix == "v" {
@@ -960,17 +989,35 @@ func render(components []component, top topLevel) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// sharedRules names the pre-major rules every component carries, which
-// render writes once at the top level.
+// sharedRules names the per-component settings render already wrote once
+// at the top level, because every component carries them alike.
 type sharedRules struct {
 	bumpMinorPreMajor         bool
 	bumpPatchForMinorPreMajor bool
+	changelogSections         bool
+}
+
+// sectionsNode is a changelog-sections list, release-please's shape.
+func sectionsNode(sections []config.ChangelogSection, add func(*yaml.Node, string, *yaml.Node)) *yaml.Node {
+	list := &yaml.Node{Kind: yaml.SequenceNode}
+	for _, s := range sections {
+		entry := &yaml.Node{Kind: yaml.MappingNode}
+		add(entry, "type", scalar(s.Type))
+		if s.Section != "" {
+			add(entry, "section", scalar(s.Section))
+		}
+		if s.Hidden {
+			add(entry, "hidden", boolean(true))
+		}
+		list.Content = append(list.Content, entry)
+	}
+	return list
 }
 
 // addSettings writes the settings release-me reads per component or at the
 // top level alike: initial-version, bump-minor-pre-major,
-// bump-patch-for-minor-pre-major and files. A pre-major rule is left out
-// where the top level already carries it.
+// bump-patch-for-minor-pre-major, changelog-sections and files. A setting
+// shared names is left out, the top level already carries it.
 func addSettings(m *yaml.Node, c component, shared sharedRules, add func(*yaml.Node, string, *yaml.Node)) {
 	if c.initialVersion != "" {
 		add(m, "initial-version", scalar(c.initialVersion))
@@ -980,6 +1027,9 @@ func addSettings(m *yaml.Node, c component, shared sharedRules, add func(*yaml.N
 	}
 	if c.bumpPatchForMinorPreMajor && !shared.bumpPatchForMinorPreMajor {
 		add(m, "bump-patch-for-minor-pre-major", boolean(true))
+	}
+	if c.changelogSections != nil && !shared.changelogSections {
+		add(m, "changelog-sections", sectionsNode(*c.changelogSections, add))
 	}
 	if len(c.files) > 0 {
 		list := &yaml.Node{Kind: yaml.SequenceNode}

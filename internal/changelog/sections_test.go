@@ -4,6 +4,7 @@
 package changelog_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ostendorf-cloud/release-me/internal/changelog"
@@ -116,5 +117,92 @@ func TestSectionsIsDateFreeSoTwoRendersOnDifferentDaysMatch(t *testing.T) {
 	renderedToday := changelog.Render("0.1.0", fixtureDate, "", entries, changelog.Options{})
 	if a == renderedToday {
 		t.Fatalf("Sections() unexpectedly equals the dated Render() output")
+	}
+}
+
+func TestSectionsRendersConfiguredSectionsInTheirOrder(t *testing.T) {
+	t.Parallel()
+	entries := []changelog.Entry{
+		{Type: "feat", Description: "add the widget"},
+		{Type: "deps", Description: "bump yaml.v3 to 3.0.1"},
+		{Type: "fix", Description: "handle the empty case"},
+		{Type: "feat", Description: "drop the v1 flag", Breaking: true},
+		{Type: "perf", Description: "cache the tag list"},
+	}
+	cases := []struct {
+		name     string
+		sections []changelog.Section
+		want     string
+	}{
+		{
+			name: "renamed and reordered, with a type the defaults never render",
+			sections: []changelog.Section{
+				{Heading: "Dependencies", Types: []string{"deps"}},
+				{Heading: "New", Types: []string{"feat"}},
+			},
+			want: "### Breaking Changes\n\n- drop the v1 flag\n\n" +
+				"### Dependencies\n\n- bump yaml.v3 to 3.0.1\n\n" +
+				"### New\n\n- add the widget",
+		},
+		{
+			name:     "several types under one heading keep the history order",
+			sections: []changelog.Section{{Heading: "Changes", Types: []string{"fix", "feat"}}},
+			want: "### Breaking Changes\n\n- drop the v1 flag\n\n" +
+				"### Changes\n\n- add the widget\n- handle the empty case",
+		},
+		{
+			name:     "an empty list keeps only Breaking Changes",
+			sections: []changelog.Section{},
+			want:     "### Breaking Changes\n\n- drop the v1 flag",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := changelog.Sections(entries, changelog.Options{Sections: tc.sections})
+			if got != tc.want {
+				t.Fatalf("Sections() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSectionsReadsBackUnderARenamedSection(t *testing.T) {
+	t.Parallel()
+	entries := []changelog.Entry{{Type: "deps", Description: "bump yaml.v3 to 3.0.1"}}
+	opts := changelog.Options{Sections: []changelog.Section{{Heading: "Dependencies", Types: []string{"deps"}}}}
+
+	rendered := changelog.Render("1.2.0", fixtureDate, "https://github.com/owner/repo/compare/v1.1.0...v1.2.0", entries, opts)
+	body, ok := changelog.TopSection(changelog.Prepend("", rendered))
+	if !ok || body != changelog.Sections(entries, opts) {
+		t.Fatalf("TopSection() = %q, %v, want the rendered sections back", body, ok)
+	}
+	if h, ok := changelog.ParseHeading(rendered); !ok || h.Version != "1.2.0" {
+		t.Fatalf("ParseHeading() = %+v, %v, want version 1.2.0", h, ok)
+	}
+}
+
+func TestCustomSectionsFilterNestedEntries(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		options  changelog.Options
+		breaking bool
+		wantPerf bool
+	}{
+		{name: "omitted nested type", options: changelog.Options{Sections: []changelog.Section{{Heading: "Features", Types: []string{"feat"}}}}},
+		{name: "explicitly hidden nested type", options: changelog.Options{Sections: []changelog.Section{{Heading: "Features", Types: []string{"feat", "perf"}}}, HiddenTypes: []string{"perf"}}},
+		{name: "empty list under a breaking parent", options: changelog.Options{Sections: []changelog.Section{}}, breaking: true},
+		{name: "visible breaking child", options: changelog.Options{Sections: []changelog.Section{}}, breaking: true, wantPerf: true},
+		{name: "default nested behavior is preserved", options: changelog.Options{}, wantPerf: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			entry := changelog.Entry{Type: "feat", Description: "add export", Breaking: tc.breaking, SubEntries: []changelog.Entry{{Type: "perf", Description: "speed up export", Breaking: tc.name == "visible breaking child"}}}
+			got := changelog.Sections([]changelog.Entry{entry}, tc.options)
+			if strings.Contains(got, "  - speed up export") != tc.wantPerf {
+				t.Fatalf("nested visibility: %s", got)
+			}
+		})
 	}
 }
