@@ -25,8 +25,9 @@ mise use ubi:ostendorf-cloud/release-me
 ```
 
 As a GitHub Action, pinned to a commit digest, the convention every action in this
-organisation follows. `release-me run` opens and updates pull requests and creates tags and
-releases, so the job needs `contents: write` and `pull-requests: write`; `secrets.GITHUB_TOKEN`
+organisation follows. `release-me run` opens and updates pull requests, creates tags and
+releases and deletes a released release branch, so the job needs `contents: write` and
+`pull-requests: write`; `secrets.GITHUB_TOKEN`
 cannot trigger the checks on the release pull request it opens, a repository or GitHub App
 token can.
 
@@ -160,6 +161,7 @@ files:
 | `release-pull-request-guide` | Whether every release pull request body opens with the collapsed "How this release works" guide. | `true` | No |
 | `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
+| `delete-release-branch` | Deletes a release branch once `release` has tagged and released it. | `true` | No |
 | `components` | Maps a name to a path and optional per-component overrides. | none, one implicit `main` component | No |
 
 See [the configuration reference](docs/configuration.md) for every key's full behavior, the

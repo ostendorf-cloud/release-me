@@ -94,6 +94,12 @@ collapsed "How this release works" guide release-please never rendered: `migrate
 `release-pull-request-guide` out, add `release-pull-request-guide: false` only when the human
 wants the body without it.
 
+**Release branches** are deleted once released: release-please leaves its
+`release-please--*` branch behind, release-me's `release` deletes `release-me/*` after
+tagging what merged from it. release-please has no such key, so the translation leaves
+`delete-release-branch` at its default, `true`; mention the difference, and set it to `false`
+only when the human wants the branches kept.
+
 Done when the table has exactly one row per warning line, every row has an action, and with
 more than one component the human has chosen the versioning mode and the release pull
 requests.
