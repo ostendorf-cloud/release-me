@@ -38,6 +38,25 @@ word that already holds an upper case letter, such as `iOS` or `gRPC`, stays as 
 do `npm` and a description starting with a backtick or a digit. The pull request title or
 commit stays as it is; only the rendered line changes. There is no per-component override.
 
+## `changelog-host`
+
+The web address every changelog link points at, release-please's `changelog-host`, default
+none: the forge's own. Set it when the changelog should link a host other than the one
+release-me's API calls go to, such as a GitHub Enterprise Server's `https://github.example.com`:
+
+```yaml
+changelog-host: https://github.example.com
+```
+
+It moves the heading's compare link and each entry's pull request link. Each link keeps its
+path, `/<owner>/<repo>/pull/12`, behind the configured address, which may carry a path prefix of
+its own, `https://code.example.com/github`. It changes no request and no link outside the
+changelog: the release pull request's own address, the action outputs and the API calls all
+stay on the forge. The address is an absolute `http` or `https` one with a host and no query,
+fragment or credentials; a trailing `/` is dropped. Whitespace and parentheses are refused, as
+they break the markdown link the heading's compare link is read back from. There is no
+per-component override.
+
 ## `fallback-type`
 
 The type assigned to text that does not parse as a conventional commit, default `other`.
