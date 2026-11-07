@@ -28,7 +28,7 @@ func SubCommits(ctx context.Context, dir, sha string) ([]Entry, error) {
 
 	var entries []Entry
 	for _, r := range parseRecords(out) {
-		entries = append(entries, Entry{SHA: r.SHA, Subject: r.Subject, Body: r.Body})
+		entries = append(entries, Entry{SHA: r.SHA, AuthorName: r.Author, Subject: r.Subject, Body: r.Body})
 	}
 	return entries, nil
 }

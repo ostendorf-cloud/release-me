@@ -134,7 +134,8 @@ func TestWalkExcludesCommitsOnAMergedSideBranch(t *testing.T) {
 
 // stripSHA returns a copy of entries with SHA zeroed, so a test can compare
 // the rest of each Entry without hardcoding a commit hash that changes on
-// every run.
+// every run. AuthorName is zeroed too, the test identity every fixture
+// commits as: TestEntriesCarryTheCommitAuthorName covers it.
 func stripSHA(entries []history.Entry) []history.Entry {
 	if entries == nil {
 		return nil
@@ -142,9 +143,33 @@ func stripSHA(entries []history.Entry) []history.Entry {
 	out := make([]history.Entry, len(entries))
 	for i, e := range entries {
 		e.SHA = ""
+		e.AuthorName = ""
 		out[i] = e
 	}
 	return out
+}
+
+func TestEntriesCarryTheCommitAuthorName(t *testing.T) {
+	dir := newRepo(t)
+	commitEntry(t, dir, "chore: initial commit", "")
+	runGit(t, dir, "tag", "v0.1.0")
+	runGit(t, dir, "-c", "user.name=Ada Lovelace", "-c", "user.email=ada@example.com",
+		"commit", "--allow-empty", "-m", "feat: add the engine")
+
+	walkers := map[string]func() ([]history.Entry, error){
+		"Walk":       func() ([]history.Entry, error) { return history.Walk(t.Context(), dir, "v0.1.0") },
+		"WalkSquash": func() ([]history.Entry, error) { return history.WalkSquash(t.Context(), dir, "v0.1.0") },
+		"AllEntries": func() ([]history.Entry, error) { return history.AllEntries(t.Context(), dir, "v0.1.0") },
+	}
+	for name, walk := range walkers {
+		got, err := walk()
+		if err != nil {
+			t.Fatalf("%s() error = %v", name, err)
+		}
+		if len(got) != 1 || got[0].AuthorName != "Ada Lovelace" {
+			t.Fatalf("%s() = %+v, want one entry by Ada Lovelace", name, got)
+		}
+	}
 }
 
 func TestWalkPopulatesTheCommitSHA(t *testing.T) {

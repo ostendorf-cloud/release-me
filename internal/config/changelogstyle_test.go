@@ -22,6 +22,7 @@ func TestLoadReadsTheChangelogStyleKeys(t *testing.T) {
 			content: "changelog-sentence-case: true\n",
 			want:    config.ChangelogStyle{SentenceCase: true},
 		},
+		{name: "changelog-authors", content: "changelog-authors: true\n", want: config.ChangelogStyle{Authors: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -39,7 +40,8 @@ func TestLoadReadsTheChangelogStyleKeys(t *testing.T) {
 
 func TestResolveGivesEveryComponentTheTopLevelChangelogStyle(t *testing.T) {
 	t.Parallel()
-	path := writeFile(t, "changelog-sentence-case: true\ncomponents:\n  api:\n    path: api\n  web:\n    path: web\n")
+	path := writeFile(t, "changelog-sentence-case: true\nchangelog-authors: true\n"+
+		"components:\n  api:\n    path: api\n  web:\n    path: web\n")
 
 	cfg, err := config.Load(path)
 	if err != nil {
@@ -54,8 +56,13 @@ func TestResolveGivesEveryComponentTheTopLevelChangelogStyle(t *testing.T) {
 
 func TestLoadRejectsAChangelogStyleKeyInsideAComponent(t *testing.T) {
 	t.Parallel()
-	_, err := config.Load(writeFile(t, "components:\n  api:\n    path: api\n    changelog-sentence-case: true\n"))
-	if err == nil {
-		t.Fatal("Load() error = nil, want the unknown component key refused")
+	for _, key := range []string{"changelog-sentence-case", "changelog-authors"} {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+			_, err := config.Load(writeFile(t, "components:\n  api:\n    path: api\n    "+key+": true\n"))
+			if err == nil {
+				t.Fatal("Load() error = nil, want the unknown component key refused")
+			}
+		})
 	}
 }

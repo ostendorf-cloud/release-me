@@ -349,6 +349,7 @@ func toPullRequest(pr *gogithub.PullRequest) forge.PullRequest {
 		URL:     pr.GetHTMLURL(),
 		Merged:  pr.GetMerged() || !pr.GetMergedAt().IsZero(),
 		HeadSHA: pr.GetHead().GetSHA(),
+		Author:  pr.GetUser().GetLogin(),
 	}
 }
 

@@ -45,14 +45,15 @@ func TestPullRequest(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name:   "reads title, body, labels and URL",
+			name:   "reads title, body, labels, URL and author",
 			number: 5,
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				fmt.Fprint(w, `{
 					"title": "feat(cli): add the next command",
 					"body": "adds release-me next",
 					"html_url": "https://github.com/owner/repo/pull/5",
-					"labels": [{"name": "release: pending"}, {"name": "feature"}]
+					"labels": [{"name": "release: pending"}, {"name": "feature"}],
+					"user": {"login": "octocat"}
 				}`)
 			},
 			want: forge.PullRequest{
@@ -61,6 +62,7 @@ func TestPullRequest(t *testing.T) {
 				Body:   "adds release-me next",
 				Labels: []string{"release: pending", "feature"},
 				URL:    "https://github.com/owner/repo/pull/5",
+				Author: "octocat",
 			},
 		},
 		{

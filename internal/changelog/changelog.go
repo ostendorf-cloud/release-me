@@ -20,6 +20,11 @@ type Entry struct {
 	Breaking          bool
 	PullRequestNumber int
 	URL               string
+	// Author is who the entry credits, rendered as it is when
+	// Options.Authors is on: "@<login>" for an entry a pull request's text
+	// gave, the commit's git author name for one a commit's own text gave.
+	// "" credits no one.
+	Author string
 	// SubEntries renders as indented list items under this entry's line,
 	// in the nested changelog source mode: the commits of the pull
 	// request's merge, each parsed on its own. A sub entry's own
@@ -41,6 +46,11 @@ type Options struct {
 	// SentenceCase upper cases the first letter of every entry's
 	// description, see sentenceCase for the words it leaves alone.
 	SentenceCase bool
+	// Authors appends " (<Author>)" to every top level entry's
+	// description, release-please's include-commit-authors shape. A sub
+	// entry never carries one: its parent's line already credits the pull
+	// request.
+	Authors bool
 }
 
 type section struct {
@@ -147,11 +157,13 @@ func RenderHeading(version string, date time.Time, compareURL string) string {
 // indented line per sub entry that opts.HiddenTypes does not drop.
 func renderEntry(e Entry, opts Options) []string {
 	lines := []string{renderLine(e, opts)}
+	subOpts := opts
+	subOpts.Authors = false
 	for _, sub := range e.SubEntries {
 		if slices.Contains(opts.HiddenTypes, sub.Type) {
 			continue
 		}
-		lines = append(lines, "  "+renderLine(sub, opts))
+		lines = append(lines, "  "+renderLine(sub, subOpts))
 	}
 	return lines
 }
@@ -168,6 +180,9 @@ func renderLine(e Entry, opts Options) string {
 		description = sentenceCase(description)
 	}
 	b.WriteString(description)
+	if opts.Authors && e.Author != "" {
+		fmt.Fprintf(&b, " (%s)", e.Author)
+	}
 	if e.PullRequestNumber > 0 && e.URL != "" {
 		fmt.Fprintf(&b, " ([#%d](%s))", e.PullRequestNumber, e.URL)
 	}
