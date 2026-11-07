@@ -34,9 +34,9 @@ type workspaceManifest struct {
 // component without such a manifest is no member of that manager's
 // workspace; a manifest that does not parse is an error naming it. Without
 // a root component, the manifest at the repository root, the workspace
-// root such as a virtual Cargo workspace, is read too, as the member of no
-// component: its dependencies on a released component move, it releases
-// nothing.
+// root such as a virtual Cargo workspace or a Maven aggregator pom, is
+// read too, as the member of no component: its dependencies on a released
+// component move, it releases nothing.
 func readWorkspace(dir string, cfg config.Config, all []config.ResolvedComponent) ([]workspaceManifest, error) {
 	var out []workspaceManifest
 	read := func(component, path, manager string) error {

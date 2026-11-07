@@ -223,6 +223,71 @@ components:
 	}
 }
 
+// modulePom is the pom.xml of a module of the com.acme build at version,
+// under the aggregator pom acme-parent 3.0.0, with dependencies, the
+// <dependency> elements of its dependencies list.
+func modulePom(artifact, version, dependencies string) string {
+	return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n" +
+		"  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>com.acme</groupId>\n" +
+		"    <artifactId>acme-parent</artifactId>\n    <version>3.0.0</version>\n  </parent>\n" +
+		"  <artifactId>" + artifact + "</artifactId>\n  <version>" + version + "</version>\n" +
+		"  <dependencies>\n" + dependencies + "  </dependencies>\n</project>\n"
+}
+
+func TestMavenWorkspaceReleasesEveryDependentModule(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	writeConfig(t, dir, `release-pull-request: shared
+workspaces: [maven]
+components:
+  core:
+    path: modules/core
+  api:
+    path: modules/api
+  cli:
+    path: modules/cli
+`)
+	coreDependency := "    <dependency>\n      <groupId>com.acme</groupId>\n      <artifactId>acme-core</artifactId>\n" +
+		"      <version>1.2.0</version>\n    </dependency>\n"
+	writeFiles(t, dir, "chore: scaffold the maven build", map[string]string{
+		"pom.xml": "<project>\n  <groupId>com.acme</groupId>\n  <artifactId>acme-parent</artifactId>\n" +
+			"  <version>3.0.0</version>\n  <packaging>pom</packaging>\n  <dependencyManagement>\n    <dependencies>\n" +
+			"  " + strings.ReplaceAll(coreDependency, "\n    ", "\n      ") + "    </dependencies>\n  </dependencyManagement>\n</project>\n",
+		"modules/core/pom.xml": modulePom("acme-core", "1.2.0", ""),
+		"modules/api/pom.xml":  modulePom("acme-api", "0.4.0", coreDependency),
+		"modules/cli/pom.xml": modulePom("acme-cli", "0.9.0", "    <dependency>\n      <groupId>info.picocli</groupId>\n"+
+			"      <artifactId>picocli</artifactId>\n      <version>4.7.6</version>\n    </dependency>\n"),
+	})
+	for _, tag := range []string{"core/v1.2.0", "api/v0.4.0", "cli/v0.9.0"} {
+		runGit(t, dir, "tag", tag)
+	}
+	writeFiles(t, dir, "feat(core): add the pricing rules", map[string]string{
+		"modules/core/src/main/java/com/acme/core/Pricing.java": "package com.acme.core;\n",
+	})
+	cfg, err := config.Load(filepath.Join(dir, "release-me.yaml"))
+	if err != nil {
+		t.Fatalf("config.Load() error = %v", err)
+	}
+
+	f := newFake()
+	var stdout bytes.Buffer
+	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
+		t.Fatalf("doPR() error = %v", err)
+	}
+
+	if len(f.CreatedPullRequests) != 1 || f.CreatedPullRequests[0].Title != "chore: release core v1.3.0, api v0.4.1" {
+		t.Fatalf("CreatedPullRequests = %+v, want core with api, cli depending on neither", f.CreatedPullRequests)
+	}
+	for path, want := range map[string]string{
+		"pom.xml":                  "<artifactId>acme-core</artifactId>\n        <version>1.3.0</version>",
+		"modules/api/pom.xml":      "<artifactId>acme-core</artifactId>\n      <version>1.3.0</version>",
+		"modules/api/CHANGELOG.md": "- **deps:** update com.acme:acme-core to 1.3.0",
+	} {
+		if got := showBareFile(t, origin, "release-me/main", path); !strings.Contains(got, want) {
+			t.Errorf("%s = %q, want it to contain %q", path, got, want)
+		}
+	}
+}
+
 func TestNodeWorkspaceLeftOutReleasesNoDependent(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\n")
 
@@ -269,6 +334,51 @@ func TestCargoWorkspaceReleasesDependentsThroughInheritedAliases(t *testing.T) {
 			want := strings.Replace(child, `version = "1.0.0"`, `version = "1.0.1"`, 1)
 			if got := showBareFile(t, remote, mainBranch, "crates/cli/Cargo.toml"); got != want {
 				t.Fatalf("child = %s; want %s", got, want)
+			}
+		})
+	}
+}
+
+func TestMavenWorkspaceReleasesDependenciesDeclaredOnlyInProfiles(t *testing.T) {
+	for _, tt := range []struct{ name, before, after string }{
+		{"dependency", "<dependencies>", "</dependencies>"},
+		{"managed dependency", "<dependencyManagement><dependencies>", "</dependencies></dependencyManagement>"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir, origin := newPRRepo(t)
+			writeConfig(t, dir, `release-pull-request: shared
+workspaces: [maven]
+components:
+  core:
+    path: modules/core
+  api:
+    path: modules/api
+`)
+			dependency := `<dependency><groupId>com.acme</groupId><artifactId>acme-core</artifactId><version>1.2.0</version></dependency>`
+			profile := `<profiles><profile><id>production</id><activation><activeByDefault>true</activeByDefault></activation>` + tt.before + dependency + tt.after + `</profile></profiles>`
+			api := strings.Replace(modulePom("acme-api", "0.4.0", ""), "</project>", profile+"</project>", 1)
+			writeFiles(t, dir, "chore: scaffold modules", map[string]string{
+				"modules/core/pom.xml": modulePom("acme-core", "1.2.0", ""), "modules/api/pom.xml": api,
+			})
+			for _, tag := range []string{"core/v1.2.0", "api/v0.4.0"} {
+				runGit(t, dir, "tag", tag)
+			}
+			writeFiles(t, dir, "feat(core): add pricing", map[string]string{"modules/core/Pricing.java": "class Pricing {}\n"})
+			cfg, err := config.Load(filepath.Join(dir, "release-me.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := newFake()
+			var out bytes.Buffer
+			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.CreatedPullRequests) != 1 || f.CreatedPullRequests[0].Title != "chore: release core v1.3.0, api v0.4.1" {
+				t.Fatalf("pull requests = %+v", f.CreatedPullRequests)
+			}
+			want := strings.Replace(api, "<version>1.2.0</version>", "<version>1.3.0</version>", 1)
+			if got := showBareFile(t, origin, "release-me/main", "modules/api/pom.xml"); got != want {
+				t.Fatalf("profile dependency = %s, want %s", got, want)
 			}
 		})
 	}

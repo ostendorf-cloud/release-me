@@ -618,6 +618,7 @@ type style struct {
 var workspacePlugins = map[string]string{
 	"node-workspace":  workspace.Node,
 	"cargo-workspace": workspace.Cargo,
+	"maven-workspace": workspace.Maven,
 }
 
 // workspacePluginOptions are the keys a workspace plugin object carries
