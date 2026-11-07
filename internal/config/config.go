@@ -5,7 +5,8 @@
 // bump-minor-pre-major, bump-patch-for-minor-pre-major, hidden-types,
 // fallback-type, token-env, files, changelog, changelog-source, the
 // changelog style keys ChangelogStyle lists, labels, author, major-tag,
-// versioning, draft-until-assets-attach, comment-mention and components.
+// versioning, signoff, draft-until-assets-attach, comment-mention and
+// components.
 package config
 
 import (
@@ -19,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/ostendorf-cloud/release-me/internal/conventional"
+	"github.com/ostendorf-cloud/release-me/internal/releasepr"
 	"github.com/ostendorf-cloud/release-me/internal/updater"
 	"github.com/ostendorf-cloud/release-me/internal/version"
 	"gopkg.in/yaml.v3"
@@ -284,6 +286,9 @@ type Config struct {
 	// stop being advertised in the body. Nothing reads the body back by the
 	// guide, so the key can change while a release pull request is open.
 	ReleasePullRequestGuide bool
+	// Signoff is the top-level "signoff" key: "Name <email>" the release
+	// commit's message carries a "Signed-off-by:" trailer for, "" for none.
+	Signoff string
 	// DraftUntilAssetsAttach is the top-level "draft-until-assets-attach"
 	// key, default false: when true, release creates every release as a
 	// draft instead of publishing it immediately, and resumes publishing
@@ -568,6 +573,7 @@ type raw struct {
 	ReleasePullRequest        *string    `yaml:"release-pull-request"`
 	ReleasePullRequestLayout  *string    `yaml:"release-pull-request-layout"`
 	ReleasePullRequestGuide   *bool      `yaml:"release-pull-request-guide"`
+	Signoff                   *string    `yaml:"signoff"`
 	DraftUntilAssetsAttach    *bool      `yaml:"draft-until-assets-attach"`
 	CommentMention            *string    `yaml:"comment-mention"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
@@ -776,6 +782,14 @@ func Load(path string) (cfg Config, err error) {
 	}
 	if r.ReleasePullRequestGuide != nil {
 		cfg.ReleasePullRequestGuide = *r.ReleasePullRequestGuide
+	}
+	if r.Signoff != nil {
+		if *r.Signoff != "" {
+			if err := releasepr.CheckSignoff(*r.Signoff); err != nil {
+				return Config{}, fmt.Errorf("config: parse %s: signoff %q %w", path, *r.Signoff, err)
+			}
+		}
+		cfg.Signoff = *r.Signoff
 	}
 	if r.DraftUntilAssetsAttach != nil {
 		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach

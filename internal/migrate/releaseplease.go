@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/ostendorf-cloud/release-me/internal/config"
+	"github.com/ostendorf-cloud/release-me/internal/releasepr"
 	"github.com/ostendorf-cloud/release-me/internal/updater"
 	"gopkg.in/yaml.v3"
 )
@@ -70,7 +71,7 @@ var packageKeys = []string{
 // level and that this translation reads or deliberately leaves out.
 var topLevelKeys = []string{
 	"packages", "plugins", "label", "release-label", "extra-label", "separate-pull-requests", "$schema",
-	"bootstrap-sha", "last-release-sha",
+	"bootstrap-sha", "last-release-sha", "signoff",
 }
 
 // FromReleasePlease translates release-please-config.json and
@@ -219,6 +220,18 @@ func FromReleasePlease(configJSON, manifestJSON []byte, readFile ReadFile) (Resu
 	opts := topLevel{
 		versioning: versioning, sharedPR: sharedPR, pending: pending, tagged: tagged, extra: extra, style: st,
 	}
+	if raw, ok := topValues["signoff"]; ok {
+		if err := json.Unmarshal(raw, &opts.signoff); err != nil {
+			return Result{}, fmt.Errorf("migrate: signoff: %w", err)
+		}
+		if opts.signoff != "" {
+			if err := releasepr.CheckSignoff(opts.signoff); err != nil {
+				warn("signoff: %q %v, left out", opts.signoff, err)
+				opts.signoff = ""
+			}
+		}
+	}
+
 	out, err := render(components, opts)
 	if err != nil {
 		return Result{}, err
@@ -759,6 +772,7 @@ type topLevel struct {
 	tagged     []string
 	extra      []string
 	style      style
+	signoff    string
 }
 
 // render writes release-me.yaml. A single root package tagged "vX.Y.Z" is
@@ -777,6 +791,9 @@ func render(components []component, top topLevel) ([]byte, error) {
 	}
 	if top.sharedPR {
 		add(doc, "release-pull-request", scalar("shared"))
+	}
+	if top.signoff != "" {
+		add(doc, "signoff", scalar(top.signoff))
 	}
 	labels := &yaml.Node{Kind: yaml.MappingNode}
 	add(labels, "pending", labelNode(top.pending))
