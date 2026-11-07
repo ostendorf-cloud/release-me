@@ -43,10 +43,11 @@ func Touches(ctx context.Context, dir, sha string) ([]string, error) {
 // Belongs reports whether any of paths, the shape Touches returns, falls
 // under componentPath, equal to it or nested inside it, and outside every
 // path in exclude: the paths whose changes do not count for the component,
-// such as the other components' paths for a root component beside them.
-// componentPath "." is the sentinel for the component at the repository
-// root and matches every path, including an empty list, unless exclude
-// names one: then it matches every path outside exclude.
+// such as the other components' paths for a root component beside them, or
+// the component's own "exclude-paths". componentPath "." is the sentinel
+// for the component at the repository root and matches every path,
+// including an empty list, unless exclude names one: then it matches every
+// path outside exclude.
 func Belongs(paths []string, componentPath string, exclude ...string) bool {
 	if componentPath == "." && len(exclude) == 0 {
 		return true
@@ -66,10 +67,12 @@ func within(path, dir string) bool {
 }
 
 // Counts reports whether a commit counts for the component name at
-// componentPath, minus the paths in exclude, as in Belongs. paths are the
-// files the commit changed, the shape Touches returns, and named every
-// component name its "Release-Component" footers name, as written: a name
-// no component carries stays in named and matches none.
+// componentPath, minus the paths in exclude, as in Belongs: the other
+// components' paths for a root component beside them, the component's own
+// "exclude-paths", or both. paths are the files the commit changed, the
+// shape Touches returns, and named every component name its
+// "Release-Component" footers name, as written: a name no component
+// carries stays in named and matches none.
 //
 // A commit named for the component counts for it, whatever files it
 // changed. Otherwise a commit that changed files counts through Belongs,

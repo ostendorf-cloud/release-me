@@ -442,19 +442,43 @@ Inherited `workspace = true` dependencies resolve renamed package aliases from t
 workspace declarations. The root keeps the version requirement, and the child keeps its
 workspace declaration unchanged.
 
+## `exclude-paths`
+
+Paths whose changes never count for a component, default none. Each one is relative to the
+repository root, like a `files` path, and names a directory or a file nested inside the
+component's `path`: a commit, or a merged pull request, that changed only files under its
+excluded paths does not reach the component's version or changelog, one that changed a file
+outside them does. A [Release-Component footer](overrides.md#release-component-footer) naming
+the component still counts, and an empty commit counts as it does without the key.
+
+```yaml
+components:
+  web:
+    path: packages/web
+    exclude-paths:
+      - packages/web/docs
+      - packages/web/package-lock.json
+```
+
+A component carries its own `exclude-paths`; the top-level key applies to the implicit `main`
+component of a repository without `components` and is a configuration error beside them. An
+entry that is empty, absolute, holds a backslash, leaves the repository, equals the
+component's `path` or lies outside it is a configuration error.
+
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
 `bump-patch-for-minor-pre-major`, `hidden-types`, `files`, `major-tag`, `changelog-source` and
-`changelog`. A key left out of a component falls back to the top-level setting above. A
-repository without `components` is one component named `main` at path `.`, tag prefix `v`,
-branch `release-me/main`, the default shape a repository with no configuration at all already
-has. A configured component gets tag prefix `<name>/v`, branch `release-me/<name>`, or
-`release-me/main` when the release pull request is shared, changelog `<path>/CHANGELOG.md`, and
-a release title `<name> vX.Y.Z`. A name holds ASCII letters, digits, `-`, `_` and `.` only, does
-not start with `.` or `-`, does not end with `.` or `.lock` and does not contain `..`; anything
-else is a configuration error naming the component and the character, since the name has to
-survive the tag prefix, the branch, the shared pull request title release reads back, the
+`changelog`, plus its own [`exclude-paths`](#exclude-paths). A key left out of a component
+falls back to the top-level setting above. A repository without `components` is one component
+named `main` at path `.`, tag prefix `v`, branch `release-me/main`, the default shape a
+repository with no configuration at all already has. A configured component gets tag prefix
+`<name>/v`, branch `release-me/<name>`, or `release-me/main` when the release pull request is
+shared, changelog `<path>/CHANGELOG.md`, and a release title `<name> vX.Y.Z`. A name holds
+ASCII letters, digits, `-`, `_` and `.` only, does not start with `.` or `-`, does not end with
+`.` or `.lock` and does not contain `..`; anything else is a configuration error naming the
+component and the character, since the name has to survive the tag prefix, the branch, the
+shared pull request title release reads back, the
 [Release-Component footer](overrides.md#release-component-footer) and the compare link.
 
 `tag-prefix` replaces the derived prefix, for a component whose existing tags follow another
@@ -491,8 +515,9 @@ A first parent entry belongs to every component whose path it touches, through t
 merge commit's branch changed; a pull request touching several components lands in every one
 of their changelogs. An empty commit lands in every component, and a
 [Release-Component footer](overrides.md#release-component-footer) adds the components it
-names. The component at path `.`, explicit or implicit, matches every entry and, beside other
-components, every entry outside their paths.
+names, while [`exclude-paths`](#exclude-paths) takes subpaths out of a component. The
+component at path `.`, explicit or implicit, matches every entry outside its excluded paths
+and, beside other components, every entry outside their paths too.
 Two components with overlapping paths, apart from a [root component](#root-component) beside
 others, or an unknown name on `--component`, are configuration errors.
 
