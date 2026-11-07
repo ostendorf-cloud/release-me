@@ -94,6 +94,9 @@ collapsed "How this release works" guide release-please never rendered: `migrate
 `release-pull-request-guide` out, add `release-pull-request-guide: false` only when the human
 wants the body without it.
 
+Its `pull-request-header` and `pull-request-footer` carry over as
+`release-pull-request-header` and `release-pull-request-footer`.
+
 A **root package** beside other packages, package `.`, translates to a root component with a
 warning: it owns only the files outside the other components' paths, where release-please's
 root package counted every commit, so a change inside a package no longer releases the root.

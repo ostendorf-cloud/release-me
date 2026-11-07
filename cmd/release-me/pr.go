@@ -252,7 +252,7 @@ func doPRComponent(
 	section := changelog.RenderHeading(versionStr, date, link) + "\n\n" + entriesBody + "\n"
 
 	title := releasepr.Title(comp.Name, versionStr)
-	body := releasepr.Body(versionStr, tag, bodyGuide(cfg), notes, versionOverride, section)
+	body := cfg.Frame().Wrap(releasepr.Body(versionStr, tag, bodyGuide(cfg), notes, versionOverride, section))
 
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body:
@@ -446,7 +446,7 @@ func doPRLocked(
 	}
 
 	title := tagrelease.LockedTitle(versionStr, names)
-	body := releasepr.Body(versionStr, strings.Join(tags, ", "), bodyGuide(cfg), notes, versionOverride, section)
+	body := cfg.Frame().Wrap(releasepr.Body(versionStr, strings.Join(tags, ", "), bodyGuide(cfg), notes, versionOverride, section))
 
 	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, "locked family", names, existing, plan, date, title, body, dryRun, stdout)
 }
