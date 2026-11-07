@@ -32,6 +32,9 @@ type GuideLabels struct {
 	Alpha  string
 	Beta   string
 	Rc     string
+	// Others are the labels of the further pre-release types
+	// "prerelease-types" configures, rendered after Rc.
+	Others []string
 }
 
 // Guide is the collapsed "How this release works" guide Body and
@@ -164,7 +167,7 @@ func guideBlock(tag string, labels GuideLabels, perComponentVersion bool) string
 // turned off.
 func preReleaseLabelList(labels GuideLabels) string {
 	var names []string
-	for _, l := range []string{labels.Alpha, labels.Beta, labels.Rc} {
+	for _, l := range append([]string{labels.Alpha, labels.Beta, labels.Rc}, labels.Others...) {
 		if l != "" {
 			names = append(names, l)
 		}

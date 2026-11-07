@@ -247,6 +247,60 @@ func TestFromReleasePleaseCarriesOverBumpPatchForMinorPreMajor(t *testing.T) {
 	}
 }
 
+func TestFromReleasePleaseCarriesOverThePreReleaseTypeAsALabel(t *testing.T) {
+	t.Parallel()
+	configJSON := `{"prerelease": true, "release-type": "go", "separate-pull-requests": true, "packages": {
+	  "web": {"component": "web", "prerelease-type": "beta"},
+	  "api": {"component": "api", "prerelease-type": "next"},
+	  "cli": {"component": "cli", "prerelease-type": "next"}}}`
+
+	got, err := migrate.FromReleasePlease([]byte(configJSON), nil, files(nil))
+	if err != nil {
+		t.Fatalf("FromReleasePlease() error = %v", err)
+	}
+
+	cfg := load(t, got.YAML)
+	want := []config.PreReleaseType{{Type: "beta", Label: "release: beta"}, {Type: "next", Label: "release: next"}}
+	if kinds := cfg.Labels.PreReleaseKinds(); !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("PreReleaseKinds() = %+v, want %+v\n%s", kinds, want, got.YAML)
+	}
+	for _, w := range []string{
+		`package web: prerelease-type beta: release-me cuts it only while the release pull request carries the label "release: beta"`,
+		`package api: prerelease-type next: release-me cuts it only while the release pull request carries the label "release: next"`,
+	} {
+		if !slices.Contains(got.Warnings, w) {
+			t.Errorf("Warnings = %q, want it to contain %q", got.Warnings, w)
+		}
+	}
+}
+
+func TestFromReleasePleaseWarnsAboutAPreReleaseItCannotCarryOver(t *testing.T) {
+	t.Parallel()
+	configJSON := `{"release-type": "go", "separate-pull-requests": true, "packages": {
+	  "web": {"component": "web", "prerelease": true},
+	  "api": {"component": "api", "versioning": "prerelease"},
+	  "cli": {"component": "cli", "prerelease-type": "pre.view"}}}`
+
+	got, err := migrate.FromReleasePlease([]byte(configJSON), nil, files(nil))
+	if err != nil {
+		t.Fatalf("FromReleasePlease() error = %v", err)
+	}
+
+	if kinds := load(t, got.YAML).Labels.PreReleaseKinds(); len(kinds) != 0 {
+		t.Fatalf("PreReleaseKinds() = %+v, want none\n%s", kinds, got.YAML)
+	}
+	for _, w := range []string{
+		"package web: prerelease: release-me cuts a pre-release only while the release pull request " +
+			"carries a pre-release type label, left out",
+		"package api: versioning: no release-me equivalent, left out",
+		"package cli: prerelease-type pre.view: not a pre-release type release-me can carry, left out",
+	} {
+		if !slices.Contains(got.Warnings, w) {
+			t.Errorf("Warnings = %q, want it to contain %q", got.Warnings, w)
+		}
+	}
+}
+
 func TestFromReleasePleaseKeepsARootPackageWithPlainTagsImplicit(t *testing.T) {
 	t.Parallel()
 	configJSON := `{"packages": {".": {"release-type": "node", "include-component-in-tag": false}}}`

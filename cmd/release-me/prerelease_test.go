@@ -13,7 +13,11 @@ import (
 
 func TestSelectPreReleaseType(t *testing.T) {
 	t.Parallel()
-	lbl := config.Labels{Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"}, Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc"}
+	lbl := config.Labels{
+		Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
+		Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
+		PreReleaseTypes: []config.PreReleaseType{{Type: "next", Label: "release: next"}},
+	}
 
 	cases := []struct {
 		name     string
@@ -26,6 +30,11 @@ func TestSelectPreReleaseType(t *testing.T) {
 		{name: "selects alpha", prLabels: []string{"release: pending", "release: alpha"}, wantType: "alpha", wantOK: true},
 		{name: "selects beta", prLabels: []string{"release: pending", "release: beta"}, wantType: "beta", wantOK: true},
 		{name: "selects rc", prLabels: []string{"release: pending", "release: rc"}, wantType: "rc", wantOK: true},
+		{name: "selects a configured prerelease type", prLabels: []string{"release: pending", "release: next"}, wantType: "next", wantOK: true},
+		{
+			name: "rejects a configured prerelease type beside rc", prLabels: []string{"release: pending", "release: next", "release: rc"},
+			wantErr: []string{"release: rc", "release: next"},
+		},
 		{
 			name: "rejects two pre-release labels at once", prLabels: []string{"release: pending", "release: alpha", "release: rc"},
 			wantErr: []string{"release: alpha", "release: rc"},

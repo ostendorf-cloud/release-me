@@ -238,7 +238,7 @@ func isReleasePullRequest(prLabels []string, labels config.Labels) bool {
 	if tagrelease.HasAll(prLabels, labels.Pending) || tagrelease.HasAll(prLabels, labels.Tagged) {
 		return true
 	}
-	for _, l := range []string{labels.Alpha, labels.Beta, labels.Rc} {
+	for _, l := range labels.PreReleaseLabels() {
 		if l != "" && slices.Contains(prLabels, l) {
 			return true
 		}

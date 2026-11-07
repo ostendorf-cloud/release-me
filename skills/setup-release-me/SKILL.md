@@ -76,7 +76,8 @@ Four choices belong to the human; ask each once, recommendation first:
   `release-pull-request-title` and `release-pull-request-shared-title` out unless the human
   asks for another title.
 - **Pre-releases:** wanted, or turned off with `alpha`, `beta` and `rc` set to `false` under
-  `labels`, so the repository needs only the pending and tagged labels.
+  `labels`, so the repository needs only the pending and tagged labels. A type of another name,
+  such as `next`, goes under `prerelease-types` with its own label.
 - **Token:** a GitHub App (recommended: its release pull requests trigger checks and the
   release commit is attributed to its bot) or a repository token.
 

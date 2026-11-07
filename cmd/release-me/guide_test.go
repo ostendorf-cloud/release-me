@@ -48,7 +48,9 @@ func TestEveryReleasePullRequestBodyCarriesTheGuideOnlyWhileTheKeyIsOn(t *testin
 			t.Run(name, func(t *testing.T) {
 				dir, _, cfg := family.repo(t)
 				cfg.ReleasePullRequestGuide = guide
+				cfg.Labels.PreReleaseTypes = []config.PreReleaseType{{Type: "next", Label: "release: next"}}
 				f := newFake()
+				f.RepoLabels = append(f.RepoLabels, "release: next")
 				var stdout bytes.Buffer
 				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 					t.Fatalf("doPR() error = %v", err)
@@ -56,6 +58,9 @@ func TestEveryReleasePullRequestBodyCarriesTheGuideOnlyWhileTheKeyIsOn(t *testin
 				body := f.CreatedPullRequests[0].Body
 				if got := strings.Contains(body, guideSummary); got != guide {
 					t.Fatalf("body carries the guide = %v, want %v:\n%s", got, guide, body)
+				}
+				if got := strings.Contains(body, "`release: next`"); got != guide {
+					t.Fatalf("body names the configured pre-release label = %v, want %v:\n%s", got, guide, body)
 				}
 				if !strings.HasPrefix(body, "Release ") {
 					t.Fatalf("body = %q, want it to open with the version line", body)
