@@ -493,6 +493,52 @@ func TestFromReleasePleaseMapsWorkspacePluginsToWorkspaces(t *testing.T) {
 	}
 }
 
+func TestFromReleasePleaseCarriesAlwaysLinkLocalOver(t *testing.T) {
+	t.Parallel()
+	packages := `"packages": {"packages/core": {"component": "core"}, "packages/web": {"component": "web"}}`
+	cases := []struct {
+		name       string
+		configJSON string
+		want       bool
+		warning    string
+	}{
+		{
+			name:       "turned off beside the node-workspace plugin",
+			configJSON: `{"always-link-local": false, "plugins": ["node-workspace"], ` + packages + `}`,
+			want:       false,
+		},
+		{
+			name:       "turned on, release-me's default",
+			configJSON: `{"always-link-local": true, "plugins": ["node-workspace"], ` + packages + `}`,
+			want:       true,
+		},
+		{
+			name:       "without the node-workspace plugin",
+			configJSON: `{"always-link-local": false, ` + packages + `}`,
+			want:       true,
+			warning:    "always-link-local: applies to the node-workspace plugin, left out",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), nil, files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			if cfg := load(t, got.YAML); cfg.AlwaysLinkLocal != tc.want {
+				t.Fatalf("AlwaysLinkLocal = %v, want %v, YAML:\n%s", cfg.AlwaysLinkLocal, tc.want, got.YAML)
+			}
+			if tc.warning != "" && !slices.Contains(got.Warnings, tc.warning) {
+				t.Errorf("Warnings = %q, want it to contain %q", got.Warnings, tc.warning)
+			}
+			if slices.ContainsFunc(got.Warnings, func(w string) bool { return strings.Contains(w, "no release-me equivalent") }) {
+				t.Errorf("Warnings = %q, want always-link-local carried over", got.Warnings)
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseReportsWhatItCannotCarryOver(t *testing.T) {
 	t.Parallel()
 	configJSON := `{

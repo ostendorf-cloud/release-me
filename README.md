@@ -164,6 +164,7 @@ files:
 | `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
 | `workspaces` | Package managers whose local dependencies release a dependent with its dependency. | none | No |
+| `always-link-local` | Links every node dependency on a local package name, not only satisfied ranges. | `true` | No |
 | `components` | Maps a name to a path and optional per-component overrides. | none, one implicit `main` component | No |
 
 See [the configuration reference](docs/configuration.md) for every key's full behavior, the

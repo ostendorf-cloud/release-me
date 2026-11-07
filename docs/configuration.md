@@ -442,6 +442,18 @@ Inherited `workspace = true` dependencies resolve renamed package aliases from t
 workspace declarations. The root keeps the version requirement, and the child keeps its
 workspace declaration unchanged.
 
+## `always-link-local`
+
+Whether every `node` dependency on a local package name links the two components, default
+`true`, release-please's default too. `false` links one only where it resolves to the local
+package anyway: a `workspace:`, `file:`, `link:` or `portal:` protocol, or a range the local
+package's current version satisfies, such as `^1.2.0` for a local `1.4.1`. Any other
+dependency on the name, `~1.1.0` for that `1.4.1` or a dist-tag like `latest`, is left to the
+registry: its range stays as written and it releases nothing. A dependent still linked through
+another dependency releases as usual. Ranges are read the way npm reads them: `||`, hyphen
+ranges, partial and `x` versions and the `=`, `<`, `<=`, `>`, `>=`, `~` and `^` operators.
+Setting the key without `node` in [`workspaces`](#workspaces) is a configuration error.
+
 ## `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,

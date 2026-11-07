@@ -134,3 +134,26 @@ func TestSetDependencyRejectsADependencyObjectOnOneLine(t *testing.T) {
 		t.Fatal("SetDependency() error = nil, want an error naming the layout it cannot read")
 	}
 }
+
+func TestNodeRewriteFiltersEveryDependencyDeclaration(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, dev, wantDev string
+		localOnly          bool
+	}{
+		{name: "mixed local and registry declarations", dev: "^9.0.0", wantDev: "^9.0.0", localOnly: true},
+		{name: "default updates both declarations", dev: "^9.0.0", wantDev: "^1.1.0"},
+		{name: "workspace protocol remains local", dev: "workspace:^9.0.0", wantDev: "workspace:^1.1.0", localOnly: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			content := "{\n  \"dependencies\": {\n    \"core\": \"^1.0.0\"\n  },\n  \"devDependencies\": {\n    \"core\": \"" + tc.dev + "\"\n  }\n}\n"
+			got, err := workspace.SetLocalDependency(workspace.Node, content, "core", "1.1.0", "1.0.0", workspace.Options{LocalRangesOnly: tc.localOnly})
+			want := strings.Replace(content, `"^1.0.0"`, `"^1.1.0"`, 1)
+			want = strings.Replace(want, `"`+tc.dev+`"`, `"`+tc.wantDev+`"`, 1)
+			if err != nil || got != want {
+				t.Fatalf("rewrite=%s,%v;want %s", got, err, want)
+			}
+		})
+	}
+}

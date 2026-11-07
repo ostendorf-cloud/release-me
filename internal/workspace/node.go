@@ -65,11 +65,12 @@ func moveNodeRange(rng, version string) (string, bool) {
 // the top level of a package.json.
 var nodeSectionOpen = regexp.MustCompile(`^\s*"(` + strings.Join(nodeSections, "|") + `)"\s*:\s*\{\s*$`)
 
-// setNodeDependency moves every declaration of name in a package.json's
-// dependency objects to version. The objects must open on a line of their
-// own and declare one dependency per line, the layout npm, pnpm and yarn
-// write; everything else in the file is kept byte for byte.
-func setNodeDependency(content, name, version string) (string, error) {
+// setNodeDependencyWhere moves declarations of name in a package.json's
+// dependency objects to version, filtered by eligible when it is set. The
+// objects must open on a line of their own and declare one dependency per
+// line, the layout npm, pnpm and yarn write; everything else in the file
+// is kept byte for byte.
+func setNodeDependencyWhere(content, name, version string, eligible func(string) bool) (string, error) {
 	entry := regexp.MustCompile(`^(\s*"` + regexp.QuoteMeta(name) + `"\s*:\s*)"((?:[^"\\]|\\.)*)"(.*)$`)
 	lines := strings.Split(content, "\n")
 	depth := -1
@@ -82,7 +83,7 @@ func setNodeDependency(content, name, version string) (string, error) {
 		case inSection && depth == 1:
 			if m := entry.FindStringSubmatch(line); m != nil {
 				found = true
-				if moved, ok := moveNodeRange(m[2], version); ok {
+				if moved, ok := moveNodeRange(m[2], version); ok && (eligible == nil || eligible(m[2])) {
 					lines[i] = m[1] + `"` + moved + `"` + m[3]
 				}
 			}
