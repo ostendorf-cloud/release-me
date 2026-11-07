@@ -1,5 +1,23 @@
 # Changelog
 
+## [v0.4.0](https://github.com/ostendorf-cloud/release-me/compare/v0.3.0...v0.4.0) (2026-11-07)
+
+### Features
+
+- **changelog:** render GitHub's generated release notes with changelog-type github ([#113](https://github.com/ostendorf-cloud/release-me/pull/113))
+- **workspace:** release cargo workspace dependents with their dependency ([#109](https://github.com/ostendorf-cloud/release-me/pull/109))
+- **updater:** add a plain updater for version.txt ([#92](https://github.com/ostendorf-cloud/release-me/pull/92))
+- **pr:** configurable release pull request title patterns ([#90](https://github.com/ostendorf-cloud/release-me/pull/90))
+- **changelog:** sentence case entries with changelog-sentence-case ([#91](https://github.com/ostendorf-cloud/release-me/pull/91))
+- **components:** allow a root component beside other components ([#89](https://github.com/ostendorf-cloud/release-me/pull/89))
+- **updater:** add an xml updater for pom.xml and .csproj ([#87](https://github.com/ostendorf-cloud/release-me/pull/87))
+- **updater:** add npm-lock, cargo-lock and gemfile-lock updaters ([#84](https://github.com/ostendorf-cloud/release-me/pull/84))
+- **config:** several labels per role and extra labels ([#104](https://github.com/ostendorf-cloud/release-me/pull/104))
+- **updater:** add a generic updater for release-please's version markers ([#102](https://github.com/ostendorf-cloud/release-me/pull/102))
+- **version:** add bump-patch-for-minor-pre-major ([#81](https://github.com/ostendorf-cloud/release-me/pull/81))
+- **releasepr:** turn the release pull request guide off ([#80](https://github.com/ostendorf-cloud/release-me/pull/80))
+- **releasepr:** a configurable layout for a release pull request with several components ([#77](https://github.com/ostendorf-cloud/release-me/pull/77))
+
 ## [v0.3.0](https://github.com/ostendorf-cloud/release-me/compare/v0.2.1...v0.3.0) (2026-10-28)
 
 ### Features
