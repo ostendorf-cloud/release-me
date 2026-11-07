@@ -247,6 +247,80 @@ func TestFromReleasePleaseCarriesOverBumpPatchForMinorPreMajor(t *testing.T) {
 	}
 }
 
+func TestFromReleasePleaseCarriesOverReleaseAs(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name         string
+		configJSON   string
+		manifestJSON string
+		wantTop      string
+		wantComps    []string
+		wantWarning  string
+	}{
+		{
+			name: "a value every package carries is written once at the top level",
+			configJSON: `{"release-as": "2.0.0", "release-type": "go",
+			  "packages": {"web": {"component": "web"}, "api": {"component": "api"}}}`,
+			wantTop:   "2.0.0",
+			wantComps: []string{"2.0.0", "2.0.0"},
+		},
+		{
+			name: "a package's own value stays on its component",
+			configJSON: `{"release-type": "go", "separate-pull-requests": true,
+			  "packages": {"web": {"component": "web", "release-as": "1.0.0"}, "api": {"component": "api"}}}`,
+			wantComps: []string{"1.0.0", ""},
+		},
+		{
+			name:         "a value the manifest already records is left out",
+			configJSON:   `{"packages": {".": {"release-type": "go", "release-as": "1.4.0"}}}`,
+			manifestJSON: `{".": "1.4.0"}`,
+			wantComps:    []string{""},
+			wantWarning:  "package .: release-as 1.4.0: already released, the manifest records 1.4.0, left out",
+		},
+		{
+			name:        "a pre-release value is left out",
+			configJSON:  `{"packages": {".": {"release-type": "go", "release-as": "2.0.0-rc.1"}}}`,
+			wantComps:   []string{""},
+			wantWarning: "package .: release-as 2.0.0-rc.1: the value is a pre-release version, left out",
+		},
+		{
+			name: "different values in a locked family are left out",
+			configJSON: `{"release-type": "go",
+			  "plugins": [{"type": "linked-versions", "groupName": "family", "components": ["web", "api"]}],
+			  "packages": {"web": {"component": "web", "release-as": "2.0.0"}, "api": {"component": "api"}}}`,
+			wantComps: []string{"", ""},
+			wantWarning: "package web: release-as: release-me forces a locked family's one version at the top level only, " +
+				"and the packages force different ones, left out",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := migrate.FromReleasePlease([]byte(tc.configJSON), []byte(tc.manifestJSON), files(nil))
+			if err != nil {
+				t.Fatalf("FromReleasePlease() error = %v", err)
+			}
+			cfg := load(t, got.YAML)
+			if cfg.ReleaseAs != tc.wantTop {
+				t.Fatalf("ReleaseAs = %q, want %q\n%s", cfg.ReleaseAs, tc.wantTop, got.YAML)
+			}
+			var comps []string
+			for _, c := range cfg.Resolve() {
+				comps = append(comps, c.ReleaseAs)
+			}
+			if !reflect.DeepEqual(comps, tc.wantComps) {
+				t.Fatalf("components = %q, want %q\n%s", comps, tc.wantComps, got.YAML)
+			}
+			if tc.wantWarning != "" && !slices.Contains(got.Warnings, tc.wantWarning) {
+				t.Fatalf("Warnings = %q, want it to contain %q", got.Warnings, tc.wantWarning)
+			}
+			if tc.wantWarning == "" && slices.ContainsFunc(got.Warnings, func(w string) bool { return strings.Contains(w, "release-as") }) {
+				t.Fatalf("Warnings = %q, want none for release-as, it carries over", got.Warnings)
+			}
+		})
+	}
+}
+
 func TestFromReleasePleaseKeepsARootPackageWithPlainTagsImplicit(t *testing.T) {
 	t.Parallel()
 	configJSON := `{"packages": {".": {"release-type": "node", "include-component-in-tag": false}}}`

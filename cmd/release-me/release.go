@@ -321,14 +321,14 @@ func parseCommit(e history.Entry, fallbackType string, number int, url string) (
 	}
 }
 
-// warnRefusedReleaseAs logs every "Release-As" footer version.Next
-// refused, never failing the run: the footer is ignored and the computed
-// bump applies, the same way pr treats a release-me-version override that
+// warnRefusedReleaseAs logs every "Release-As" footer and "release-as"
+// key value version.Next refused, never failing the run: the value is
+// ignored and the computed bump applies, the same way pr treats a release-me-version override that
 // is not greater than the last released version. who names the component
 // or family.
 func warnRefusedReleaseAs(logger *slog.Logger, who string, refused []version.Refusal) {
 	for _, r := range refused {
-		logger.Warn("ignoring a Release-As footer: the value "+r.Reason, "component", who, "value", r.Value)
+		logger.Warn("ignoring a "+r.Source+": the value "+r.Reason, "component", who, "value", r.Value)
 	}
 }
 

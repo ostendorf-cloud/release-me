@@ -172,6 +172,8 @@ only the files outside the other components' paths, where release-please's root 
 counted every commit. It also carries over:
 
 - `bump-minor-pre-major`, `bump-patch-for-minor-pre-major` and `initial-version`;
+- `release-as`, unless the manifest already records it as released or release-me refuses the
+  value, a pre-release for one;
 - the version file of a `node` (`package.json`), `rust` (`Cargo.toml`), `maven` (`pom.xml`, its
   project version or else its parent's), `simple` (its `version-file`, default `version.txt`,
   through `plain`) or `helm` (`Chart.yaml`) package where that file exists, `node` being

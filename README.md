@@ -143,6 +143,7 @@ files:
 | `initial-version` | Version used when no tag exists yet. | `0.1.0` | No |
 | `bump-minor-pre-major` | Turns a major bump into a minor one below `1.0.0`. | `false` | No |
 | `bump-patch-for-minor-pre-major` | Turns a minor bump into a patch one below `1.0.0`. | `false` | No |
+| `release-as` | Forces the next version while it is greater than the last tag. | none | No |
 | `hidden-types` | Entry types hidden from the changelog. | `chore, docs, ci, style, refactor, test, build, other` | No |
 | `changelog-sentence-case` | Upper cases the first letter of every changelog entry. | `false` | No |
 | `fallback-type` | Type assigned to text that does not parse as a conventional commit. | `other` | No |

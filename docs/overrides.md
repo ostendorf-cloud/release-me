@@ -157,6 +157,22 @@ footer of `2.0.0` and the `rc` label.
 A `release-me-version` block on the release pull request, from a `release-as` comment or a
 hand edit, wins over every footer.
 
+## Forced version precedence
+
+Four sources can set the next version. The first one that applies wins:
+
+1. The `release-me-version` block on the open release pull request, from a
+   [`release-as` comment](#comment-commands) or a hand edit.
+2. The [`release-as` key](configuration.md#release-as) in `release-me.yaml`.
+3. The highest [Release-As footer](#release-as-footer) in range.
+4. The version computed from the changes, or `initial-version` for a first release.
+
+The same rule decides whether a forced value applies: it is a plain `X.Y.Z` version, optionally
+prefixed with `v`, and strictly greater than the last tag. A value that fails either check is
+ignored, and the next source applies. The block alone accepts a pre-release version. The key and
+the footer stay in place after their release, so they would force the same pre-release a second
+time. A pre-release label builds on whichever version wins instead.
+
 ## Release-Component footer
 
 With `components`, a commit counts for every component whose `path` it touches. Two rules
