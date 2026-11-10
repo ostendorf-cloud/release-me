@@ -24,17 +24,14 @@ func Title(name, version string) string {
 }
 
 // GuideLabels is the label names rendered in the release pull request's
-// "How this release works" guide: the tagged label and the three
-// pre-release type labels, an empty one for a type turned off. The pending
-// label never appears there.
+// "How this release works" guide: the tagged label and every enabled
+// pre-release type's label, in order. The pending label never appears
+// there.
 type GuideLabels struct {
 	Tagged []string
-	Alpha  string
-	Beta   string
-	Rc     string
-	// Others are the labels of the further pre-release types
-	// "prerelease-types" configures, rendered after Rc.
-	Others []string
+	// PreRelease is the label of every enabled pre-release type, in
+	// configured order: a type turned off carries no entry here.
+	PreRelease []string
 }
 
 // Guide is the collapsed "How this release works" guide Body and
@@ -167,7 +164,7 @@ func guideBlock(tag string, labels GuideLabels, perComponentVersion bool) string
 // turned off.
 func preReleaseLabelList(labels GuideLabels) string {
 	var names []string
-	for _, l := range append([]string{labels.Alpha, labels.Beta, labels.Rc}, labels.Others...) {
+	for _, l := range labels.PreRelease {
 		if l != "" {
 			names = append(names, l)
 		}

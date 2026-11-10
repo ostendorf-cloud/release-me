@@ -365,7 +365,7 @@ func releaseShared(
 	for _, p := range plan {
 		comp, versionStr, ver := p.comp, p.versionStr, p.ver
 		if preType, _, ok := ver.PreReleaseType(); ok {
-			if typeLabel := labels.typeLabel(preType); typeLabel != "" && !slices.Contains(remove, typeLabel) {
+			if typeLabel := labels.PreRelease[preType]; typeLabel != "" && !slices.Contains(remove, typeLabel) {
 				remove = append(remove, typeLabel)
 			}
 		}
@@ -477,7 +477,7 @@ func (comp Component) releaseName(versionStr string) string {
 }
 
 // Labels names the labels Run reads and writes: Pending and Tagged on
-// every release, plus the three pre-release type labels, so a pre-release
+// every release, plus every pre-release type's label, so a pre-release
 // pull request's type label swaps to Tagged alongside Pending, the same as
 // Pending does.
 type Labels struct {
@@ -488,27 +488,9 @@ type Labels struct {
 	// Tagged is every label releasing a pull request adds in place of the
 	// pending ones; it is tagged only while it carries all of them.
 	Tagged []string
-	Alpha  string
-	Beta   string
-	Rc     string
-	// Others maps every further pre-release type "prerelease-types"
-	// configures to its label.
-	Others map[string]string
-}
-
-// typeLabel returns the label naming preType, "" when preType is "" or
-// names no configured pre-release type.
-func (l Labels) typeLabel(preType string) string {
-	switch preType {
-	case "alpha":
-		return l.Alpha
-	case "beta":
-		return l.Beta
-	case "rc":
-		return l.Rc
-	default:
-		return l.Others[preType]
-	}
+	// PreRelease maps every configured pre-release type, alpha, beta, rc
+	// and any further one, to its label; a type turned off carries none.
+	PreRelease map[string]string
 }
 
 // Result is the outcome for one merged release pull request.
@@ -781,7 +763,7 @@ func releaseOne(
 	}
 	remove := slices.Clone(labels.Pending)
 	if preType, _, ok := ver.PreReleaseType(); ok {
-		if typeLabel := labels.typeLabel(preType); typeLabel != "" {
+		if typeLabel := labels.PreRelease[preType]; typeLabel != "" {
 			remove = append(remove, typeLabel)
 		}
 	}

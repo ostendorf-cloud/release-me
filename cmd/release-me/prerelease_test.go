@@ -15,8 +15,10 @@ func TestSelectPreReleaseType(t *testing.T) {
 	t.Parallel()
 	lbl := config.Labels{
 		Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
-		Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
-		PreReleaseTypes: []config.PreReleaseType{{Type: "next", Label: "release: next"}},
+		PreRelease: []config.PreReleaseType{
+			{Type: "alpha", Label: "release: alpha"}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: "release: rc"},
+			{Type: "next", Label: "release: next"},
+		},
 	}
 
 	cases := []struct {
@@ -132,7 +134,10 @@ func TestPreReleaseVersionSharesTheCounterAcrossTheFamily(t *testing.T) {
 
 func TestSelectPreReleaseTypeIgnoresATypeConfiguredEmpty(t *testing.T) {
 	t.Parallel()
-	lbl := config.Labels{Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"}, Rc: "release: rc"}
+	lbl := config.Labels{
+		Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
+		PreRelease: []config.PreReleaseType{{Type: "alpha", Label: ""}, {Type: "rc", Label: "release: rc"}},
+	}
 
 	// A label named like a turned-off type is an ordinary label, not a
 	// pre-release request, and a second label beside rc is no conflict.

@@ -18,13 +18,15 @@ import (
 )
 
 // selectPreReleaseType reads which of the enabled pre-release type labels,
-// alpha, beta, rc and every prerelease-types entry, prLabels carries. ok is false when none of them is present: the release stays
-// stable, the next run's version returns to it the moment the label it
-// carried is removed. err names every label present when more than one is.
+// alpha, beta, rc and every further type "labels.prerelease" configures,
+// prLabels carries. ok is false when none of them is present: the release
+// stays stable, the next run's version returns to it the moment the label
+// it carried is removed. err names every label present when more than one
+// is.
 func selectPreReleaseType(prLabels []string, lbl config.Labels) (preType string, ok bool, err error) {
 	var found []config.PreReleaseType
-	for _, k := range lbl.PreReleaseKinds() {
-		if slices.Contains(prLabels, k.Label) {
+	for _, k := range lbl.PreRelease {
+		if k.Label != "" && slices.Contains(prLabels, k.Label) {
 			found = append(found, k)
 		}
 	}
@@ -130,22 +132,15 @@ func preReleaseEntries(
 	return preVersion.String(), restricted, since, nil
 }
 
-// otherPreReleaseLabels maps every "prerelease-types" entry's type to its
-// label, for release to swap it alongside pending.
-func otherPreReleaseLabels(lbl config.Labels) map[string]string {
-	out := make(map[string]string, len(lbl.PreReleaseTypes))
-	for _, t := range lbl.PreReleaseTypes {
-		out[t.Type] = t.Label
+// preReleaseLabelsByType maps every configured pre-release type to its
+// label, for release to swap it alongside pending. A type turned off, with
+// an empty label, is left out.
+func preReleaseLabelsByType(lbl config.Labels) map[string]string {
+	out := make(map[string]string, len(lbl.PreRelease))
+	for _, t := range lbl.PreRelease {
+		if t.Label != "" {
+			out[t.Type] = t.Label
+		}
 	}
 	return out
-}
-
-// otherPreReleaseLabelNames returns every "prerelease-types" entry's label,
-// in release-me.yaml's order, for the release pull request's guide.
-func otherPreReleaseLabelNames(lbl config.Labels) []string {
-	names := make([]string, len(lbl.PreReleaseTypes))
-	for i, t := range lbl.PreReleaseTypes {
-		names[i] = t.Label
-	}
-	return names
 }

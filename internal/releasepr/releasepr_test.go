@@ -34,10 +34,8 @@ func TestTitle(t *testing.T) {
 // configuration, the shape every test that does not exercise a custom
 // configuration uses.
 var testLabels = releasepr.GuideLabels{
-	Tagged: []string{"release: tagged"},
-	Alpha:  "release: alpha",
-	Beta:   "release: beta",
-	Rc:     "release: rc",
+	Tagged:     []string{"release: tagged"},
+	PreRelease: []string{"release: alpha", "release: beta", "release: rc"},
 }
 
 // guideText is the "How this release works" block rendered for tag and
@@ -53,7 +51,7 @@ func guideText(tag string, labels releasepr.GuideLabels) string {
 		"`release-as X.Y.Z`. It wins outright over the computed bump, pre-release label included, " +
 		"until the pull request merges or the block is removed; one that does not parse, or is not " +
 		"greater than the last released version, is ignored instead.\n" +
-		"- Pre-release: add the label `" + labels.Alpha + "`, `" + labels.Beta + "` or `" + labels.Rc + "`. " +
+		"- Pre-release: add the label `" + labels.PreRelease[0] + "`, `" + labels.PreRelease[1] + "` or `" + labels.PreRelease[2] + "`. " +
 		"The next run turns the version into `X.Y.Z-<type>.N`. Remove the label to go back to the stable version.\n" +
 		"- Hide or rewrite a change: a fenced block `release-me` in the changed pull request's body, " +
 		"one conventional line per entry, an empty block hides it.\n" +
@@ -106,10 +104,8 @@ func TestBodyRendersTheVersionGuideNotesAndChangelog(t *testing.T) {
 func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 	t.Parallel()
 	labels := releasepr.GuideLabels{
-		Tagged: []string{"status: released"},
-		Alpha:  "pre: alpha",
-		Beta:   "pre: beta",
-		Rc:     "pre: rc",
+		Tagged:     []string{"status: released"},
+		PreRelease: []string{"pre: alpha", "pre: beta", "pre: rc"},
 	}
 	section := "## v0.4.0 (2026-01-02)\n\n### Features\n\n- add the thing\n"
 
@@ -129,8 +125,8 @@ func TestBodyRendersTheRealTagAndConfiguredLabelNames(t *testing.T) {
 func TestBodyListsAConfiguredPreReleaseTypeAfterRc(t *testing.T) {
 	t.Parallel()
 	labels := releasepr.GuideLabels{
-		Tagged: []string{"release: tagged"}, Alpha: "release: alpha", Rc: "release: rc",
-		Others: []string{"release: next", "release: preview"},
+		Tagged:     []string{"release: tagged"},
+		PreRelease: []string{"release: alpha", "release: rc", "release: next", "release: preview"},
 	}
 
 	got := releasepr.Body("0.4.0", "v0.4.0", releasepr.Guide{Show: true, Labels: labels}, "", "", "## v0.4.0\n")
@@ -372,12 +368,12 @@ func TestBodyNamesOnlyTheEnabledPreReleaseLabels(t *testing.T) {
 	}{
 		{
 			name:   "two of three",
-			labels: releasepr.GuideLabels{Tagged: []string{"release: tagged"}, Beta: "pre: beta", Rc: "pre: rc"},
+			labels: releasepr.GuideLabels{Tagged: []string{"release: tagged"}, PreRelease: []string{"", "pre: beta", "pre: rc"}},
 			want:   "add the label `pre: beta` or `pre: rc`.",
 		},
 		{
 			name:   "one",
-			labels: releasepr.GuideLabels{Tagged: []string{"release: tagged"}, Rc: "pre: rc"},
+			labels: releasepr.GuideLabels{Tagged: []string{"release: tagged"}, PreRelease: []string{"", "", "pre: rc"}},
 			want:   "add the label `pre: rc`.",
 		},
 		{

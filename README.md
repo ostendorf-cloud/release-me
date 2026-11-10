@@ -128,9 +128,10 @@ changelog: CHANGELOG.md
 labels:
   pending: "release: pending"
   tagged: "release: tagged"
-  alpha: "release: alpha"
-  beta: "release: beta"
-  rc: "release: rc"
+  prerelease:
+    alpha: "release: alpha"
+    beta: "release: beta"
+    rc: "release: rc"
 files:
   - path: cmd/cli/version.go
     updater: marker
@@ -159,8 +160,7 @@ files:
 | `changelog-date-format` | Format of the date in each version heading. | `%Y-%m-%d` | No |
 | `labels.pending` / `labels.tagged` | Label names `pr`, `release` and `check` use, one or a list. | `release: pending` / `release: tagged` | No |
 | `labels.extra` | Labels `pr` adds to every release pull request it opens. | none | No |
-| `labels.alpha` / `labels.beta` / `labels.rc` | Pre-release type labels. | `release: alpha` / `release: beta` / `release: rc` | No |
-| `prerelease-types` | Further pre-release types, each mapped to the label that selects it. | none | No |
+| `labels.prerelease` | Pre-release type labels: built-in `alpha` / `beta` / `rc`, plus any further type. | `release: alpha` / `release: beta` / `release: rc` | No |
 | `author.name` / `author.email` | Ignored, still accepted; `check` and `pr` warn when set. | `release-me` / `release-me[bot]@users.noreply.github.com` | No |
 | `files` | Files `pr` bumps to the next version. | none | No |
 | `major-tag` | Moves the major tag on every stable release. | `false` | No |

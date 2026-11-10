@@ -120,7 +120,7 @@ A pre-release type label on the open release pull request, `release: alpha`, `re
 `release: rc` by default, turns its next run into a pre-release: version `X.Y.Z-alpha.N`,
 `X.Y.Z-beta.N` or `X.Y.Z-rc.N`. `X.Y.Z` is the version a stable release would get from the
 entries since the last stable tag; pre-release tags never move that base. A
-[`prerelease-types`](configuration.md#prerelease-types) entry adds a type of any other name,
+[`labels.prerelease`](configuration.md#labels) entry adds a type of any other name,
 `X.Y.Z-next.N` for `next`, selected by its own label, and behaving exactly like the three.
 Exactly one pre-release type label may be present at a time; two at once is an error naming
 both. A type whose label is set to `false`, or `""`, in `release-me.yaml` is turned off:
@@ -301,7 +301,7 @@ counted every commit. It also carries over:
   every label of each comma separated list;
 - `prerelease-type` as a pre-release type selected by the label `release: <type>`: `alpha`,
   `beta` or `rc` stays on, any other name becomes a
-  [`prerelease-types`](configuration.md#prerelease-types) entry, and every type no package names
+  [`labels.prerelease`](configuration.md#labels) entry, and every type no package names
   is turned off. release-me cuts the pre-release while the release pull request carries that
   label, not on every release, so this is warned about, as is `prerelease: true`, which has no
   always-on counterpart;

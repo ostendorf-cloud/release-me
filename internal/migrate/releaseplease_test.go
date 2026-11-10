@@ -92,9 +92,10 @@ release-pull-request: shared
 labels:
   pending: 'autorelease: pending'
   tagged: 'autorelease: tagged'
-  alpha: false
-  beta: false
-  rc: false
+  prerelease:
+    alpha: false
+    beta: false
+    rc: false
 bump-minor-pre-major: true
 components:
   duxt:
@@ -352,9 +353,12 @@ func TestFromReleasePleaseCarriesOverThePreReleaseTypeAsALabel(t *testing.T) {
 	}
 
 	cfg := load(t, got.YAML)
-	want := []config.PreReleaseType{{Type: "beta", Label: "release: beta"}, {Type: "next", Label: "release: next"}}
-	if kinds := cfg.Labels.PreReleaseKinds(); !reflect.DeepEqual(kinds, want) {
-		t.Fatalf("PreReleaseKinds() = %+v, want %+v\n%s", kinds, want, got.YAML)
+	want := []config.PreReleaseType{
+		{Type: "alpha", Label: ""}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: ""},
+		{Type: "next", Label: "release: next"},
+	}
+	if kinds := cfg.Labels.PreRelease; !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("PreRelease = %+v, want %+v\n%s", kinds, want, got.YAML)
 	}
 	for _, w := range []string{
 		`package web: prerelease-type beta: release-me cuts it only while the release pull request carries the label "release: beta"`,
@@ -400,8 +404,8 @@ func TestFromReleasePleaseWarnsAboutAPreReleaseItCannotCarryOver(t *testing.T) {
 		t.Fatalf("FromReleasePlease() error = %v", err)
 	}
 
-	if kinds := load(t, got.YAML).Labels.PreReleaseKinds(); len(kinds) != 0 {
-		t.Fatalf("PreReleaseKinds() = %+v, want none\n%s", kinds, got.YAML)
+	if labels := load(t, got.YAML).Labels.PreReleaseLabels(); len(labels) != 0 {
+		t.Fatalf("PreReleaseLabels() = %+v, want none\n%s", labels, got.YAML)
 	}
 	for _, w := range []string{
 		"package web: prerelease: release-me cuts a pre-release only while the release pull request " +

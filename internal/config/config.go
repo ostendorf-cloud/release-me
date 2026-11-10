@@ -5,7 +5,7 @@
 // bump-minor-pre-major, bump-patch-for-minor-pre-major, versioning-strategy,
 // release-as, hidden-types, fallback-type, token-env, files, changelog,
 // changelog-source, changelog-type, skip-changelog, the changelog style keys
-// ChangelogStyle lists, labels, prerelease-types, author, major-tag,
+// ChangelogStyle lists, labels, author, major-tag,
 // versioning, signoff, release-pull-request-title,
 // release-pull-request-shared-title, release-pull-request-draft,
 // release-pull-request-header, release-pull-request-footer,
@@ -250,57 +250,45 @@ type ChangelogSection struct {
 }
 
 // Labels is the "labels" key: the label names release-me expects on the
-// repository. Alpha, Beta and Rc select a pre-release type on the release
-// pull request; Pending and Tagged apply to every release, stable or not.
-// Pending and Tagged are each one name or a list of them, never empty: a
-// release pull request is pending while it carries every pending label, and
-// releasing it swaps all of them for every tagged label. Extra is the labels
-// pr adds to a release pull request it opens beside the pending ones, read
-// by nothing. An empty Alpha, Beta or Rc, configured as "" or false, turns
-// that pre-release type off: release-me neither expects the label on the
-// repository nor reads it from a pull request.
+// repository. PreRelease selects a pre-release type on the release pull
+// request, each entry's label naming it; Pending and Tagged apply to every
+// release, stable or not. Pending and Tagged are each one name or a list of
+// them, never empty: a release pull request is pending while it carries
+// every pending label, and releasing it swaps all of them for every tagged
+// label. Extra is the labels pr adds to a release pull request it opens
+// beside the pending ones, read by nothing. A PreRelease entry with an
+// empty Label turns that pre-release type off: release-me neither expects
+// the label on the repository nor reads it from a pull request.
 type Labels struct {
 	Pending []string
 	Tagged  []string
 	Extra   []string
-	Alpha   string
-	Beta    string
-	Rc      string
-	// PreReleaseTypes is the top-level "prerelease-types" key: further
-	// pre-release types, each selected by its own label, in
-	// release-me.yaml's order, nil when the key is left out.
-	PreReleaseTypes []PreReleaseType
+	// PreRelease is the "labels.prerelease" key: every pre-release type
+	// release-me selects through a label on the release pull request, in
+	// order, alpha, beta and rc by default, each further type
+	// release-me.yaml adds appended after them, in the order it declares
+	// them.
+	PreRelease []PreReleaseType
 }
 
 // PreReleaseType is one pre-release type and the label that selects it on
-// the release pull request: an entry of "prerelease-types", or one of
-// alpha, beta and rc.
+// the release pull request: alpha, beta and rc by default, or a further
+// type "labels.prerelease" adds. An empty Label turns the type off.
 type PreReleaseType struct {
 	Type  string
 	Label string
 }
 
-// PreReleaseKinds returns every enabled pre-release type with its label:
-// alpha, beta and rc, in that order, each left out when its label is
-// turned off, then PreReleaseTypes. It is the order a pull request
-// carrying more than one of the labels is reported in.
-func (l Labels) PreReleaseKinds() []PreReleaseType {
-	kinds := make([]PreReleaseType, 0, 3+len(l.PreReleaseTypes))
-	for _, k := range []PreReleaseType{{"alpha", l.Alpha}, {"beta", l.Beta}, {"rc", l.Rc}} {
-		if k.Label != "" {
-			kinds = append(kinds, k)
-		}
-	}
-	return append(kinds, l.PreReleaseTypes...)
-}
-
 // PreReleaseLabels returns the label of every enabled pre-release type, in
-// PreReleaseKinds's order.
+// Labels.PreRelease's order, a type turned off, with an empty label,
+// carrying none. It is the order a pull request carrying more than one of
+// the labels is reported in.
 func (l Labels) PreReleaseLabels() []string {
-	kinds := l.PreReleaseKinds()
-	names := make([]string, len(kinds))
-	for i, k := range kinds {
-		names[i] = k.Label
+	names := make([]string, 0, len(l.PreRelease))
+	for _, p := range l.PreRelease {
+		if p.Label != "" {
+			names = append(names, p.Label)
+		}
 	}
 	return names
 }
@@ -778,12 +766,14 @@ type rawChangelogSection struct {
 // rawLabels mirrors Labels with pointer fields, so Load can tell a key left
 // out of the "labels" block apart from one set to its zero value.
 type rawLabels struct {
-	Pending *labelList       `yaml:"pending"`
-	Tagged  *labelList       `yaml:"tagged"`
-	Extra   *labelList       `yaml:"extra"`
-	Alpha   *preReleaseLabel `yaml:"alpha"`
-	Beta    *preReleaseLabel `yaml:"beta"`
-	Rc      *preReleaseLabel `yaml:"rc"`
+	Pending *labelList `yaml:"pending"`
+	Tagged  *labelList `yaml:"tagged"`
+	Extra   *labelList `yaml:"extra"`
+	// PreRelease is decoded as a node, like Components, so
+	// applyPreReleaseTypes can read its entries back in release-me.yaml's
+	// order: a Go map gives no such guarantee. A zero Kind means the
+	// "labels.prerelease" key was left out.
+	PreRelease yaml.Node `yaml:"prerelease"`
 }
 
 // labelList is "labels.pending", "labels.tagged" or "labels.extra": one
@@ -812,33 +802,6 @@ func (l *labelList) UnmarshalYAML(node *yaml.Node) error {
 		}
 	}
 	*l = names
-	return nil
-}
-
-// preReleaseLabel is one of "labels.alpha", "labels.beta" and "labels.rc":
-// a label name, or false for that pre-release type turned off, the same as
-// "". Without it yaml decodes an unquoted false into the label name "false".
-type preReleaseLabel string
-
-// UnmarshalYAML accepts a string, or the boolean false as the empty name.
-// true is rejected: it names no label and turns nothing off.
-func (l *preReleaseLabel) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode && node.Tag == "!!bool" {
-		var on bool
-		if err := node.Decode(&on); err != nil {
-			return err
-		}
-		if on {
-			return fmt.Errorf("line %d: a pre-release label is a name, or false to turn it off, not true", node.Line)
-		}
-		*l = ""
-		return nil
-	}
-	var name string
-	if err := node.Decode(&name); err != nil {
-		return err
-	}
-	*l = preReleaseLabel(name)
 	return nil
 }
 
@@ -895,9 +858,6 @@ type raw struct {
 	DeleteReleaseBranch           *bool                  `yaml:"delete-release-branch"`
 	AlwaysLinkLocal               *bool                  `yaml:"always-link-local"`
 	ExcludePaths                  *[]string              `yaml:"exclude-paths"`
-	// PreReleaseTypes is decoded as a node, like Components, so its
-	// entries keep release-me.yaml's order.
-	PreReleaseTypes yaml.Node `yaml:"prerelease-types"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -942,7 +902,11 @@ func Default() Config {
 		ChangelogSource: DefaultChangelogSource,
 		Labels: Labels{
 			Pending: []string{DefaultPendingLabel}, Tagged: []string{DefaultTaggedLabel},
-			Alpha: DefaultAlphaLabel, Beta: DefaultBetaLabel, Rc: DefaultRcLabel,
+			PreRelease: []PreReleaseType{
+				{Type: "alpha", Label: DefaultAlphaLabel},
+				{Type: "beta", Label: DefaultBetaLabel},
+				{Type: "rc", Label: DefaultRcLabel},
+			},
 		},
 		Author:                   Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
 		Versioning:               DefaultVersioning,
@@ -1159,22 +1123,13 @@ func Load(path string) (cfg Config, err error) {
 		if r.Labels.Extra != nil {
 			cfg.Labels.Extra = *r.Labels.Extra
 		}
-		if r.Labels.Alpha != nil {
-			cfg.Labels.Alpha = string(*r.Labels.Alpha)
+		if r.Labels.PreRelease.Kind != 0 {
+			types, err := applyPreReleaseTypes(path, &r.Labels.PreRelease, cfg.Labels.PreRelease)
+			if err != nil {
+				return Config{}, err
+			}
+			cfg.Labels.PreRelease = types
 		}
-		if r.Labels.Beta != nil {
-			cfg.Labels.Beta = string(*r.Labels.Beta)
-		}
-		if r.Labels.Rc != nil {
-			cfg.Labels.Rc = string(*r.Labels.Rc)
-		}
-	}
-	if r.PreReleaseTypes.Kind != 0 {
-		types, err := decodePreReleaseTypes(path, &r.PreReleaseTypes)
-		if err != nil {
-			return Config{}, err
-		}
-		cfg.Labels.PreReleaseTypes = types
 	}
 	if err := validateLabels(path, cfg.Labels); err != nil {
 		return Config{}, err
@@ -1896,17 +1851,16 @@ func validateLabels(path string, l Labels) error {
 	}{
 		{"labels.pending", l.Pending},
 		{"labels.tagged", l.Tagged},
-		{"labels.alpha", []string{l.Alpha}},
-		{"labels.beta", []string{l.Beta}},
-		{"labels.rc", []string{l.Rc}},
-		{"labels.extra", l.Extra},
 	} {
 		for _, name := range group.names {
 			roles = append(roles, struct{ key, name string }{group.key, name})
 		}
 	}
-	for _, t := range l.PreReleaseTypes {
-		roles = append(roles, struct{ key, name string }{"prerelease-types." + t.Type, t.Label})
+	for _, t := range l.PreRelease {
+		roles = append(roles, struct{ key, name string }{"labels.prerelease." + t.Type, t.Label})
+	}
+	for _, name := range l.Extra {
+		roles = append(roles, struct{ key, name string }{"labels.extra", name})
 	}
 	for i := 0; i < len(roles); i++ {
 		for j := i + 1; j < len(roles); j++ {
@@ -1922,36 +1876,61 @@ func validateLabels(path string, l Labels) error {
 	return nil
 }
 
-// reservedPreReleaseTypes are the type names "prerelease-types" refuses:
-// alpha, beta and rc are configured under "labels".
-var reservedPreReleaseTypes = []string{"alpha", "beta", "rc"}
-
-// decodePreReleaseTypes converts the "prerelease-types" mapping node, type
-// name to label, into []PreReleaseType in release-me.yaml's order. A type
-// name is one semver pre-release identifier that is not only digits, the
-// "<type>" of "X.Y.Z-<type>.N", and none of reservedPreReleaseTypes; a
-// label is a non-empty string.
-func decodePreReleaseTypes(path string, node *yaml.Node) ([]PreReleaseType, error) {
+// applyPreReleaseTypes merges the "labels.prerelease" mapping node, type
+// name to label, onto base, cfg.Labels.PreRelease already holding alpha,
+// beta and rc at their defaults: a key naming one of the three, or an
+// earlier line of this same block, renames or turns it off in place,
+// keeping its position in the order; any other key appends a further
+// pre-release type after them, in release-me.yaml's order. A type name is
+// one semver pre-release identifier that is not only digits, the "<type>"
+// of "X.Y.Z-<type>.N".
+func applyPreReleaseTypes(path string, node *yaml.Node, base []PreReleaseType) ([]PreReleaseType, error) {
 	if node.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("config: parse %s: prerelease-types: must be a mapping of type to label", path)
+		return nil, fmt.Errorf("config: parse %s: labels.prerelease: must be a mapping of type to label", path)
 	}
-	types := make([]PreReleaseType, 0, len(node.Content)/2)
+	types := slices.Clone(base)
 	for i := 0; i+1 < len(node.Content); i += 2 {
-		name, value := node.Content[i].Value, node.Content[i+1]
+		name, valueNode := node.Content[i].Value, node.Content[i+1]
 		if !preReleaseTypeName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
-			return nil, fmt.Errorf("config: parse %s: prerelease-types: type %q is not one pre-release identifier "+
+			return nil, fmt.Errorf("config: parse %s: labels.prerelease: type %q is not one pre-release identifier "+
 				"of ASCII letters, digits and \"-\" with at least one letter or \"-\"", path, name)
 		}
-		if slices.Contains(reservedPreReleaseTypes, name) {
-			return nil, fmt.Errorf("config: parse %s: prerelease-types: type %q is reserved, "+
-				"alpha, beta and rc are configured under labels", path, name)
+		label, off, err := decodePreReleaseLabelValue(valueNode)
+		if err != nil {
+			return nil, fmt.Errorf("config: parse %s: labels.prerelease.%s: %w", path, name, err)
 		}
-		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || value.Value == "" {
-			return nil, fmt.Errorf("config: parse %s: prerelease-types.%s: the label must be a non-empty string", path, name)
+		if idx := slices.IndexFunc(types, func(t PreReleaseType) bool { return t.Type == name }); idx >= 0 {
+			types[idx].Label = label
+			continue
 		}
-		types = append(types, PreReleaseType{Type: name, Label: value.Value})
+		if off {
+			return nil, fmt.Errorf("config: parse %s: labels.prerelease.%s: turning off a type that is not alpha, "+
+				"beta, rc or configured earlier in this block is pointless", path, name)
+		}
+		types = append(types, PreReleaseType{Type: name, Label: label})
 	}
 	return types, nil
+}
+
+// decodePreReleaseLabelValue reads one "labels.prerelease" entry's value: a
+// label name, or false, or an empty string, for off. true is rejected: it
+// names no label and turns nothing off.
+func decodePreReleaseLabelValue(node *yaml.Node) (label string, off bool, err error) {
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!bool" {
+		var on bool
+		if err := node.Decode(&on); err != nil {
+			return "", false, err
+		}
+		if on {
+			return "", false, errors.New("a pre-release label is a name, or false to turn it off, not true")
+		}
+		return "", true, nil
+	}
+	var name string
+	if err := node.Decode(&name); err != nil {
+		return "", false, err
+	}
+	return name, name == "", nil
 }
 
 // preReleaseTypeName matches one semver pre-release identifier.

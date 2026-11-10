@@ -205,7 +205,7 @@ func TestPullRequestsListedMergeTimestampDrivesRelease(t *testing.T) {
 	comp := release.Component{Name: "main", Branch: "release-me/main", TagPrefix: "v"}
 	labels := release.Labels{
 		Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
-		Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
+		PreRelease: map[string]string{"alpha": "release: alpha", "beta": "release: beta", "rc": "release: rc"},
 	}
 
 	results, err := release.Run(context.Background(), f, "owner", "repo", comp, labels, false, false, slog.New(slog.DiscardHandler))

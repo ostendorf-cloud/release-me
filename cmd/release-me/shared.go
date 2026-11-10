@@ -526,10 +526,7 @@ func reportSupersededPRs(
 // unless "release-pull-request-guide: false", naming the configured labels.
 func bodyGuide(cfg config.Config) releasepr.Guide {
 	return releasepr.Guide{
-		Show: cfg.ReleasePullRequestGuide,
-		Labels: releasepr.GuideLabels{
-			Tagged: cfg.Labels.Tagged, Alpha: cfg.Labels.Alpha, Beta: cfg.Labels.Beta, Rc: cfg.Labels.Rc,
-			Others: otherPreReleaseLabelNames(cfg.Labels),
-		},
+		Show:   cfg.ReleasePullRequestGuide,
+		Labels: releasepr.GuideLabels{Tagged: cfg.Labels.Tagged, PreRelease: cfg.Labels.PreReleaseLabels()},
 	}
 }
