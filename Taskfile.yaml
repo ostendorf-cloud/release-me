@@ -2,6 +2,7 @@ version: "3"
 
 vars:
   BIN: bin/release-me
+  COVERPROFILE: coverage.out
 
 tasks:
   setup:
@@ -76,9 +77,13 @@ tasks:
       - gitleaks git --no-banner --redact
 
   test:go:
-    desc: Go tests with the race detector
+    desc: Go tests with the race detector and a coverage profile
     cmds:
-      - go test -race -count=1 ./...
+      # "go test" prints one "coverage: NN.N% of statements" line per
+      # package as it goes, the per-package summary; "go tool cover"
+      # adds the total over every package from the profile.
+      - go test -race -count=1 -coverprofile={{.COVERPROFILE}} ./...
+      - go tool cover -func={{.COVERPROFILE}} | tail -n 1
 
   test:action:
     desc: Shell script tests for the composite action and this repository's own CI scripts
