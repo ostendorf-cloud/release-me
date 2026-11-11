@@ -290,7 +290,8 @@ pull request number, author association and body, not something a human runs dir
 `migrate release-please` reads `release-please-config.json` and `.release-please-manifest.json`
 from the repository root and prints the equivalent `release-me.yaml` on stdout, so it can be
 reviewed before it is written: `release-me migrate release-please > release-me.yaml`. It writes
-nothing itself.
+nothing itself. This section is the whole translation contract: what carries over, what is set
+regardless and what is left out.
 
 Each release-please package becomes a component named after its `component`, else its
 `package-name` with a node scope removed, else the name in its `package.json`. A character a
@@ -304,6 +305,22 @@ only the files outside the other components' paths, where release-please's root 
 counted every commit. It also carries over:
 
 - `bump-minor-pre-major`, `bump-patch-for-minor-pre-major` and `initial-version`;
+- `changelog-type`, at the top level when every package carries the same value, on the
+  component otherwise;
+- `skip-changelog`, at the top level when every package carries the same value, on the
+  component otherwise;
+- `changelog-sections`, release-please's own list shape, at the top level when every package
+  carries the same list, on the component otherwise;
+- `changelog-host`, only when every package names the same one and release-me accepts the
+  address; packages naming different hosts, or an address release-me refuses, are warned about
+  and the key is left out, since release-me links every component on one host;
+- `include-commit-authors` as [`changelog-authors`](configuration.md#changelog-authors), only
+  when every package sets it: release-me credits authors for every component or for none, so a
+  value only some packages carry is warned about and left out;
+- the `sentence-case` plugin as
+  [`changelog-sentence-case`](configuration.md#changelog-sentence-case), its `specialWords`
+  option warned about, since release-me keeps `gRPC`, `npm` and any first word already holding
+  an upper case letter as written;
 - `versioning` as `versioning-strategy`, by name, for `always-bump-patch`, `always-bump-minor`,
   `always-bump-major`, `service-pack` and `dependency-manifest`, the last two warned about since
   their release-me form differs from release-please's Java one;
@@ -390,8 +407,26 @@ counted every commit. It also carries over:
   [`release-pull-request-header`](configuration.md#release-pull-request-header) and
   [`release-pull-request-footer`](configuration.md#release-pull-request-footer).
 
-`changelog-source` is set to `all`, because release-please reads every commit since the last
-release, not the first parent history.
+Three keys are set whatever the release-please configuration says, so the translated changelog
+reads the way release-please's did:
+
+- `changelog-source: all`, because release-please reads every commit since the last release,
+  not the first parent history. It is the one setting the translation changes without being
+  asked and without a warning, and it decides what every entry looks like: a repository that
+  merges with merge commits usually wants `first-parent` instead, one entry per pull request.
+  See [changelog modes](changelog-modes.md) and decide it deliberately after the migration.
+- `changelog-commit-links: true` and `changelog-issue-references: true`, the two links
+  release-please's default changelog carries and release-me's does not unless asked.
+
+Two keys are deliberately left out:
+
+- `release-pull-request-guide`, so a migrated repository's release pull request bodies open
+  with the collapsed "How this release works" guide release-please never rendered. Set it to
+  `false` to get the body without it.
+- release-please's `date-format`, which formats the date its generic updater writes into a
+  file, not the changelog's date release-me's
+  [`changelog-date-format`](configuration.md#changelog-date-format) sets; it is reported as a
+  warning saying so.
 
 Every setting it cannot carry over is printed on stderr as a `warning:` line, each naming the
 key and what to do instead, as are the differences a reader should know about. It then looks

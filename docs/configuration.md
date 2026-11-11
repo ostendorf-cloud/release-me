@@ -266,9 +266,6 @@ release-please renders it, not `closes`. The release pull request body carries t
 and a closing keyword there would close the issue again when that pull request merges. There is
 no per-component override.
 
-`release-me migrate` turns both keys on, since release-please's default changelog carries both
-links.
-
 ## `changelog-host`
 
 The web address every changelog link points at, release-please's `changelog-host`, default
@@ -308,9 +305,6 @@ configuration errors. Changing the format changes the next heading only: `CHANGE
 every earlier heading as it was written, and a release pull request opened before the change
 keeps its date, rendered in the new format on the next `pr` run. There is no per-component
 override.
-
-release-please's own `date-format` formats the date its generic updater writes into a file, not
-the changelog's, so `release-me migrate` leaves it out with a warning saying so.
 
 Custom-formatted pull request bodies record the canonical date in machine metadata outside
 the rendered body. Changing to another custom format, or back to the default, keeps that
@@ -602,8 +596,6 @@ A team that turns the guide off finds everything it says documented here:
 - What a push to the default branch updates and which edits survive it: [pr](commands.md#pr)
   and the [notes block](overrides.md#notes-block).
 
-`migrate` leaves the key out, so a migrated repository keeps the guide.
-
 ## `release-pull-request-title`
 
 The title pattern of every component's own release pull request, default
@@ -765,8 +757,8 @@ all. [`force-tag-creation: false`](#force-tag-creation) beside this key is refus
 release-me.yaml loads: it leaves the tag to a release that is never created. A component
 overrides it through its own `skip-github-release` key.
 
-Unlike release-please, release-me creates the tag even with this key on. After migrating,
-remove any external tagging step that release-please needed for `skip-github-release`.
+Unlike release-please, release-me creates the tag even with this key on; see
+[migrate](commands.md#migrate) for what a migrated repository has to change because of it.
 
 ## `github-release-draft`
 
