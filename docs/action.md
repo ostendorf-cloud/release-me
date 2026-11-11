@@ -7,16 +7,27 @@ bootstrapping the first release. See the [README](../README.md#install) for the 
 ## Inputs
 
 The action downloads the archive and checksums file matching its own version for the
-runner's os and arch, verifies the checksum, then runs `release-me run`. Inputs: `token`
-(required), `component`, `dry-run`, `verbose`, `download-token` for the download step on a
-private fork, defaulting to the calling workflow's own token, `version` to pin a different
-release than the one the action resolves on its own, or `source` to build from the checkout
-with `go build` instead. `author-name`, `author-email` and `app-slug` are still accepted but
-ignored: the release commit is created through the GitHub API under the token's own identity,
-see [signed release commits](commands.md#signed-release-commits). `source` only builds this
-repository's own code:
-it is `go build`'s working directory for `uses: ./action` from inside this repository, not the
-caller's checkout for `uses: ostendorf-cloud/release-me/action@ref`.
+runner's os and arch, verifies the checksum, then runs `release-me run`.
+
+| Input | Purpose | Required | Default |
+| --- | --- | --- | --- |
+| `token` | Token `release-me` opens release pull requests and creates releases with. | Yes | none |
+| `component` | Limits the run to one configured component, the CLI's `--component`. | No | every component |
+| `dry-run` | Prints what would change and writes nothing, the CLI's `--dry-run`. | No | `false` |
+| `verbose` | Enables debug logging on stderr, the CLI's `--verbose`. | No | `false` |
+| `version` | The release-me release to run, without the `v`, or `source` to build it from the checkout with `go build` instead of downloading a release. | No | resolved, see below |
+| `download-token` | Token sent when downloading the release archive and checksums, needed only for a private release-me fork. | No | the calling workflow's own token |
+| `author-name` | Ignored, still accepted so an existing workflow keeps working. | No | empty |
+| `author-email` | Ignored, still accepted so an existing workflow keeps working. | No | empty |
+| `app-slug` | Ignored, still accepted so an existing workflow keeps working. | No | empty |
+
+The three ignored inputs change nothing because the release commit is created through the
+GitHub API under the token's own identity, see
+[signed release commits](commands.md#signed-release-commits).
+
+`version: source` only builds this repository's own code: it is `go build`'s working directory
+for `uses: ./action` from inside this repository, not the caller's checkout for
+`uses: ostendorf-cloud/release-me/action@ref`.
 
 Without `version`, the action resolves its own release in order: the ref it was invoked at
 (`github.action_ref`), when that ref is itself a release tag; failing that, the `VERSION`
