@@ -226,13 +226,14 @@ func TestDoPRCommitsTheReleaseBranchThroughTheForgeAsTheTokensIdentity(t *testin
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+			t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+
 			dir, origin := newPRRepoWithoutIdentity(t)
 			commitWithIdentity(t, dir, "feat: add the next command")
 			head := gitOut(t, dir, "rev-parse", "HEAD")
 
-			t.Setenv("HOME", t.TempDir())
-			t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-			t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
 			for k, v := range tc.env {
 				t.Setenv(k, v)
 			}

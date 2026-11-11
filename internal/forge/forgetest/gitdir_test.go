@@ -37,6 +37,7 @@ func newRemote(t *testing.T) (remote, base, next string) {
 	t.Helper()
 	work := t.TempDir()
 	gitIn(t, work, "init", "-q", "-b", "main")
+	gitIn(t, work, "config", "commit.gpgsign", "false")
 	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("# release-me\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
