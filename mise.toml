@@ -9,6 +9,9 @@ actionlint = "1"
 markdownlint-cli2 = "0.20"
 yamllint = "1"
 gitleaks = "8"
+# jq parses the pull request commit JSON scripts/check-dco.sh reads, and
+# builds the check run payload .github/workflows/dco.yaml posts.
+jq = "1"
 goreleaser = "2"
 hadolint = "2"
 shellcheck = "0"
