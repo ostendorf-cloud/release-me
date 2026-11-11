@@ -101,7 +101,11 @@ var Strategies = []Strategy{
 }
 
 // fixedBump returns the bump an always-bump strategy gives every release.
-// ok is false for StrategyDefault, which bumps by the changes.
+// ok is false for the three strategies that have no fixed bump, which the
+// default arm returns together: StrategyDefault and
+// StrategyDependencyManifest both bump by the changes, and
+// StrategyServicePack never reaches here, since Next returns its service
+// pack of the last version before asking.
 func (s Strategy) fixedBump() (bump Bump, ok bool) {
 	switch s {
 	case StrategyAlwaysBumpPatch:
