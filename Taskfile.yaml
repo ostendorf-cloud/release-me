@@ -85,6 +85,9 @@ tasks:
     cmds:
       - action/resolve-version_test.sh
       - action/run-release-me_test.sh
+      - action/verify-checksum_test.sh
+      - action/extract_test.sh
+      - action/resolve-platform_test.sh
       - scripts/publish-release-assets_test.sh
 
   check:
