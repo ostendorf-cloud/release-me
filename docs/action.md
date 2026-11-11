@@ -73,7 +73,7 @@ phase fails still lists in `prs` the pull request its `pr` phase opened.
   naming several components. Dry-run opens nothing, so it reports none.
 
 ```yaml
-  - uses: ostendorf-cloud/release-me/action@<commit sha>  # v0.1.1
+  - uses: ostendorf-cloud/release-me/action@<commit sha>  # <version>
     id: release
     with:
       token: ${{ steps.app-token.outputs.token }}

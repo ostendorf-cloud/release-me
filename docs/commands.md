@@ -15,9 +15,12 @@ your working copy. `versioning: locked` and `release-pull-request: shared` open 
 request for every component instead, on branch `release-me/main`: see
 [shared release pull request](versioning-modes.md#shared-release-pull-request).
 
-`pr` checks that the `pending`, `tagged`, `alpha`, `beta` and `rc` labels exist before it writes
-anything, the same check `check` runs. The labels are shared across every component; the
-default branch is resolved once and shared too.
+`pr` checks that every label `release-me.yaml` configures exists before it writes anything, the
+same check `check` runs: the `pending` and `tagged` labels, every
+[`labels.extra`](configuration.md#labels) one, and the label of every enabled pre-release type,
+`release: alpha`, `release: beta` and `release: rc` by default, a type turned off expecting
+none. The labels are shared across every component; the default branch is resolved once and
+shared too.
 
 The changelog heading, the same one `changelog` prints, links the version to the forge's compare
 view, between the tag the release's entries are collected since and the tag it will get:
@@ -214,8 +217,10 @@ updating every release pull request and releasing whatever merged since the last
 
 ## check
 
-Validates `release-me.yaml`, including an unknown `--component` name, that the `pending`,
-`tagged`, `alpha`, `beta` and `rc` labels exist on the repository, and that the token
+Validates `release-me.yaml`, including an unknown `--component` name, that every configured
+label exists on the repository, the `pending` and `tagged` ones, every
+[`labels.extra`](configuration.md#labels) one and the label of every enabled pre-release type,
+and that the token
 environment variable is both set and accepted by the forge: a rejected token is reported as
 such, not as a missing label, since the symptom from the forge is the same 401 either way.
 Prints every missing or invalid item and exits 1 when anything is missing, 0 otherwise.

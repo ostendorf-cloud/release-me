@@ -42,10 +42,13 @@ steps:
     with:
       app-id: ${{ vars.APP_ID }}
       private-key: ${{ secrets.APP_PRIVATE_KEY }}
-  - uses: ostendorf-cloud/release-me/action@<commit sha>  # v0.1.1
+  - uses: ostendorf-cloud/release-me/action@<commit sha>  # <version>
     with:
       token: ${{ steps.app-token.outputs.token }}
 ```
+
+Pin the commit SHA of a release and keep the trailing comment at the version that SHA was
+released as, so a dependency bot can move both together.
 
 A GitHub App token also gets the release commit signed by GitHub, see
 [signed release commits](docs/commands.md#signed-release-commits). See
@@ -56,11 +59,11 @@ output, the `github-release-draft-until-assets-attach` workflow shapes, the labe
 As a container image, for runners with an image cache:
 
 ```sh
-docker run --rm -e GITHUB_TOKEN ghcr.io/ostendorf-cloud/release-me:0.1.0 run
+docker run --rm -e GITHUB_TOKEN ghcr.io/ostendorf-cloud/release-me:<version> run
 ```
 
-Images are tagged with the released version. A stable release also moves `latest`, a
-pre-release does not.
+Images are tagged with the released version, without the `v`. A stable release also moves
+`latest`, a pre-release does not, so `:latest` is the newest stable release.
 
 ## Use
 
@@ -73,15 +76,19 @@ release-me run         # pr then release, the CI entry point
 release-me check       # config, labels and token
 release-me comment     # apply a release-as or release-notes comment command
 release-me migrate release-please   # translate a release-please setup, nothing written
+release-me version     # print the version of release-me itself
 ```
 
-Every writing command accepts `--dry-run`: it prints what would change and writes nothing, not
-even a branch. `--verbose` enables debug logging on stderr.
+`pr`, `release` and `run`, the three commands that write, accept `--dry-run`: it prints what
+would change and writes nothing, not even a branch. `comment` has no `--dry-run`. `--verbose`
+enables debug logging on stderr, on every command but `version`.
 
-Every command loops over the configured components, in `release-me.yaml`'s order, or the
-single implicit `main` component a repository without `components` carries. `--component
-<name>` limits a command to one. Output lines are prefixed with the component's name, `"<name>:
-<line>"`, only when a command runs more than one component; a run limited to one component, by
+Every command that acts on the history loops over the configured components, in
+`release-me.yaml`'s order, or the single implicit `main` component a repository without
+`components` carries; `migrate` translates the whole configuration and `version` reads none of
+it. `--component <name>` limits a command to one. Output lines are prefixed with the
+component's name, `"<name>: <line>"`, only when a command runs more than one component; a run
+limited to one component, by
 `--component` or because the repository has only one, prints unprefixed lines, the same shape a
 single-component repository always has.
 
@@ -97,7 +104,9 @@ label, and resumes publishing a release left a draft under
 CI entry point. `check` validates the
 configuration, the release labels and the token. `comment` applies a release-as or
 release-notes comment command posted on the release pull request. `migrate release-please`
-translates a release-please setup to `release-me.yaml`, writing nothing itself. A pre-release
+translates a release-please setup to `release-me.yaml`, writing nothing itself. `version`
+prints the version of release-me itself and reads neither the configuration nor the
+repository. A pre-release
 type label on the open release pull request turns its next run into a pre-release. See
 [commands](docs/commands.md) for the full reference, including pull request branch naming,
 rerun behavior and pre-releases.
@@ -113,7 +122,10 @@ the full reference.
 reads and renders.
 
 The top-level `versioning` key chooses how configured components' versions relate to each
-other: `independent` (default), `locked` or `linked`. A shared release pull request, one pull
+other: `independent` (default), `locked` or `linked`. The configured components of one
+repository are its family, the word the reference uses for them wherever a version, a
+pre-release counter or a forced version is shared across all of them. A shared release pull
+request, one pull
 request for every component instead of one each, is available as an option in any mode. See
 [versioning modes](docs/versioning-modes.md) for the full reference.
 
@@ -124,7 +136,7 @@ request for every component instead of one each, is available as an option in an
 ```yaml
 initial-version: 0.1.0
 bump-minor-pre-major: true
-hidden-types: [chore, docs, ci, style, refactor, test, build]
+hidden-types: [chore, docs, ci, style, refactor, test, build, other]
 changelog-path: CHANGELOG.md
 labels:
   pending: "release: pending"
@@ -145,7 +157,7 @@ files:
 | `bump-patch-for-minor-pre-major` | Turns a minor bump into a patch one below `1.0.0`. | `false` | No |
 | `release-as` | Forces the next version while it is greater than the last tag. | none | No |
 | `versioning-strategy` | How a release bumps the version: `default`, `always-bump-patch`/`-minor`/`-major`, `service-pack` or `dependency-manifest`. | `default` | No |
-| `hidden-types` | Entry types hidden from the changelog. | `chore, docs, ci, style, refactor, test, build, other` | No |
+| `hidden-types` | Entry types hidden from the changelog; the list replaces the default rather than extending it. | `chore, docs, ci, style, refactor, test, build, other` | No |
 | `changelog-sentence-case` | Upper cases the first letter of every changelog entry. | `false` | No |
 | `changelog-authors` | Credits each changelog entry's author after its description. | `false` | No |
 | `changelog-sections` | Renames, reorders or adds changelog sections per type. | `Features`, `Bug Fixes`, `Performance`, `Reverts` | No |
@@ -166,7 +178,7 @@ files:
 | `files` | Files `pr` bumps to the next version. | none | No |
 | `major-tag` | Moves the major tag on every stable release. | `false` | No |
 | `versioning` | How components' versions relate to each other. | `independent` | No |
-| `release-pull-request` | One release pull request per component or one shared by every component. | `per-component` | No |
+| `release-pull-request` | One release pull request per component or one shared by every component. | `per-component`, always `shared` in `locked` | No |
 | `release-pull-request-layout` | How a release pull request with several components lays out each one: `headings`, `details` or `compact`. | `headings` | No |
 | `release-pull-request-guide` | Whether every release pull request body opens with the collapsed "How this release works" guide. | `true` | No |
 | `release-pull-request-title` | Title pattern of a component's own release pull request. | `chore(${component}): release v${version}` | No |
@@ -188,7 +200,7 @@ files:
 | `components` | Maps a name to a path and optional per-component overrides. | none, one implicit `main` component | No |
 
 See [the configuration reference](docs/configuration.md) for every key's full behavior, the
-twenty `files` updater types, and the `components` rules.
+[`files` updater types](docs/configuration.md#files), and the `components` rules.
 
 ## Agent skills
 

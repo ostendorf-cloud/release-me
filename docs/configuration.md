@@ -323,9 +323,9 @@ and a `key` where the updater needs one. Every updater keeps the rest of the fil
 byte: order, comments, indentation. A file that does not exist, or a `key` not found in it,
 fails `pr`, naming the path and the key.
 
-- `marker` replaces the version on a line ending in `# release-me: version` or
-  `// release-me: version`, keeping the rest of the line, including the comment, as it is. No
-  `key`:
+- `marker` replaces the version on every line ending in `# release-me: version` or
+  `// release-me: version`, not only the first, keeping the rest of each line, including the
+  comment, as it is. No `key`:
 
   ```go
   const Version = "0.1.0" // release-me: version
@@ -358,7 +358,11 @@ fails `pr`, naming the path and the key.
   version: 0.1.0
   ```
 
-- `go` replaces the string literal assigned to the constant or variable `key` names:
+- `go` replaces the string literal assigned to the constant or variable `key` names. The
+  `const` or `var` keyword has to sit on the same line as the identifier, with an optional type
+  between the name and the `=`: `const Version = "0.1.0"`, `var Version = "0.1.0"` and
+  `const Version string = "0.1.0"` match, an identifier inside a grouped `const (` block does
+  not, and the entry fails `pr` naming the identifier as not found:
 
   ```yaml
   files:
@@ -369,7 +373,21 @@ fails `pr`, naming the path and the key.
 
 - `json`, `yaml` and `toml` replace the value at `key`, a dotted path of object keys, mapping
   keys or table-and-key, such as `tool.poetry.version`. A `composer.json`, which release-please's
-  `php` release type bumps, takes `json` with key `version`.
+  `php` release type bumps, takes `json` with key `version`. Each one reads the file as lines
+  rather than parsing it, which is what keeps every other byte in place, so the layout is part
+  of the contract:
+  - `json`: every object a path segment but the last names has to open on a line of its own,
+    `"segment": {`, and the leaf has to be a string on a line of its own,
+    `"version": "1.2.3"`. A single-segment key names the top level only, and nesting is
+    tracked through unquoted braces, so a same-named leaf at another depth is never taken for
+    the match.
+  - `yaml`: every mapping a path segment but the last names has to be a bare `segment:` line,
+    its block found through indentation, any consistent width. A single-segment key matches at
+    indentation zero only, never a deeper leaf of the same name. The leaf's value may be bare,
+    single or double quoted, and a trailing comment is kept.
+  - `toml`: the leading segments name the enclosing table, `a.b.version` meaning key `version`
+    under `[a.b]`, and a key before any table header is addressed by its name alone. The
+    leaf's value may be bare, single or double quoted.
 
 - `npm-lock` bumps a `package-lock.json` or `npm-shrinkwrap.json`: its top-level `version` and,
   in lockfile version 2 or 3, the root package's entry `packages[""].version`. Dependencies and
@@ -903,7 +921,8 @@ Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor
 `bump-patch-for-minor-pre-major`, `release-as` (only with `versioning: independent`),
 `versioning-strategy`, `hidden-types`, `changelog-sections`, `files`, `major-tag`,
 `changelog-source`, `changelog-type`, `force-tag-creation`, `include-v-in-release-name`,
-`skip-github-release`, `github-release-draft`, `skip-changelog` and `changelog-path`, plus its own
+`skip-github-release`, `github-release-draft`, `skip-changelog` and `changelog-path`, plus two
+keys only a component has: `tag-prefix`, described below, and
 [`exclude-paths`](#exclude-paths), which the top-level key cannot apply beside configured
 components. A key left out of a component falls back to the top-level setting above. A
 repository without `components` is one component named `main` at path `.`, tag prefix `v`,
