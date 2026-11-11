@@ -3,11 +3,17 @@
 Full reference for every `release-me.yaml` key. See the [README](../README.md#configuration)
 for the quick table and example.
 
-## `initial-version`
+The keys are grouped the way the configuration surface itself is ordered, version rules first
+and the environment last, the one canonical order `AGENTS.md` records for the `Config` struct
+and these headings alike.
+
+## Version rules
+
+### `initial-version`
 
 The version when no tag exists yet, default `0.1.0`.
 
-## `release-as`
+### `release-as`
 
 Forces the next version, default none:
 
@@ -38,7 +44,7 @@ does. In `independent`, a component's own `release-as` key replaces the top-leve
 component only. `linked` and `locked` refuse a component's own key, since the family shares one
 version.
 
-## `versioning-strategy`
+### `versioning-strategy`
 
 How a release bumps the version, default `default`:
 
@@ -90,13 +96,13 @@ means for any repository:
   dependency, `2.0.0 (dependency react major update)`. The changelog entry keeps its own
   type, so a hidden `chore` stays hidden.
 
-## `bump-minor-pre-major`
+### `bump-minor-pre-major`
 
 Turns a major bump into a minor one below `1.0.0`, default `false`. A component overrides it
 through its own `bump-minor-pre-major` key; a `locked` or `linked` family computes its one
 shared version with the top-level value.
 
-## `bump-patch-for-minor-pre-major`
+### `bump-patch-for-minor-pre-major`
 
 Turns a minor bump, a `feat`, into a patch one below `1.0.0`, default `false`, so `0.4.1` with a
 `feat` releases `0.4.2` instead of `0.5.0`. A breaking change is not affected: it still bumps
@@ -106,18 +112,20 @@ A component overrides it through its own `bump-patch-for-minor-pre-major` key; a
 `linked` family computes its one shared version with the top-level value. `next` names the
 rule in its reason, `0.4.2 (feat, patch below 1.0.0)`.
 
-## `changelog-path`
+## Changelog
+
+### `changelog-path`
 
 The changelog file path, default `CHANGELOG.md`, release-please's own `changelog-path` key.
 `pr` prepends the new version's section to it, creating the file when it does not exist yet.
 
-## `changelog-source`
+### `changelog-source`
 
 Which commits become changelog entries, default `first-parent`. See
 [changelog modes](changelog-modes.md) for `first-parent`, `squash`, `all` and `nested`. A
 component overrides it through its own `changelog-source` key.
 
-## `changelog-type`
+### `changelog-type`
 
 Where the changelog section comes from, release-please's `changelog-type`: `default`, the
 entries `changelog-source` reads, or `github`, the release notes GitHub generates for the release,
@@ -151,7 +159,7 @@ A component overrides it through its own `changelog-type` key, so a shared relea
 can carry GitHub's notes for one component and entries for another. Any other value is a
 configuration error.
 
-## `skip-changelog`
+### `skip-changelog`
 
 Leaves the changelog file alone, default `false`, release-please's `skip-changelog`: `pr`
 neither creates nor prepends to it, for a repository that keeps its changelog elsewhere, or by
@@ -161,19 +169,19 @@ release branch carries an empty release commit, so the release pull request stil
 merge. A component overrides it through its own `skip-changelog` key, so one component of a
 shared release pull request can skip its changelog while the others keep theirs.
 
-## `hidden-types`
+### `hidden-types`
 
 Hides entries of these types from the changelog, default `chore`, `docs`, `ci`, `style`,
 `refactor`, `test`, `build`, `other`. Without [`changelog-sections`](#changelog-sections), only
 `feat`, `fix`, `perf`, `revert` and a breaking change ever render a section; a type outside
 those five never renders, hidden or not.
 
-## `fallback-type`
+### `fallback-type`
 
 The type assigned to text that does not parse as a conventional commit, default `other`.
 `feat`, `fix`, `perf` and `revert` are refused, unparseable text never bumps the version.
 
-## `changelog-sections`
+### `changelog-sections`
 
 Renames, reorders or adds the sections after `Breaking Changes`, release-please's shape: a list
 of `type`, `section` and an optional `hidden`, default `false`. Left out, the sections are
@@ -208,7 +216,7 @@ Renaming a section changes the next release only: `CHANGELOG.md` keeps every ear
 it was written, and an open release pull request picks the new headings up on the next `pr`
 run.
 
-## `changelog-sentence-case`
+### `changelog-sentence-case`
 
 Upper cases the first letter of every entry's description, default `false`, the counterpart of
 release-please's `sentence-case` plugin: `feat(cli): add the widget` renders as
@@ -217,7 +225,7 @@ word that already holds an upper case letter, such as `iOS` or `gRPC`, stays as 
 do `npm` and a description starting with a backtick or a digit. The pull request title or
 commit stays as it is; only the rendered line changes. There is no per-component override.
 
-## `changelog-authors`
+### `changelog-authors`
 
 Credits each entry's author after its description, default `false`, the counterpart of
 release-please's `include-commit-authors`:
@@ -236,7 +244,7 @@ parent line already credits the pull request. An `@<login>` mentions that accoun
 renders the text, in the release pull request body and the release, which notifies it the way
 release-please's mention does. There is no per-component override.
 
-## `changelog-commit-links`
+### `changelog-commit-links`
 
 Links each entry's commit after the pull request link, default `false`, the shape
 release-please renders:
@@ -250,7 +258,7 @@ The commit is the one the entry comes from: the merge commit for a pull request 
 [override block](overrides.md#override-block) links the oldest commit of its pull request. A
 `nested` sub item links its own commit. There is no per-component override.
 
-## `changelog-issue-references`
+### `changelog-issue-references`
 
 Links the issues an entry closes, default `false`, after every other link:
 
@@ -266,7 +274,7 @@ release-please renders it, not `closes`. The release pull request body carries t
 and a closing keyword there would close the issue again when that pull request merges. There is
 no per-component override.
 
-## `changelog-host`
+### `changelog-host`
 
 The web address every changelog link points at, release-please's `changelog-host`, default
 none: the forge's own. Set it when the changelog should link a host other than the one
@@ -285,7 +293,7 @@ fragment or credentials; a trailing `/` is dropped. Whitespace and parentheses a
 they break the markdown link the heading's compare link is read back from. There is no
 per-component override.
 
-## `changelog-date-format`
+### `changelog-date-format`
 
 The format of the date in each version heading, a strftime expression, default `%Y-%m-%d`:
 
@@ -310,7 +318,9 @@ Custom-formatted pull request bodies record the canonical date in machine metada
 the rendered body. Changing to another custom format, or back to the default, keeps that
 date until release content changes. Older bodies fall back to the current format and ISO.
 
-## `files`
+## Version files
+
+### `files`
 
 Files `pr` bumps to the next version, each a `path`, an optional `updater`, default `marker`,
 and a `key` where the updater needs one. Every updater keeps the rest of the file byte for
@@ -350,7 +360,7 @@ Pick an updater by the file in front of you:
 The updaters below carry constraints a row cannot hold; the rest behave exactly as their row
 says.
 
-### `marker` and `generic`
+#### `marker` and `generic`
 
 `marker` needs nothing but the comment at the end of the line, in a file of any language:
 
@@ -378,7 +388,7 @@ marker on its own line so it closes the block. An end marker outside a block has
 The major scope also matches a number prefixed with `v`, whereas minor and patch require a
 word boundary before the number.
 
-### `json`, `yaml` and `toml`
+#### `json`, `yaml` and `toml`
 
 Each one reads the file as lines rather than parsing it, which is what keeps every other byte
 in place, so the layout is part of the contract:
@@ -395,7 +405,7 @@ in place, so the layout is part of the contract:
   under `[a.b]`, and a key before any table header is addressed by its name alone. The leaf's
   value may be bare, single or double quoted.
 
-### `go`
+#### `go`
 
 The `const` or `var` keyword has to sit on the same line as the identifier, with an optional
 type between the name and the `=`: `const Version = "0.1.0"`, `var Version = "0.1.0"` and
@@ -409,7 +419,7 @@ files:
     key: Version
 ```
 
-### `cargo-lock`, `gemfile-lock` and `xml`
+#### `cargo-lock`, `gemfile-lock` and `xml`
 
 - `cargo-lock`: only a `[[package]]` entry without a `source` matches, which is how Cargo
   records a crate of the workspace itself, so a same-named crate from a registry is never
@@ -434,7 +444,7 @@ files:
     key: project.version
 ```
 
-### `expo`
+#### `expo`
 
 `expo.version` must be there; `expo.ios.buildNumber` and `expo.android.versionCode` are bumped
 only where the file carries them. The version code is an integer Android requires to grow with
@@ -462,7 +472,7 @@ files:
 
 Under SDK 54, version `1.5.0` gives the version code `540010500`.
 
-### `terraform-module` and `krm-blueprint`
+#### `terraform-module` and `krm-blueprint`
 
 Both bump a version that is part of a longer string rather than a field of its own, which is
 why they replace every match in the file.
@@ -478,13 +488,15 @@ why they replace every match in the file.
   `gcr.io/kpt-fn/set-annotations:v0.1.4` out of it. A manifest carrying no such value is an
   error, which is how a YAML that is no blueprint is rejected.
 
-## `release-pull-request`
+## Pull request
+
+### `release-pull-request`
 
 `per-component`, the default for `independent` and `linked`, or `shared`, always the case for
 `locked`, which rejects `per-component`. See
 [shared release pull request](versioning-modes.md#shared-release-pull-request).
 
-## `release-pull-request-layout`
+### `release-pull-request-layout`
 
 How the changelog in the body of a release pull request carrying several components lays out
 each component, default `headings`. It applies to every such body, the
@@ -548,7 +560,7 @@ block whose summary reads `<name> vX.Y.Z`, at the changelog's top level and clos
 section, an override block's text carried into an entry, never marks `details`; the release
 notes and version override blocks are never read for components.
 
-## `release-pull-request-guide`
+### `release-pull-request-guide`
 
 Every release pull request body, per component, shared or locked, opens with a collapsed
 `<details><summary>How this release works</summary>` guide below its version line. The
@@ -582,7 +594,7 @@ A team that turns the guide off finds everything it says documented here:
 - What a push to the default branch updates and which edits survive it: [pr](commands.md#pr)
   and the [notes block](overrides.md#notes-block).
 
-## `release-pull-request-title`
+### `release-pull-request-title`
 
 The title pattern of every component's own release pull request, default
 `chore(${component}): release v${version}`. Literal text with these placeholders:
@@ -612,7 +624,7 @@ comment, `<!-- release-me-title-pattern: ... -->`, written for any non-default p
 then tries the legacy default shape before the current configured pattern, so an ambiguous
 new setting never reinterprets an older title.
 
-## `release-pull-request-shared-title`
+### `release-pull-request-shared-title`
 
 The title pattern of the release pull request every component shares, with
 [`release-pull-request: shared`](#release-pull-request) or in `locked`. The placeholders depend
@@ -632,7 +644,7 @@ release-pull-request-shared-title: "chore(${branch}): release ${releases}"
 The pattern is checked, parsed back, length checked and read back after a change the same way
 as [`release-pull-request-title`](#release-pull-request-title).
 
-## `release-pull-request-draft`
+### `release-pull-request-draft`
 
 Opens every release pull request as a draft, default `false`:
 
@@ -650,7 +662,7 @@ GitHub offers drafts on public repositories and on private ones with a paid plan
 does not, creating the pull request fails with the forge's error and `pr` reports it, the
 release branch already pushed.
 
-## `release-pull-request-header`
+### `release-pull-request-header`
 
 Free text every release pull request body carries, per component, shared or locked: the header
 above the version line, and its counterpart
@@ -675,12 +687,14 @@ pull request is open updates its body on the next `pr` run without pushing the r
 the notes block and a version override kept. Neither reaches the changelog file or the GitHub
 release.
 
-## `release-pull-request-footer`
+### `release-pull-request-footer`
 
 Free text below the changelog of every release pull request body, default none. It follows the
 same rules as [`release-pull-request-header`](#release-pull-request-header).
 
-## `author`
+## Release commit
+
+### `author`
 
 `author.name` and `author.email`: accepted, default `release-me` and
 `release-me[bot]@users.noreply.github.com`, but ignored. The forge creates the release commit
@@ -689,7 +703,7 @@ under the token's own identity, since GitHub signs it only when no author is pas
 existing configuration keeps working, and `check` and `pr` warn about each one that is set,
 naming it as ignored. `GIT_AUTHOR_*` and `GIT_COMMITTER_*` in the environment change nothing either.
 
-## `signoff`
+### `signoff`
 
 The identity, `Name <email>`, the release commit is signed off by, default none:
 
@@ -706,7 +720,9 @@ an email in angle brackets on one line is a configuration error. Enabling or cha
 `signoff` also refreshes an already open release commit whose trailer is missing or names the
 previous identity. An unchanged rerun then leaves that commit alone.
 
-## `major-tag`
+## Tags and releases
+
+### `major-tag`
 
 Moves the major tag on every stable release, default `false`. See [release](commands.md#release)
 for what `true` changes. A component overrides it through its own `major-tag` key.
@@ -721,7 +737,7 @@ someone publishes that draft. Deferring the move is not an option: nothing in re
 after that publish, so a deferred major tag would never be created at all. Keep
 `force-tag-creation: true` where the major tag matters, which is the default.
 
-## `include-v-in-release-name`
+### `include-v-in-release-name`
 
 Keeps the `v` before the version in the GitHub release's name, default `true`: `vX.Y.Z` for
 the implicit `main` component, `<name> vX.Y.Z` for a configured one. `false` names it
@@ -729,7 +745,7 @@ the implicit `main` component, `<name> vX.Y.Z` for a configured one. `false` nam
 release pull request title, which `release` reads the version back from, keeps its `v`. A
 component overrides it through its own `include-v-in-release-name` key.
 
-## `skip-github-release`
+### `skip-github-release`
 
 Tags a merged release pull request without creating a GitHub release, default `false`, for a
 repository whose own workflow creates the release from the tag, such as a GoReleaser step that
@@ -746,7 +762,7 @@ overrides it through its own `skip-github-release` key.
 Unlike release-please, release-me creates the tag even with this key on; see
 [migrate](commands.md#migrate) for what a migrated repository has to change because of it.
 
-## `github-release-draft`
+### `github-release-draft`
 
 Creates each GitHub release as a draft and leaves it one, default `false`, for a human to
 review and publish. The tag, the label swap, the `released-tag` marker and the action outputs
@@ -766,7 +782,7 @@ With [`skip-github-release`](#skip-github-release) on, this key has no effect: t
 release to draft. With [`major-tag`](#major-tag) on, the major tag moves when the draft is
 created, not when it is published; see `major-tag`.
 
-## `github-release-draft-until-assets-attach`
+### `github-release-draft-until-assets-attach`
 
 Drafts every release instead of publishing it immediately, default `false`. There is no
 per-component override: it applies to the whole repository. Only a repository with GitHub's
@@ -777,7 +793,7 @@ See [release](commands.md#release) for what `true` changes, and
 setting needs: `publish.yaml`'s own webhook-triggered asset step for `false`, `release.yaml`
 attaching and publishing the release itself for `true`.
 
-## `force-tag-creation`
+### `force-tag-creation`
 
 Creates the tag on the merge commit before the release, default `true`, the way release-me
 always has, so a draft's tag exists while the draft waits. `false` leaves the tag to GitHub
@@ -810,7 +826,7 @@ including after switching per-component releases to a shared pull request. Publi
 draft creates the tag and unblocks `pr`; deleting the draft also unblocks it, so the next
 run can create the release again.
 
-## `delete-release-branch`
+### `delete-release-branch`
 
 Deletes a release branch once `release` has tagged and released every pull request merged from
 it, default `true`; `false` keeps it. There is no per-component override. See
@@ -823,7 +839,9 @@ merged from it has been released. The
 [shared release pull request's leftover sweep](versioning-modes.md#shared-release-pull-request)
 depends on finding that branch. Both can be on: a branch GitHub already deleted is not an error.
 
-## `labels`
+## Labels and comments
+
+### `labels`
 
 `labels.pending` and `labels.tagged`: the label names `pr`, `release` and `check` use, default
 `release: pending` and `release: tagged`. Each is one name or a list of names, the way
@@ -882,18 +900,20 @@ This is release-please's `prerelease-type` with a free name. A pre-release stays
 human asks for on the release pull request: there is no key that cuts every release as a
 pre-release, as release-please's `prerelease: true` does.
 
-## `comment-mention`
+### `comment-mention`
 
 The mention prefix a comment on the release pull request names to issue a `release-as` or
 `release-notes` command, default `@release-me`. See
 [comment commands](overrides.md#comment-commands). Cannot be empty.
 
-## `versioning`
+## Components and workspaces
+
+### `versioning`
 
 `independent` (default), `locked` or `linked`. See [versioning modes](versioning-modes.md).
 There is no per-component override: it applies to the whole family.
 
-## `components`
+### `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
 `bump-patch-for-minor-pre-major`, `release-as` (only with `versioning: independent`),
@@ -959,7 +979,7 @@ An unknown key is an error, inside a component too. The file is read from the re
 root, found through `git rev-parse --show-toplevel`, whatever directory the command runs
 from.
 
-### Root component
+#### Root component
 
 A component at path `.` may sit beside other components, the shape of a root package that
 versions the whole repository while its packages version themselves. It owns every file
@@ -984,7 +1004,7 @@ components:
     path: packages/api
 ```
 
-## `exclude-paths`
+### `exclude-paths`
 
 Paths whose changes never count for a component, default none. Each one is relative to the
 repository root, like a `files` path, and names a directory or a file nested inside the
@@ -1007,7 +1027,7 @@ component of a repository without `components` and is a configuration error besi
 entry that is empty, absolute, holds a backslash, leaves the repository, equals the
 component's `path` or lies outside it is a configuration error.
 
-## `workspaces`
+### `workspaces`
 
 The package managers whose manifests link components to each other, default none:
 
@@ -1076,7 +1096,7 @@ Inherited `workspace = true` dependencies resolve renamed package aliases from t
 workspace declarations. The root keeps the version requirement, and the child keeps its
 workspace declaration unchanged.
 
-## `always-link-local`
+### `always-link-local`
 
 Whether every `node` dependency on a local package name links the two components, default
 `true`, release-please's default too. `false` links one only where it resolves to the local
@@ -1088,7 +1108,9 @@ another dependency releases as usual. Ranges are read the way npm reads them: `|
 ranges, partial and `x` versions and the `=`, `<`, `<=`, `>`, `>=`, `~` and `^` operators.
 Setting the key without `node` in [`workspaces`](#workspaces) is a configuration error.
 
-## `token-env`
+## Environment
+
+### `token-env`
 
 The environment variable holding the GitHub token, default `GITHUB_TOKEN`. It governs every API
 call, the release commit `pr` creates included, so the kind of token decides whether GitHub
