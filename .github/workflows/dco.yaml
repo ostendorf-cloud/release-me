@@ -75,17 +75,17 @@ jobs:
       - name: Check whether the security app credentials are available
         id: credentials
         env:
-          APP_ID: ${{ secrets.SECURITY_APP_ID }}
-          PRIVATE_KEY: ${{ secrets.SECURITY_APP_PRIVATE_KEY }}
+          APP_ID: ${{ vars.GH_APP_SECURITY_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.GH_APP_SECURITY_PRIVATE_KEY }}
         run: |
           if [ -n "${APP_ID}" ] && [ -n "${PRIVATE_KEY}" ]; then
             echo "available=true" >>"${GITHUB_OUTPUT}"
           else
             echo "available=false" >>"${GITHUB_OUTPUT}"
-            echo "SECURITY_APP_ID or SECURITY_APP_PRIVATE_KEY is unset," \
-              "which is also the case for a pull request from a fork:" \
-              "no check run is published, this job's status carries the" \
-              "verdict." >>"${GITHUB_STEP_SUMMARY}"
+            echo "GH_APP_SECURITY_APP_ID or GH_APP_SECURITY_PRIVATE_KEY is" \
+              "unset, which is also the case for a pull request from a" \
+              "fork: no check run is published, this job's status carries" \
+              "the verdict." >>"${GITHUB_STEP_SUMMARY}"
           fi
 
       # The token is scoped to the one permission the check run below
@@ -96,8 +96,8 @@ jobs:
         if: steps.credentials.outputs.available == 'true'
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
         with:
-          app-id: ${{ secrets.SECURITY_APP_ID }}
-          private-key: ${{ secrets.SECURITY_APP_PRIVATE_KEY }}
+          app-id: ${{ vars.GH_APP_SECURITY_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SECURITY_PRIVATE_KEY }}
           permission-checks: write
 
       # A check run, not a pull request comment: a check run is attributed
