@@ -273,9 +273,9 @@ updating every release pull request and releasing whatever merged since the last
 Validates `release-me.yaml`, including an unknown `--component` name, that every configured
 label exists on the repository, the `pending` and `tagged` ones, every
 [`labels.extra`](configuration.md#labels) one and the label of every enabled pre-release type,
-and that the token
-environment variable is both set and accepted by the forge: a rejected token is reported as
-such, not as a missing label, since the symptom from the forge is the same 401 either way.
+and that the token environment variable is both set and accepted by the forge: a rejected token
+is reported as such, not as a missing label, since the symptom from the forge is the same 401
+either way.
 Prints every missing or invalid item and exits 1 when anything is missing, 0 otherwise.
 
 ## comment

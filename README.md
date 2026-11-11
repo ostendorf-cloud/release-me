@@ -88,9 +88,8 @@ Every command that acts on the history loops over the configured components, in
 `components` carries; `migrate` translates the whole configuration and `version` reads none of
 it. `--component <name>` limits a command to one. Output lines are prefixed with the
 component's name, `"<name>: <line>"`, only when a command runs more than one component; a run
-limited to one component, by
-`--component` or because the repository has only one, prints unprefixed lines, the same shape a
-single-component repository always has.
+limited to one component, by `--component` or because the repository has only one, prints
+unprefixed lines, the same shape a single-component repository always has.
 
 `next` prints the next version and the bump reason per component, for example `0.2.0 (feat)`,
 or a forced version's own reason; see [commands](docs/commands.md) and
@@ -105,9 +104,9 @@ CI entry point. `check` validates the
 configuration, the release labels and the token. `comment` applies a release-as or
 release-notes comment command posted on the release pull request. `migrate release-please`
 translates a release-please setup to `release-me.yaml`, writing nothing itself. `version`
-prints the version of release-me itself and reads neither the configuration nor the
-repository. A pre-release
-type label on the open release pull request turns its next run into a pre-release. See
+prints the version of release-me itself and reads neither the configuration nor the repository.
+A pre-release type label on the open release pull request turns its next run into a
+pre-release. See
 [commands](docs/commands.md) for the full reference, including pull request branch naming,
 rerun behavior and pre-releases.
 
@@ -125,8 +124,8 @@ The top-level `versioning` key chooses how configured components' versions relat
 other: `independent` (default), `locked` or `linked`. The configured components of one
 repository are its family, the word the reference uses for them wherever a version, a
 pre-release counter or a forced version is shared across all of them. A shared release pull
-request, one pull
-request for every component instead of one each, is available as an option in any mode. See
+request, one pull request for every component instead of one each, is available as an option in
+any mode. See
 [versioning modes](docs/versioning-modes.md) for the full reference.
 
 ## Configuration
