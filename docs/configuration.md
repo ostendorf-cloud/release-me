@@ -800,10 +800,10 @@ always has, so a draft's tag exists while the draft waits. `false` leaves the ta
 instead, the release-please default: the release is created with the merge commit as its
 target, and GitHub creates the tag on it when the release is published, right away for a
 published release, on publish for a draft from
-[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach). That tag
-creation on publish is GitHub behaviour release-me relies on but GitHub does not document anywhere,
-and it is not verified against a live repository either. If the tag does not appear after a
-publish, `pr` reports the missing tag and waits instead of releasing the same version again. The
+[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach). GitHub
+creates the tag on publish; release-me relies on this and GitHub does not document it. If the tag
+does not appear, `pr` reports the missing tag and waits instead of releasing the same version
+again, and [ADR 0001](adr/0001-draft-releases-until-assets-attach.md) records the caveat. The
 run then reports `drafted <tag>, tagged on publish`. Until that publish the tag does not exist: a
 later step must not expect it, a rerun cannot tell a draft it tagged before, and the [major
 tag](#major-tag) already points at the merge commit. The draft is still found by its tag name, so
