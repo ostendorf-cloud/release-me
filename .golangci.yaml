@@ -9,7 +9,9 @@ linters:
   default: standard
   enable:
     - errorlint
+    - exhaustive
     - gocritic
+    - gosec
     - govet
     - misspell
     - noctx
@@ -24,7 +26,28 @@ linters:
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
+    exhaustive:
+      # Of the switches on a named enum type in this codebase, most
+      # (version.Strategy.fixedBump, releasepr.RenderComponents, the
+      # LayoutCompact branch inside releasepr.ParseComponents) use default
+      # to cover every remaining case on purpose, each documented as doing
+      # so at its call site. The other two (version.bumped, version.severity)
+      # already list every case explicitly, so this setting changes nothing
+      # for them. Treat a documented default as exhaustive instead of
+      # asking those switches to spell out cases the default already
+      # covers correctly.
+      default-signifies-exhaustive: true
     revive:
       rules:
         - name: exported
           arguments: ["checkPrivateReceivers"]
+  exclusions:
+    rules:
+      # Test fixtures use permissive local temp-directory permissions, run
+      # the git binary with test-controlled arguments, and include
+      # credential-shaped strings only to exercise redaction. None of that
+      # is the security boundary gosec checks for; production code in
+      # cmd/ and internal/ keeps full gosec scrutiny.
+      - path: _test\.go
+        linters:
+          - gosec

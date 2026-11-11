@@ -17,6 +17,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # The label list is release-me.yaml's defaults, spelled out: the condition
     # cannot read the configuration.
     if: >-
@@ -71,6 +72,7 @@ jobs:
 
   comment:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Every other filter, the release pull request's own labels included,
     # is the comment command's own job: nothing here reads release-me.yaml,
     # so the mention and the label names stay unchecked until it runs.

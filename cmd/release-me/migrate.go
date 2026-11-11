@@ -59,18 +59,39 @@ func runMigrate(args []string, stdout, stderr io.Writer) int {
 	}
 	logger.Debug("resolved repository root", "dir", dir)
 
+	//nolint:gosec // dir is the local repository root history.Root resolved, the filename is a fixed literal
 	configJSON, err := os.ReadFile(filepath.Join(dir, "release-please-config.json"))
 	if err != nil {
 		fmt.Fprintf(stderr, "release-me: migrate: %v\n", err)
 		return 1
 	}
+	//nolint:gosec // dir is the local repository root history.Root resolved, the filename is a fixed literal
 	manifestJSON, err := os.ReadFile(filepath.Join(dir, ".release-please-manifest.json"))
 	if err != nil && !os.IsNotExist(err) {
 		fmt.Fprintf(stderr, "release-me: migrate: %v\n", err)
 		return 1
 	}
 
-	readFile := func(path string) ([]byte, error) { return os.ReadFile(filepath.Join(dir, filepath.FromSlash(path))) }
+	// An extra-files entry comes out of release-please-config.json, so it
+	// names a path the repository controls, not one release-me chose. The
+	// lexical check rejects a literal "..": it names the offending entry in
+	// the warning, which the generic open error cannot. os.OpenInRoot then
+	// resolves the entry with every path element and every symlink checked
+	// against dir, so a symlink committed inside the repository and pointing
+	// out of it is refused too. filepath.Rel alone would follow that symlink,
+	// since it only compares path text.
+	readFile := func(path string) ([]byte, error) {
+		rel, err := filepath.Rel(dir, filepath.Join(dir, filepath.FromSlash(path)))
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("release-me: migrate: extra-files path %q escapes the repository root", path)
+		}
+		f, err := os.OpenInRoot(dir, rel)
+		if err != nil {
+			return nil, fmt.Errorf("release-me: migrate: extra-files path %q does not open inside the repository root: %w", path, err)
+		}
+		defer func() { _ = f.Close() }()
+		return io.ReadAll(f)
+	}
 	result, err := migrate.FromReleasePlease(configJSON, manifestJSON, readFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "release-me: %v\n", err)

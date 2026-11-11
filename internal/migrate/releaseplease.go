@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	stdpath "path"
 	"reflect"
 	"regexp"
@@ -1040,7 +1041,11 @@ func markedExtraFile(pkgPath, rel string, plain bool, readFile ReadFile, warn fu
 	path := repoPath(pkgPath, rel)
 	data, err := readFile(path)
 	if err != nil {
-		warn("package %s: extra-files: %s does not exist, left out of files", pkgPath, path)
+		if errors.Is(err, fs.ErrNotExist) {
+			warn("package %s: extra-files: %s does not exist, left out of files", pkgPath, path)
+		} else {
+			warn("package %s: extra-files: %s: %v, left out of files", pkgPath, path, err)
+		}
 		return nil
 	}
 	content := string(data)

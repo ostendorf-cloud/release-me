@@ -31,7 +31,8 @@ import (
 // file entirely.
 const (
 	DefaultInitialVersion = "0.1.0"
-	DefaultTokenEnv       = "GITHUB_TOKEN"
+	//nolint:gosec // this names the environment variable that carries the token, it is not a credential itself
+	DefaultTokenEnv = "GITHUB_TOKEN"
 	// DefaultFallbackType is conventional.FallbackType, named here too so
 	// callers of this package never need to import internal/conventional
 	// just to read the default.
@@ -1036,6 +1037,7 @@ func PerComponentBranch(name string) string {
 // Load reads release-me.yaml at path. A missing file yields Default(). An
 // unknown key is an error.
 func Load(path string) (cfg Config, err error) {
+	//nolint:gosec // path is always release-me.yaml under the resolved repository root or a tool-created temp dir, never externally supplied
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return Default(), nil

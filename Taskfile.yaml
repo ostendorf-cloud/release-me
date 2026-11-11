@@ -2,6 +2,7 @@ version: "3"
 
 vars:
   BIN: bin/release-me
+  COVERPROFILE: coverage.out
 
 tasks:
   setup:
@@ -75,16 +76,28 @@ tasks:
     cmds:
       - gitleaks git --no-banner --redact
 
-  test:go:
-    desc: Go tests with the race detector
+  lint:vuln:
+    desc: Known vulnerabilities in the module's dependencies and the toolchain
     cmds:
-      - go test -race -count=1 ./...
+      - govulncheck ./...
+
+  test:go:
+    desc: Go tests with the race detector and a coverage profile
+    cmds:
+      # "go test" prints one "coverage: NN.N% of statements" line per
+      # package as it goes, the per-package summary; "go tool cover"
+      # adds the total over every package from the profile.
+      - go test -race -count=1 -coverprofile={{.COVERPROFILE}} ./...
+      - go tool cover -func={{.COVERPROFILE}} | tail -n 1
 
   test:action:
     desc: Shell script tests for the composite action and this repository's own CI scripts
     cmds:
       - action/resolve-version_test.sh
       - action/run-release-me_test.sh
+      - action/verify-checksum_test.sh
+      - action/extract_test.sh
+      - action/resolve-platform_test.sh
       - scripts/publish-release-assets_test.sh
 
   check:
@@ -103,6 +116,10 @@ tasks:
       - task: test:go
       - task: test:action
       - task: build
+      # Last: lint:vuln is the only target that needs the network, so an
+      # unreachable vulnerability database aborts the aggregate without
+      # taking a test result with it. CI runs the targets on their own.
+      - task: lint:vuln
 
   fmt:
     desc: Format Go code

@@ -40,6 +40,7 @@ type workspaceManifest struct {
 func readWorkspace(dir string, cfg config.Config, all []config.ResolvedComponent) ([]workspaceManifest, error) {
 	var out []workspaceManifest
 	read := func(component, path, manager string) error {
+		//nolint:gosec // path is a manifest path release-me.yaml's workspaces configure, joined under the resolved repository root
 		content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(path)))
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
