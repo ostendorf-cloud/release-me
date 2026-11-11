@@ -124,7 +124,7 @@ request for every component instead of one each, is available as an option in an
 initial-version: 0.1.0
 bump-minor-pre-major: true
 hidden-types: [chore, docs, ci, style, refactor, test, build]
-changelog: CHANGELOG.md
+changelog-path: CHANGELOG.md
 labels:
   pending: "release: pending"
   tagged: "release: tagged"
@@ -152,7 +152,7 @@ files:
 | `changelog-issue-references` | Links the issues each changelog entry closes. | `false` | No |
 | `fallback-type` | Type assigned to text that does not parse as a conventional commit. | `other` | No |
 | `token-env` | Environment variable holding the GitHub token. | `GITHUB_TOKEN` | No |
-| `changelog` | Changelog file path. | `CHANGELOG.md` | No |
+| `changelog-path` | Changelog file path. | `CHANGELOG.md` | No |
 | `skip-changelog` | Leaves the changelog file alone; the release pull request still carries the section. | `false` | No |
 | `changelog-source` | Which commits become changelog entries. | `first-parent` | No |
 | `changelog-type` | Changelog from the entries (`default`) or GitHub's generated release notes (`github`). | `default` | No |

@@ -3,7 +3,7 @@
 
 // Package config loads release-me.yaml: initial-version,
 // bump-minor-pre-major, bump-patch-for-minor-pre-major, versioning-strategy,
-// release-as, hidden-types, fallback-type, token-env, files, changelog,
+// release-as, hidden-types, fallback-type, token-env, files, changelog-path,
 // changelog-source, changelog-type, skip-changelog, the changelog style keys
 // ChangelogStyle lists, labels, author, major-tag,
 // versioning, signoff, release-pull-request-title,
@@ -46,7 +46,7 @@ const (
 	// just to read the default.
 	DefaultFallbackType = conventional.FallbackType
 	// DefaultChangelogPath is the changelog file path applied when the
-	// "changelog" key is left out of release-me.yaml.
+	// "changelog-path" key is left out of release-me.yaml.
 	DefaultChangelogPath = "CHANGELOG.md"
 	// DefaultChangelogSource is the changelog source mode applied when
 	// the "changelog-source" key is left out of release-me.yaml.
@@ -521,9 +521,9 @@ type Component struct {
 	// TagPrefix is the component's "tag-prefix" key, nil when it was left
 	// out and the component keeps the derived "<name>/v".
 	TagPrefix *string
-	// Changelog is the component's "changelog" key, nil when it was left
-	// out and the component keeps the derived "<path>/CHANGELOG.md".
-	Changelog *string
+	// ChangelogPath is the component's "changelog-path" key, nil when it was
+	// left out and the component keeps the derived "<path>/CHANGELOG.md".
+	ChangelogPath *string
 	// ExcludePaths is the component's "exclude-paths" key: paths inside
 	// Path, relative to the repository root and cleaned, whose changes never
 	// count for the component. There is no top-level fallback, a path names
@@ -824,7 +824,7 @@ type raw struct {
 	FallbackType                  *string                `yaml:"fallback-type"`
 	TokenEnv                      *string                `yaml:"token-env"`
 	Files                         *[]rawFile             `yaml:"files"`
-	Changelog                     *string                `yaml:"changelog"`
+	ChangelogPath                 *string                `yaml:"changelog-path"`
 	ChangelogSource               *string                `yaml:"changelog-source"`
 	ChangelogType                 *string                `yaml:"changelog-type"`
 	ChangelogSentenceCase         *bool                  `yaml:"changelog-sentence-case"`
@@ -887,7 +887,7 @@ type rawComponent struct {
 	Draft                     *bool                  `yaml:"draft"`
 	ChangelogSections         *[]rawChangelogSection `yaml:"changelog-sections"`
 	TagPrefix                 *string                `yaml:"tag-prefix"`
-	Changelog                 *string                `yaml:"changelog"`
+	ChangelogPath             *string                `yaml:"changelog-path"`
 	ExcludePaths              *[]string              `yaml:"exclude-paths"`
 }
 
@@ -1062,8 +1062,8 @@ func Load(path string) (cfg Config, err error) {
 	if r.TokenEnv != nil {
 		cfg.TokenEnv = *r.TokenEnv
 	}
-	if r.Changelog != nil {
-		cfg.ChangelogPath = *r.Changelog
+	if r.ChangelogPath != nil {
+		cfg.ChangelogPath = *r.ChangelogPath
 	}
 	if r.ChangelogSource != nil {
 		if !slices.Contains(changelogSources, *r.ChangelogSource) {
@@ -1519,9 +1519,9 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 				return nil, fmt.Errorf("config: parse %s: component %s: tag-prefix %q %w", path, name, *rc.TagPrefix, err)
 			}
 		}
-		if rc.Changelog != nil {
-			if err := validateChangelogPath(*rc.Changelog); err != nil {
-				return nil, fmt.Errorf("config: parse %s: component %s: changelog %q %w", path, name, *rc.Changelog, err)
+		if rc.ChangelogPath != nil {
+			if err := validateChangelogPath(*rc.ChangelogPath); err != nil {
+				return nil, fmt.Errorf("config: parse %s: component %s: changelog-path %q %w", path, name, *rc.ChangelogPath, err)
 			}
 		}
 		if rc.ChangelogType != nil {
@@ -1572,7 +1572,7 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 			VersioningStrategy: strategy,
 			HiddenTypes:        rc.HiddenTypes, MajorTag: rc.MajorTag, ChangelogType: rc.ChangelogType,
 			SkipChangelog:   rc.SkipChangelog,
-			ChangelogSource: rc.ChangelogSource, TagPrefix: rc.TagPrefix, Changelog: rc.Changelog,
+			ChangelogSource: rc.ChangelogSource, TagPrefix: rc.TagPrefix, ChangelogPath: rc.ChangelogPath,
 			ForceTagCreation:      rc.ForceTagCreation,
 			IncludeVInReleaseName: rc.IncludeVInReleaseName,
 			SkipGitHubRelease:     rc.SkipGitHubRelease,
@@ -1760,18 +1760,18 @@ func validateTagPrefixes(path string, components []Component) error {
 	return nil
 }
 
-// changelogPath returns the component's configured "changelog", cleaned,
-// or the derived "<path>/CHANGELOG.md" when it carries none.
+// changelogPath returns the component's configured "changelog-path",
+// cleaned, or the derived "<path>/CHANGELOG.md" when it carries none.
 func (c Component) changelogPath() string {
-	if c.Changelog != nil {
-		return stdpath.Clean(*c.Changelog)
+	if c.ChangelogPath != nil {
+		return stdpath.Clean(*c.ChangelogPath)
 	}
 	return stdpath.Join(c.Path, "CHANGELOG.md")
 }
 
-// validateChangelogPath rejects a "changelog" that is not a file inside the
-// repository: pr writes it relative to the checkout, so an absolute path or
-// one that climbs out through ".." would write outside it.
+// validateChangelogPath rejects a "changelog-path" that is not a file inside
+// the repository: pr writes it relative to the checkout, so an absolute path
+// or one that climbs out through ".." would write outside it.
 func validateChangelogPath(p string) error {
 	clean := stdpath.Clean(p)
 	switch {

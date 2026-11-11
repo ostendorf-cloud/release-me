@@ -31,7 +31,7 @@ func TestRunMigrateTranslatesTheRepositorysReleasePleaseConfig(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
 	}
-	for _, want := range []string{"  layer:\n", "    tag-prefix: layer@v\n", "    changelog: CHANGELOG.md\n", "  search:\n"} {
+	for _, want := range []string{"  layer:\n", "    tag-prefix: layer@v\n", "    changelog-path: CHANGELOG.md\n", "  search:\n"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("stdout = %s, want it to contain %q", stdout.String(), want)
 		}

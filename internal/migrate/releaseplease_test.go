@@ -101,7 +101,7 @@ components:
   duxt:
     path: packages/duxt
     tag-prefix: duxt@v
-    changelog: CHANGELOG.md
+    changelog-path: CHANGELOG.md
     files:
       - path: packages/duxt/package.json
         updater: json

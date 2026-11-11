@@ -1585,7 +1585,7 @@ func render(components []component, top topLevel) ([]byte, error) {
 	if len(components) == 1 && components[0].path == "." && components[0].tagPrefix == "v" {
 		c := components[0]
 		if c.changelog != "CHANGELOG.md" {
-			add(doc, "changelog", scalar(c.changelog))
+			add(doc, "changelog-path", scalar(c.changelog))
 		}
 		addSettings(doc, c, shared, topFlags, add)
 		addExcludePaths(doc, c, add)
@@ -1598,7 +1598,7 @@ func render(components []component, top topLevel) ([]byte, error) {
 				add(m, "tag-prefix", scalar(c.tagPrefix))
 			}
 			if c.changelog != stdpath.Join(c.path, "CHANGELOG.md") {
-				add(m, "changelog", scalar(c.changelog))
+				add(m, "changelog-path", scalar(c.changelog))
 			}
 			addSettings(m, c, shared, topFlags, add)
 			addExcludePaths(m, c, add)

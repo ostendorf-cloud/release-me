@@ -131,7 +131,7 @@ versioning-strategy: always-bump-patch
 hidden-types: [chore, docs]
 fallback-type: misc
 token-env: RELEASE_TOKEN
-changelog: HISTORY.md
+changelog-path: HISTORY.md
 changelog-source: all
 labels:
   pending: needs-release
@@ -316,6 +316,11 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		content string
 	}{
 		{name: "rejects an unknown key", content: "release-tag: v1\n"},
+		{name: "rejects the renamed top-level changelog key", content: "changelog: HISTORY.md\n"},
+		{
+			name:    "rejects the renamed changelog key on a component",
+			content: "components:\n  web:\n    path: web\n    changelog: CHANGELOG.md\n",
+		},
 		{name: "rejects malformed YAML", content: "initial-version: [0.1.0\n"},
 		{name: "rejects a fallback type that bumps the version", content: "fallback-type: feat\n"},
 		{name: "rejects an unknown changelog source", content: "changelog-source: rebase\n"},
@@ -383,7 +388,7 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		},
 		{
 			name:    "rejects two root components",
-			content: "components:\n  main:\n    path: .\n  site:\n    path: ./\n    tag-prefix: site@v\n    changelog: SITE.md\n",
+			content: "components:\n  main:\n    path: .\n  site:\n    path: ./\n    tag-prefix: site@v\n    changelog-path: SITE.md\n",
 		},
 		{name: "rejects an empty tag prefix", content: "components:\n  web:\n    path: web\n    tag-prefix: \"\"\n"},
 		{name: "rejects a tag prefix with a glob character", content: "components:\n  web:\n    path: web\n    tag-prefix: web*v\n"},
@@ -402,22 +407,22 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 			name:    "rejects a tag prefix equal to another component's derived one",
 			content: "components:\n  web:\n    path: web\n    tag-prefix: api/v\n  api:\n    path: api\n",
 		},
-		{name: "rejects an empty changelog path", content: "components:\n  web:\n    path: web\n    changelog: \"\"\n"},
-		{name: "rejects an absolute changelog path", content: "components:\n  web:\n    path: web\n    changelog: /tmp/CHANGELOG.md\n"},
+		{name: "rejects an empty changelog path", content: "components:\n  web:\n    path: web\n    changelog-path: \"\"\n"},
+		{name: "rejects an absolute changelog path", content: "components:\n  web:\n    path: web\n    changelog-path: /tmp/CHANGELOG.md\n"},
 		{
 			name:    "rejects a changelog path outside the repository",
-			content: "components:\n  web:\n    path: web\n    changelog: web/../../CHANGELOG.md\n",
+			content: "components:\n  web:\n    path: web\n    changelog-path: web/../../CHANGELOG.md\n",
 		},
-		{name: "rejects the repository root as a changelog path", content: "components:\n  web:\n    path: web\n    changelog: ./\n"},
+		{name: "rejects the repository root as a changelog path", content: "components:\n  web:\n    path: web\n    changelog-path: ./\n"},
 		{
 			name:    "rejects two components configured with the same changelog",
-			content: "components:\n  web:\n    path: web\n    changelog: CHANGELOG.md\n  api:\n    path: api\n    changelog: ./CHANGELOG.md\n",
+			content: "components:\n  web:\n    path: web\n    changelog-path: CHANGELOG.md\n  api:\n    path: api\n    changelog-path: ./CHANGELOG.md\n",
 		},
 		{
 			name:    "rejects a changelog equal to another component's derived one",
-			content: "components:\n  web:\n    path: web\n    changelog: api/CHANGELOG.md\n  api:\n    path: api\n",
+			content: "components:\n  web:\n    path: web\n    changelog-path: api/CHANGELOG.md\n  api:\n    path: api\n",
 		},
-		{name: "rejects a changelog path with a backslash", content: "components:\n  web:\n    path: web\n    changelog: 'web\\CHANGELOG.md'\n"},
+		{name: "rejects a changelog path with a backslash", content: "components:\n  web:\n    path: web\n    changelog-path: 'web\\CHANGELOG.md'\n"},
 		{
 			name:    "rejects an unknown workspace package manager",
 			content: "release-pull-request: shared\nworkspaces: [gradle]\ncomponents:\n  web:\n    path: web\n",
@@ -1477,12 +1482,12 @@ func TestLoadAcceptsAComponentNameOfLettersDigitsDashUnderscoreAndDot(t *testing
 	}
 }
 
-func TestResolveUsesAConfiguredChangelogAndDerivesTheRest(t *testing.T) {
+func TestResolveUsesAConfiguredChangelogPathAndDerivesTheRest(t *testing.T) {
 	t.Parallel()
 	path := writeFile(t, `components:
   duxt:
     path: packages/duxt
-    changelog: ./CHANGELOG.md
+    changelog-path: ./CHANGELOG.md
   duxt-typesense:
     path: packages/duxt-typesense
 `)

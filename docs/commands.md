@@ -237,7 +237,7 @@ Each release-please package becomes a component named after its `component`, els
 `package-name` with a node scope removed, else the name in its `package.json`. A character a
 component name cannot hold becomes `-`, with a warning, and two packages ending up with the same
 name are an error. Its tags and
-changelog stay where release-please put them, through `tag-prefix` and `changelog`, so
+changelog stay where release-please put them, through `tag-prefix` and `changelog-path`, so
 release-me continues from the existing tags and changelogs. A single root package with plain
 `vX.Y.Z` tags becomes the implicit `main` component instead, and a root package beside other
 packages becomes a [root component](configuration.md#root-component), with a warning: it owns

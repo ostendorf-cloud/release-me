@@ -269,10 +269,10 @@ signs that commit: see [signed release commits](commands.md#signed-release-commi
 and publishing the release branch go through the git credentials the checkout's
 `origin` remote already carries.
 
-## `changelog`
+## `changelog-path`
 
-The changelog file path, default `CHANGELOG.md`. `pr` prepends the new version's section to
-it, creating the file when it does not exist yet.
+The changelog file path, default `CHANGELOG.md`, release-please's own `changelog-path` key.
+`pr` prepends the new version's section to it, creating the file when it does not exist yet.
 
 ## `changelog-type`
 
@@ -1013,7 +1013,7 @@ Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor
 `bump-patch-for-minor-pre-major`, `release-as` (only with `versioning: independent`),
 `versioning-strategy`, `hidden-types`, `changelog-sections`, `files`, `major-tag`,
 `changelog-source`, `changelog-type`, `force-tag-creation`, `include-v-in-release-name`,
-`skip-github-release`, `draft`, `skip-changelog` and `changelog`, plus its own
+`skip-github-release`, `draft`, `skip-changelog` and `changelog-path`, plus its own
 [`exclude-paths`](#exclude-paths), which the top-level key cannot apply beside configured
 components. A key left out of a component falls back to the top-level setting above. A
 repository without `components` is one component named `main` at path `.`, tag prefix `v`,
@@ -1038,7 +1038,7 @@ changelog heading's compare link. The prefix is how a component finds its histor
 changing or removing `tag-prefix` once a component has tags under its previous prefix restarts
 it at `initial-version`, the same way renaming the component would.
 
-`changelog` replaces the derived changelog path, relative to the repository root, for a
+`changelog-path` replaces the derived changelog path, relative to the repository root, for a
 component whose changelog lives outside its own path, such as one kept at the root while the
 code sits in `packages/<name>`; a directory it names that does not exist yet is created. A
 changelog path that is empty, absolute, holds a backslash, or is not a file inside the
@@ -1055,7 +1055,7 @@ components:
     path: services/backend
     hidden-types: [chore, docs, test]
     tag-prefix: backend@v
-    changelog: CHANGELOG.md
+    changelog-path: CHANGELOG.md
 ```
 
 A first parent entry belongs to every component whose path it touches, through the files a
