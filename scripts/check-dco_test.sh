@@ -292,6 +292,24 @@ else
   echo "PASS a paginated input reads the same as a single page"
 fi
 
+# DCO_EXPECTED_COMMITS set to more than this run actually read is the
+# shape a pull request past the commits endpoint's 250-commit cap takes:
+# "gh api --paginate" stops silently, so the script has to fail closed.
+total_commits="$(jq 'length' "${commits_json}")"
+code=0
+DCO_EXPECTED_COMMITS="$((total_commits + 1))" \
+  "${script}" "${commits_json}" >"${work}/expected-mismatch" 2>&1 || code=$?
+if [ "${code}" != "2" ]; then
+  echo "FAIL DCO_EXPECTED_COMMITS mismatch: exit code = ${code}, want 2"
+  failures=$((failures + 1))
+elif ! grep -qF "only ${total_commits} of $((total_commits + 1)) commit(s) were checked" \
+  "${work}/expected-mismatch"; then
+  echo "FAIL DCO_EXPECTED_COMMITS mismatch: output = $(cat "${work}/expected-mismatch")"
+  failures=$((failures + 1))
+else
+  echo "PASS DCO_EXPECTED_COMMITS mismatch fails closed"
+fi
+
 if [ "${failures}" -ne 0 ]; then
   echo "${failures} test(s) failed"
   exit 1

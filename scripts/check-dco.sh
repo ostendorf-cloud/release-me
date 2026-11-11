@@ -20,7 +20,13 @@
 # in the job's checkout would need fetch-depth: 0 and a merge-base
 # computation, and still could not answer the bot question. The endpoint
 # returns at most 250 commits for a pull request; a larger one has to be
-# split, which is the same limit the GitHub DCO app works under.
+# split, which is the same limit the GitHub DCO app works under. A pull
+# request past that cap makes "gh api --paginate" stop silently instead
+# of failing, so a caller that knows the pull request's real commit count
+# can pass it as DCO_EXPECTED_COMMITS: a mismatch between that count and
+# the number of commits this run actually read then fails closed with
+# exit 2, rather than this script reporting success over a truncated
+# prefix of the pull request.
 #
 # "gh api --paginate" emits one JSON array per page, so the jq program
 # below is slurped and flattened one level: that reads a single page, a
@@ -64,6 +70,7 @@
 set -euo pipefail
 
 report_path="${DCO_REPORT:-}"
+expected_commits="${DCO_EXPECTED_COMMITS:-}"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "jq is required but not installed" >&2
@@ -146,6 +153,20 @@ while IFS=$'\t' read -r sha outcome detail; do
     ;;
   esac
 done <<<"${outcomes}"
+
+total=$((passed + skipped + ${#failures[@]}))
+
+# DCO_EXPECTED_COMMITS, when the caller sets it, is the pull request's
+# real commit count from the GitHub API rather than a count derived from
+# this run's own input. The two can differ only when "gh api --paginate"
+# was truncated by the commits endpoint's 250-commit cap, since pagination
+# itself is otherwise lossless. Checking fewer commits than the pull
+# request actually has must not be read as a passing run.
+if [ -n "${expected_commits}" ] && [ "${total}" != "${expected_commits}" ]; then
+  echo "only ${total} of ${expected_commits} commit(s) were checked:" \
+    "the pull request has more commits than this run read" >&2
+  exit 2
+fi
 
 if [ "${passed}" -eq 0 ] && [ "${skipped}" -eq 0 ] && [ "${#failures[@]}" -eq 0 ]; then
   echo "no commits to check: the input holds no commit" >&2
