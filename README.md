@@ -223,8 +223,11 @@ task --list
 task check
 ```
 
-One target per check, one CI job per target. `check` only calls the small targets.
+One target per check, one CI job per target. `check` only calls the small targets. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to propose a change.
 
 ## License
 
 Apache-2.0. See `LICENSE`.
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability.
