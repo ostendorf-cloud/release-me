@@ -76,6 +76,11 @@ tasks:
     cmds:
       - gitleaks git --no-banner --redact
 
+  lint:vuln:
+    desc: Known vulnerabilities in the module's dependencies and the toolchain
+    cmds:
+      - govulncheck ./...
+
   test:go:
     desc: Go tests with the race detector and a coverage profile
     cmds:
@@ -108,6 +113,7 @@ tasks:
       - task: lint:dockerfile
       - task: lint:shell
       - task: lint:secrets
+      - task: lint:vuln
       - task: test:go
       - task: test:action
       - task: build

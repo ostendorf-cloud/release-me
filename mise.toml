@@ -11,3 +11,7 @@ gitleaks = "8"
 goreleaser = "2"
 hadolint = "2"
 shellcheck = "0"
+# govulncheck has no entry in the mise or aqua registry, so it comes from
+# mise's go backend, still pinned here and installed by "mise install" in CI
+# like every other tool.
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.9.0"
