@@ -331,6 +331,11 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 			name:    "rejects the renamed draft key on a component",
 			content: "components:\n  web:\n    path: web\n    draft: true\n",
 		},
+		{
+			name:    "rejects the renamed top-level prerelease-types key",
+			content: "prerelease-types:\n  next: \"release: next\"\n",
+		},
+		{name: "rejects the renamed labels.alpha key", content: "labels:\n  alpha: \"release: a\"\n"},
 		{name: "rejects malformed YAML", content: "initial-version: [0.1.0\n"},
 		{name: "rejects a fallback type that bumps the version", content: "fallback-type: feat\n"},
 		{name: "rejects an unknown changelog source", content: "changelog-source: rebase\n"},
