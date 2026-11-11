@@ -101,11 +101,20 @@ jobs:
           permission-checks: write
 
       # A check run, not a pull request comment: a check run is attributed
-      # to the app that created it, it updates in place on every push
-      # instead of leaving a comment per push behind, it can be made a
-      # required check in a ruleset, and it carries the full report as its
-      # own output. A comment would notify every subscriber of the pull
-      # request again for each push.
+      # to the app that created it, it can be made a required check in a
+      # ruleset, and it carries the full report as its own output. A
+      # comment would notify every subscriber of the pull request again
+      # for each push.
+      #
+      # "POST /check-runs" always creates a new check run; nothing here
+      # looks up or PATCHes an existing one. In the common case that still
+      # reads as one check run per push, because each push produces a new
+      # head SHA and GitHub scopes check runs per SHA. A "reopened" event,
+      # which this workflow's "on: pull_request:" trigger includes, or a
+      # manual re-run against the same head SHA, instead POSTs a second,
+      # duplicate check run for that commit rather than replacing the
+      # first. That duplicate-run case is a known edge case this step does
+      # not handle.
       - name: Publish the result as the security app's check run
         if: steps.credentials.outputs.available == 'true'
         env:
