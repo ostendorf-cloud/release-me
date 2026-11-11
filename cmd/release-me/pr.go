@@ -949,6 +949,7 @@ func planReleaseBranch(ctx context.Context, dir string, changelogs []changelogUp
 			plan.changelogs[i] = c
 			continue
 		}
+		//nolint:gosec // c.path is a changelog path release-me.yaml configures, joined under the tool-created temporary worktree
 		baseline, err := os.ReadFile(filepath.Join(tmp, c.path))
 		if err != nil && !os.IsNotExist(err) {
 			plan.cleanup()
@@ -963,6 +964,7 @@ func planReleaseBranch(ctx context.Context, dir string, changelogs []changelogUp
 		file, version := fu.file, fu.version
 		content, seen := plan.desiredFiles[file.Path]
 		if !seen {
+			//nolint:gosec // file.Path is a files entry release-me.yaml configures, joined under the tool-created temporary worktree
 			raw, err := os.ReadFile(filepath.Join(tmp, file.Path))
 			if err != nil {
 				plan.cleanup()
@@ -1179,6 +1181,7 @@ func publishReleaseCommit(ctx context.Context, dir, branch, sha, expected string
 	if err != nil {
 		return fmt.Errorf("resolve publication remote: %w", err)
 	}
+	//nolint:gosec // pushURL comes from the repository's own git remote config and sha from the object this tool just created, neither is externally supplied
 	cmd := exec.CommandContext(ctx, "git", "fetch", "--quiet", "--no-tags", pushURL, sha)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
@@ -1338,6 +1341,7 @@ func gitOutput(ctx context.Context, dir string, args ...string) (string, error) 
 // nil meaning the process's own, and returns its trimmed stdout, surfacing
 // stderr on failure.
 func gitOutputEnv(ctx context.Context, dir string, env []string, args ...string) (string, error) {
+	//nolint:gosec // the binary is the fixed literal "git", args are built by this package's own callers, not passed through a shell
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = env
@@ -1354,6 +1358,7 @@ func gitOutputEnv(ctx context.Context, dir string, env []string, args ...string)
 // ok is false for any failure, a missing ref or a missing path alike: both
 // are the ordinary shape of "nothing to compare against yet".
 func gitShowFile(ctx context.Context, dir, ref, path string) (content string, ok bool) {
+	//nolint:gosec // ref is always the literal "HEAD" or the compareRef constant, so the argument can never start with "-", and exec.CommandContext never invokes a shell
 	cmd := exec.CommandContext(ctx, "git", "show", ref+":"+path)
 	cmd.Dir = dir
 	var stdout bytes.Buffer

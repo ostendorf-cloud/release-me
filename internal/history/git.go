@@ -17,6 +17,7 @@ import (
 
 // run executes git in dir and returns its stdout.
 func run(ctx context.Context, dir string, args ...string) (string, error) {
+	//nolint:gosec // the binary is the fixed literal "git", args are built by this package, not passed through a shell
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer

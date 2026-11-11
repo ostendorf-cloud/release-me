@@ -350,6 +350,7 @@ func remoteBranches(ctx context.Context, dir string, patterns ...string) (map[st
 	for _, p := range patterns {
 		refs = append(refs, "refs/heads/"+p)
 	}
+	//nolint:gosec // pushURL comes from the repository's own git remote config and refs from configured branch names, neither is externally supplied
 	cmd := exec.CommandContext(ctx, "git", append([]string{"ls-remote", "--heads", pushURL}, refs...)...)
 	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer

@@ -72,6 +72,7 @@ type plumbing struct {
 
 // run runs git with stdin, returning its trimmed stdout.
 func (g plumbing) run(ctx context.Context, stdin []byte, args ...string) (string, error) {
+	//nolint:gosec // the binary is the fixed literal "git", args come from this test fake's own callers, not external input
 	cmd := exec.CommandContext(ctx, "git", args...)
 	authorName, authorEmail := splitIdentity(FakeAuthor)
 	committerName, committerEmail := splitIdentity(FakeCommitter)

@@ -215,6 +215,7 @@ func emitOutputs(components []config.ResolvedComponent, out *runOutputs) error {
 	if err != nil {
 		return fmt.Errorf("release-me: render outputs: %w", err)
 	}
+	//nolint:gosec // path is outputsEnv, the CI runner's own output file path, not externally supplied
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("release-me: open %s: %w", outputsEnv, err)
