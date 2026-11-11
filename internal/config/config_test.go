@@ -105,7 +105,8 @@ func TestLoadReadsConfiguredKeys(t *testing.T) {
 				Labels: config.Labels{
 					Pending: []string{config.DefaultPendingLabel}, Tagged: []string{config.DefaultTaggedLabel},
 					PreRelease: []config.PreReleaseType{
-						{Type: "alpha", Label: config.DefaultAlphaLabel}, {Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
 				},
@@ -205,7 +206,8 @@ files:
 				Labels: config.Labels{
 					Pending: []string{config.DefaultPendingLabel}, Tagged: []string{config.DefaultTaggedLabel},
 					PreRelease: []config.PreReleaseType{
-						{Type: "alpha", Label: config.DefaultAlphaLabel}, {Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
 				},
@@ -234,7 +236,8 @@ files:
 				Labels: config.Labels{
 					Pending: []string{"needs-release"}, Tagged: []string{config.DefaultTaggedLabel},
 					PreRelease: []config.PreReleaseType{
-						{Type: "alpha", Label: config.DefaultAlphaLabel}, {Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
 				},
@@ -263,7 +266,8 @@ files:
 				Labels: config.Labels{
 					Pending: []string{config.DefaultPendingLabel}, Tagged: []string{config.DefaultTaggedLabel},
 					PreRelease: []config.PreReleaseType{
-						{Type: "alpha", Label: config.DefaultAlphaLabel}, {Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
 				},

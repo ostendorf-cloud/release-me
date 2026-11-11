@@ -146,8 +146,8 @@ run, branch content, title and body updated accordingly.
 Tags and releases every merged pull request on a component's release branch, or the shared
 `release-me/main`, that still carries the `pending` label: a tag on the merge commit, a
 GitHub release with the pull request's notes and changelog, prerelease true for a
-pre-release version. Draft follows `github-release-draft-until-assets-attach`, default `false`: off, the
-release publishes immediately; on, it starts a draft, exempt from GitHub's immutable
+pre-release version. Draft follows `github-release-draft-until-assets-attach`, default `false`:
+off, the release publishes immediately; on, it starts a draft, exempt from GitHub's immutable
 releases feature, until a caller, such as a workflow step that still needs to attach
 binary assets, publishes it. The label swap removes `pending`, and the matching
 pre-release type label when the version carries one, replacing both with `tagged`. The
@@ -174,9 +174,10 @@ With `skip-github-release: true`, `release` tags the merge commit, swaps the lab
 the `released-tag` marker as usual, but creates no GitHub release, for a workflow that creates
 it from the tag itself. See [configuration](configuration.md#skip-github-release).
 
-With `github-release-draft: true`, the release starts a draft too, reported as `tagged and drafted <tag>`, but
-it is left for a human to publish: a later run never resumes it, whatever
-`github-release-draft-until-assets-attach` is set to. See [configuration](configuration.md#github-release-draft).
+With `github-release-draft: true`, the release starts a draft too, reported as
+`tagged and drafted <tag>`, but it is left for a human to publish: a later run never resumes it,
+whatever `github-release-draft-until-assets-attach` is set to. See
+[configuration](configuration.md#github-release-draft).
 
 With `major-tag: true`, every stable release additionally creates or force-moves the major
 tag, `vX` for the implicit `main` component or its tag prefix followed by `X` for a configured

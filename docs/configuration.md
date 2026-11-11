@@ -7,22 +7,6 @@ for the quick table and example.
 
 The version when no tag exists yet, default `0.1.0`.
 
-## `bump-minor-pre-major`
-
-Turns a major bump into a minor one below `1.0.0`, default `false`. A component overrides it
-through its own `bump-minor-pre-major` key; a `locked` or `linked` family computes its one
-shared version with the top-level value.
-
-## `bump-patch-for-minor-pre-major`
-
-Turns a minor bump, a `feat`, into a patch one below `1.0.0`, default `false`, so `0.4.1` with a
-`feat` releases `0.4.2` instead of `0.5.0`. A breaking change is not affected: it still bumps
-the major, or the minor with `bump-minor-pre-major: true`, never only the patch. From `1.0.0`
-on, and for a component's first release, which gets `initial-version`, the key changes nothing.
-A component overrides it through its own `bump-patch-for-minor-pre-major` key; a `locked` or
-`linked` family computes its one shared version with the top-level value. `next` names the
-rule in its reason, `0.4.2 (feat, patch below 1.0.0)`.
-
 ## `release-as`
 
 Forces the next version, default none:
@@ -106,12 +90,88 @@ means for any repository:
   dependency, `2.0.0 (dependency react major update)`. The changelog entry keeps its own
   type, so a hidden `chore` stays hidden.
 
+## `bump-minor-pre-major`
+
+Turns a major bump into a minor one below `1.0.0`, default `false`. A component overrides it
+through its own `bump-minor-pre-major` key; a `locked` or `linked` family computes its one
+shared version with the top-level value.
+
+## `bump-patch-for-minor-pre-major`
+
+Turns a minor bump, a `feat`, into a patch one below `1.0.0`, default `false`, so `0.4.1` with a
+`feat` releases `0.4.2` instead of `0.5.0`. A breaking change is not affected: it still bumps
+the major, or the minor with `bump-minor-pre-major: true`, never only the patch. From `1.0.0`
+on, and for a component's first release, which gets `initial-version`, the key changes nothing.
+A component overrides it through its own `bump-patch-for-minor-pre-major` key; a `locked` or
+`linked` family computes its one shared version with the top-level value. `next` names the
+rule in its reason, `0.4.2 (feat, patch below 1.0.0)`.
+
+## `changelog-path`
+
+The changelog file path, default `CHANGELOG.md`, release-please's own `changelog-path` key.
+`pr` prepends the new version's section to it, creating the file when it does not exist yet.
+
+## `changelog-source`
+
+Which commits become changelog entries, default `first-parent`. See
+[changelog modes](changelog-modes.md) for `first-parent`, `squash`, `all` and `nested`. A
+component overrides it through its own `changelog-source` key.
+
+## `changelog-type`
+
+Where the changelog section comes from, release-please's `changelog-type`: `default`, the
+entries `changelog-source` reads, or `github`, the release notes GitHub generates for the release,
+the ones its "Generate release notes" button fills in:
+
+```markdown
+## [v0.2.0](https://github.com/owner/repo/compare/v0.1.0...v0.2.0) (2026-11-04)
+
+### What's Changed
+* feat: add the widget by @octocat in https://github.com/owner/repo/pull/12
+
+**Full Changelog**: https://github.com/owner/repo/compare/v0.1.0...v0.2.0
+```
+
+- The version still comes from the conventional commits since the last tag; only the section
+  under the heading changes, in the changelog file, the release pull request body and the
+  release alike. `release-me changelog` prints it the same way, so it calls GitHub too.
+- `pr` asks GitHub for the notes of the tag the release will get, on the commit it cuts the
+  release pull request from, since the component's last tag; for a first release GitHub picks
+  the previous release itself, or takes the whole history. GitHub's notes cover the whole
+  repository between those two points, not only a component's path, and follow the
+  repository's `.github/release.yml` categories when it has one.
+- The notes are fitted under the version heading: GitHub's `## What's Changed` and every heading
+  up to the third level become `###`, a deeper one a bold line, since a `##` heading would read
+  as the next version's and a `####` one as a component of a shared release pull request.
+- `hidden-types` shapes the default type only.
+- The request is a `POST` to `releases/generate-notes`, which creates nothing and needs the
+  `contents: write` permission the job already has for its tags.
+
+A component overrides it through its own `changelog-type` key, so a shared release pull request
+can carry GitHub's notes for one component and entries for another. Any other value is a
+configuration error.
+
+## `skip-changelog`
+
+Leaves the changelog file alone, default `false`, release-please's `skip-changelog`: `pr`
+neither creates nor prepends to it, for a repository that keeps its changelog elsewhere, or by
+hand. Everything else stays: the release pull request body and the release still carry the
+version's section, and the files under `files` are still bumped. With no file to bump, the
+release branch carries an empty release commit, so the release pull request still has one to
+merge. A component overrides it through its own `skip-changelog` key, so one component of a
+shared release pull request can skip its changelog while the others keep theirs.
+
 ## `hidden-types`
 
 Hides entries of these types from the changelog, default `chore`, `docs`, `ci`, `style`,
 `refactor`, `test`, `build`, `other`. Without [`changelog-sections`](#changelog-sections), only
 `feat`, `fix`, `perf`, `revert` and a breaking change ever render a section; a type outside
 those five never renders, hidden or not.
+
+## `fallback-type`
+
+The type assigned to text that does not parse as a conventional commit, default `other`.
+`feat`, `fix`, `perf` and `revert` are refused, unparseable text never bumps the version.
 
 ## `changelog-sections`
 
@@ -176,6 +236,39 @@ parent line already credits the pull request. An `@<login>` mentions that accoun
 renders the text, in the release pull request body and the release, which notifies it the way
 release-please's mention does. There is no per-component override.
 
+## `changelog-commit-links`
+
+Links each entry's commit after the pull request link, default `false`, the shape
+release-please renders:
+
+```markdown
+- handle the empty case ([#12](https://github.com/owner/repo/pull/12)) ([8fa6c1b](https://github.com/owner/repo/commit/8fa6c1b0d3e2f4a5b6c7d8e9f0a1b2c3d4e5f6a7))
+```
+
+The commit is the one the entry comes from: the merge commit for a pull request in
+`first-parent` and `nested`, the squash commit in `squash`, each commit's own in `all`, where an
+[override block](overrides.md#override-block) links the oldest commit of its pull request. A
+`nested` sub item links its own commit. There is no per-component override.
+
+## `changelog-issue-references`
+
+Links the issues an entry closes, default `false`, after every other link:
+
+```markdown
+- handle the empty case ([#12](https://github.com/owner/repo/pull/12)), refs [#7](https://github.com/owner/repo/issues/7)
+```
+
+An issue counts when the entry's text names it after one of GitHub's closing keywords, `close`,
+`closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` or `resolved`, any case, an
+optional `:` after it: a pull request's title and body, a commit's message. A plain mention, or
+an issue in another repository, `owner/repo#7`, is no reference. It renders as `refs`, the way
+release-please renders it, not `closes`. The release pull request body carries the changelog,
+and a closing keyword there would close the issue again when that pull request merges. There is
+no per-component override.
+
+`release-me migrate` turns both keys on, since release-please's default changelog carries both
+links.
+
 ## `changelog-host`
 
 The web address every changelog link points at, release-please's `changelog-host`, default
@@ -222,175 +315,6 @@ the changelog's, so `release-me migrate` leaves it out with a warning saying so.
 Custom-formatted pull request bodies record the canonical date in machine metadata outside
 the rendered body. Changing to another custom format, or back to the default, keeps that
 date until release content changes. Older bodies fall back to the current format and ISO.
-
-## `changelog-commit-links`
-
-Links each entry's commit after the pull request link, default `false`, the shape
-release-please renders:
-
-```markdown
-- handle the empty case ([#12](https://github.com/owner/repo/pull/12)) ([8fa6c1b](https://github.com/owner/repo/commit/8fa6c1b0d3e2f4a5b6c7d8e9f0a1b2c3d4e5f6a7))
-```
-
-The commit is the one the entry comes from: the merge commit for a pull request in
-`first-parent` and `nested`, the squash commit in `squash`, each commit's own in `all`, where an
-[override block](overrides.md#override-block) links the oldest commit of its pull request. A
-`nested` sub item links its own commit. There is no per-component override.
-
-## `changelog-issue-references`
-
-Links the issues an entry closes, default `false`, after every other link:
-
-```markdown
-- handle the empty case ([#12](https://github.com/owner/repo/pull/12)), refs [#7](https://github.com/owner/repo/issues/7)
-```
-
-An issue counts when the entry's text names it after one of GitHub's closing keywords, `close`,
-`closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` or `resolved`, any case, an
-optional `:` after it: a pull request's title and body, a commit's message. A plain mention, or
-an issue in another repository, `owner/repo#7`, is no reference. It renders as `refs`, the way
-release-please renders it, not `closes`. The release pull request body carries the changelog,
-and a closing keyword there would close the issue again when that pull request merges. There is
-no per-component override.
-
-`release-me migrate` turns both keys on, since release-please's default changelog carries both
-links.
-
-## `fallback-type`
-
-The type assigned to text that does not parse as a conventional commit, default `other`.
-`feat`, `fix`, `perf` and `revert` are refused, unparseable text never bumps the version.
-
-## `token-env`
-
-The environment variable holding the GitHub token, default `GITHUB_TOKEN`. It governs every API
-call, the release commit `pr` creates included, so the kind of token decides whether GitHub
-signs that commit: see [signed release commits](commands.md#signed-release-commits). Reading
-and publishing the release branch go through the git credentials the checkout's
-`origin` remote already carries.
-
-## `changelog-path`
-
-The changelog file path, default `CHANGELOG.md`, release-please's own `changelog-path` key.
-`pr` prepends the new version's section to it, creating the file when it does not exist yet.
-
-## `changelog-type`
-
-Where the changelog section comes from, release-please's `changelog-type`: `default`, the
-entries `changelog-source` reads, or `github`, the release notes GitHub generates for the release,
-the ones its "Generate release notes" button fills in:
-
-```markdown
-## [v0.2.0](https://github.com/owner/repo/compare/v0.1.0...v0.2.0) (2026-11-04)
-
-### What's Changed
-* feat: add the widget by @octocat in https://github.com/owner/repo/pull/12
-
-**Full Changelog**: https://github.com/owner/repo/compare/v0.1.0...v0.2.0
-```
-
-- The version still comes from the conventional commits since the last tag; only the section
-  under the heading changes, in the changelog file, the release pull request body and the
-  release alike. `release-me changelog` prints it the same way, so it calls GitHub too.
-- `pr` asks GitHub for the notes of the tag the release will get, on the commit it cuts the
-  release pull request from, since the component's last tag; for a first release GitHub picks
-  the previous release itself, or takes the whole history. GitHub's notes cover the whole
-  repository between those two points, not only a component's path, and follow the
-  repository's `.github/release.yml` categories when it has one.
-- The notes are fitted under the version heading: GitHub's `## What's Changed` and every heading
-  up to the third level become `###`, a deeper one a bold line, since a `##` heading would read
-  as the next version's and a `####` one as a component of a shared release pull request.
-- `hidden-types` shapes the default type only.
-- The request is a `POST` to `releases/generate-notes`, which creates nothing and needs the
-  `contents: write` permission the job already has for its tags.
-
-A component overrides it through its own `changelog-type` key, so a shared release pull request
-can carry GitHub's notes for one component and entries for another. Any other value is a
-configuration error.
-
-## `skip-changelog`
-
-Leaves the changelog file alone, default `false`, release-please's `skip-changelog`: `pr`
-neither creates nor prepends to it, for a repository that keeps its changelog elsewhere, or by
-hand. Everything else stays: the release pull request body and the release still carry the
-version's section, and the files under `files` are still bumped. With no file to bump, the
-release branch carries an empty release commit, so the release pull request still has one to
-merge. A component overrides it through its own `skip-changelog` key, so one component of a
-shared release pull request can skip its changelog while the others keep theirs.
-
-## `changelog-source`
-
-Which commits become changelog entries, default `first-parent`. See
-[changelog modes](changelog-modes.md) for `first-parent`, `squash`, `all` and `nested`. A
-component overrides it through its own `changelog-source` key.
-
-## `labels`
-
-`labels.pending` and `labels.tagged`: the label names `pr`, `release` and `check` use, default
-`release: pending` and `release: tagged`. Each is one name or a list of names, the way
-release-please's comma separated `label` and `release-label` work:
-
-```yaml
-labels:
-  pending: ["autorelease: pending", release]
-  tagged: "autorelease: tagged"
-  extra: ["team: platform", automerge]
-```
-
-`pr` opens a release pull request with every pending label and adds back any one it lost. A
-merged release pull request is pending, and `release` tags it, only while it carries every
-pending label; `release` then removes all of them and adds every tagged label, and a draft is
-resumed only on a pull request carrying every tagged label. A configuration written with one
-name per role keeps working unchanged. Neither list can be empty, no name in it can be empty,
-and one name configured for two roles, or twice in one, is a configuration error.
-
-`labels.extra`: labels `pr` adds to a release pull request it opens, beside the pending ones,
-release-please's `extra-label`, default none. Nothing reads them, `release` leaves them in
-place, and `pr` never adds one back after a human removed it. `check` and `pr` expect them on
-the repository like every other configured label.
-
-`labels.prerelease`: the pre-release type labels `pr`, `release` and `check` use. The built-in
-types are `alpha`, `beta` and `rc`, in that order, default `release: alpha`, `release: beta` and
-`release: rc`:
-
-```yaml
-labels:
-  prerelease:
-    alpha: "release: alpha"
-    beta: false
-    rc: "release: rc"
-    next: "release: next"
-```
-
-A key naming `alpha`, `beta` or `rc` renames its label, keeping its position in the order.
-`false`, or `""`, turns that type off, so a repository that never cuts pre-releases needs none
-of the three labels. Any other key, `next` above, adds a further pre-release type, appended
-after the built-in three in the order this block declares it; its value must be a non-empty
-string, `false` for a type that does not exist yet is pointless and a configuration error.
-
-See [Pre-releases](commands.md#pre-releases): a type's label on the release pull request turns
-the next run into `X.Y.Z-<type>.N`, with a counter of its own, `check` reports the label missing
-by name, the guide in the pull request body lists every enabled type in order, and `release`
-swaps it for `tagged`. A pull request carrying more than one type label is an error naming them
-in that same order.
-
-A type name is one semver pre-release identifier: ASCII letters, digits and `-`, not only
-digits, so `next`, `preview` and `nightly-build` work, `pre.view` and `2024` do not. A label
-must differ from every other label, `labels.pending` and `labels.tagged` included; anything
-else is a configuration error naming the key.
-
-This is release-please's `prerelease-type` with a free name. A pre-release stays something a
-human asks for on the release pull request: there is no key that cuts every release as a
-pre-release, as release-please's `prerelease: true` does.
-
-## `author`
-
-`author.name` and `author.email`: accepted, default `release-me` and
-`release-me[bot]@users.noreply.github.com`, but ignored. The forge creates the release commit
-under the token's own identity, since GitHub signs it only when no author is passed, see
-[signed release commits](commands.md#signed-release-commits). The keys still load, so an
-existing configuration keeps working, and `check` and `pr` warn about each one that is set,
-naming it as ignored. `GIT_AUTHOR_*` and `GIT_COMMITTER_*` in the environment change nothing either.
 
 ## `files`
 
@@ -555,26 +479,6 @@ fails `pr`, naming the path and the key.
 Every file entry is validated when release-me.yaml loads: an unknown `updater`, a `key`
 missing where the updater requires one, and a `key` given to an updater that takes none are
 all errors.
-
-## `major-tag`
-
-Moves the major tag on every stable release, default `false`. See [release](commands.md#release)
-for what `true` changes. A component overrides it through its own `major-tag` key.
-
-Known limitation: the major tag moves when the release is created, not when a human publishes
-it. With [`force-tag-creation`](#force-tag-creation) on, the default, the version tag sits on
-that same commit already, draft or not, so the two agree. With it off and the release drafted
-by [`github-release-draft`](#github-release-draft) or
-[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach), the version
-tag does not exist yet, so the major tag points at a version that is not published until
-someone publishes that draft. Deferring the move is not an option: nothing in release-me runs
-after that publish, so a deferred major tag would never be created at all. Keep
-`force-tag-creation: true` where the major tag matters, which is the default.
-
-## `versioning`
-
-`independent` (default), `locked` or `linked`. See [versioning modes](versioning-modes.md).
-There is no per-component override: it applies to the whole family.
 
 ## `release-pull-request`
 
@@ -750,23 +654,6 @@ GitHub offers drafts on public repositories and on private ones with a paid plan
 does not, creating the pull request fails with the forge's error and `pr` reports it, the
 release branch already pushed.
 
-## `signoff`
-
-The identity, `Name <email>`, the release commit is signed off by, default none:
-
-```yaml
-signoff: "Release Bot <release-bot@example.com>"
-```
-
-`pr` ends the release commit's message with a `Signed-off-by: Release Bot
-<release-bot@example.com>` trailer, the line `git commit --signoff` writes, for a repository
-whose DCO check requires one on every commit. The trailer is part of the message, so it is the
-same whichever way the commit is created, and it changes neither the commit's author nor its
-committer, which are the token's own, see [`author`](#author). Anything other than a name and
-an email in angle brackets on one line is a configuration error. Enabling or changing
-`signoff` also refreshes an already open release commit whose trailer is missing or names the
-previous identity. An unchanged rerun then leaves that commit alone.
-
 ## `release-pull-request-header`
 
 Free text every release pull request body carries, per component, shared or locked: the header
@@ -797,6 +684,92 @@ release.
 Free text below the changelog of every release pull request body, default none. It follows the
 same rules as [`release-pull-request-header`](#release-pull-request-header).
 
+## `author`
+
+`author.name` and `author.email`: accepted, default `release-me` and
+`release-me[bot]@users.noreply.github.com`, but ignored. The forge creates the release commit
+under the token's own identity, since GitHub signs it only when no author is passed, see
+[signed release commits](commands.md#signed-release-commits). The keys still load, so an
+existing configuration keeps working, and `check` and `pr` warn about each one that is set,
+naming it as ignored. `GIT_AUTHOR_*` and `GIT_COMMITTER_*` in the environment change nothing either.
+
+## `signoff`
+
+The identity, `Name <email>`, the release commit is signed off by, default none:
+
+```yaml
+signoff: "Release Bot <release-bot@example.com>"
+```
+
+`pr` ends the release commit's message with a `Signed-off-by: Release Bot
+<release-bot@example.com>` trailer, the line `git commit --signoff` writes, for a repository
+whose DCO check requires one on every commit. The trailer is part of the message, so it is the
+same whichever way the commit is created, and it changes neither the commit's author nor its
+committer, which are the token's own, see [`author`](#author). Anything other than a name and
+an email in angle brackets on one line is a configuration error. Enabling or changing
+`signoff` also refreshes an already open release commit whose trailer is missing or names the
+previous identity. An unchanged rerun then leaves that commit alone.
+
+## `major-tag`
+
+Moves the major tag on every stable release, default `false`. See [release](commands.md#release)
+for what `true` changes. A component overrides it through its own `major-tag` key.
+
+Known limitation: the major tag moves when the release is created, not when a human publishes
+it. With [`force-tag-creation`](#force-tag-creation) on, the default, the version tag sits on
+that same commit already, draft or not, so the two agree. With it off and the release drafted
+by [`github-release-draft`](#github-release-draft) or
+[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach), the version
+tag does not exist yet, so the major tag points at a version that is not published until
+someone publishes that draft. Deferring the move is not an option: nothing in release-me runs
+after that publish, so a deferred major tag would never be created at all. Keep
+`force-tag-creation: true` where the major tag matters, which is the default.
+
+## `include-v-in-release-name`
+
+Keeps the `v` before the version in the GitHub release's name, default `true`: `vX.Y.Z` for
+the implicit `main` component, `<name> vX.Y.Z` for a configured one. `false` names it
+`X.Y.Z` or `<name> X.Y.Z`. Only the release's name changes: the tag keeps its prefix, and the
+release pull request title, which `release` reads the version back from, keeps its `v`. A
+component overrides it through its own `include-v-in-release-name` key.
+
+## `skip-github-release`
+
+Tags a merged release pull request without creating a GitHub release, default `false`, for a
+repository whose own workflow creates the release from the tag, such as a GoReleaser step that
+reads the action's `tags` output. Everything else still happens: the tag, the
+[major tag](#major-tag), the label swap from `pending` to `tagged`, the `released-tag` marker
+and every action output, so a later step knows which tag to release. With
+[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach) on, a
+component that skips its release has no draft to attach assets to or to resume, and
+[`github-release-draft`](#github-release-draft) has no effect at
+all. [`force-tag-creation: false`](#force-tag-creation) beside this key is refused when
+release-me.yaml loads: it leaves the tag to a release that is never created. A component
+overrides it through its own `skip-github-release` key.
+
+Unlike release-please, release-me creates the tag even with this key on. After migrating,
+remove any external tagging step that release-please needed for `skip-github-release`.
+
+## `github-release-draft`
+
+Creates each GitHub release as a draft and leaves it one, default `false`, for a human to
+review and publish. The tag, the label swap, the `released-tag` marker and the action outputs
+still happen on the same run, exactly as for a published release, so a publish step already
+sees this tag before any human has acted. It differs from
+[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach) in one way:
+a draft left on purpose is never resumed, so a later run does not print its `released-tag` marker
+again while it waits. That holds with both keys on too: the component that drafts on purpose is
+left out of the resume. Neither key makes a publish step wait for a human on its own: the
+[draft until assets attach](action.md#draft-until-assets-attach) workflow this repository
+runs publishes every draft its `tags` output carries, this one included, with no way to tell
+a deliberate draft from one only waiting on assets. Filter the component out of that step, or
+run no automatic publish step for it, where the release genuinely needs a human to publish it
+first. A component overrides `github-release-draft` through its own `github-release-draft` key.
+
+With [`skip-github-release`](#skip-github-release) on, this key has no effect: there is no
+release to draft. With [`major-tag`](#major-tag) on, the major tag moves when the draft is
+created, not when it is published; see `major-tag`.
+
 ## `github-release-draft-until-assets-attach`
 
 Drafts every release instead of publishing it immediately, default `false`. There is no
@@ -815,14 +788,14 @@ always has, so a draft's tag exists while the draft waits. `false` leaves the ta
 instead, the release-please default: the release is created with the merge commit as its
 target, and GitHub creates the tag on it when the release is published, right away for a
 published release, on publish for a draft from
-[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach). That tag creation on publish is
-GitHub behaviour release-me relies on but GitHub does not document anywhere, and it is not
-verified against a live repository either. If the tag does not appear after a publish, `pr`
-reports the missing tag and waits instead of releasing the same version again.
-The run then reports `drafted <tag>, tagged on publish`. Until that publish the tag does not
-exist: a later step must not expect it, a rerun cannot tell a draft it tagged before, and the
-[major tag](#major-tag) already points at the merge commit. The draft is still found by its tag
-name, so the resume of `github-release-draft-until-assets-attach` and the guard against a second draft work
+[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach). That tag
+creation on publish is GitHub behaviour release-me relies on but GitHub does not document anywhere,
+and it is not verified against a live repository either. If the tag does not appear after a
+publish, `pr` reports the missing tag and waits instead of releasing the same version again. The
+run then reports `drafted <tag>, tagged on publish`. Until that publish the tag does not exist: a
+later step must not expect it, a rerun cannot tell a draft it tagged before, and the [major
+tag](#major-tag) already points at the merge commit. The draft is still found by its tag name, so
+the resume of `github-release-draft-until-assets-attach` and the guard against a second draft work
 the same. A component overrides it through its own `force-tag-creation` key.
 
 `force-tag-creation: false` together with [`skip-github-release`](#skip-github-release) is
@@ -830,8 +803,8 @@ refused when release-me.yaml loads, at the top level and for every component it 
 the tag is left to a release that is never created, so nothing would ever create it.
 
 Keep `force-tag-creation: true` when using this repository's
-`scripts/publish-release-assets.sh` with `github-release-draft-until-assets-attach`: the script checks out
-the tag and GoReleaser resolves it before publishing, so both need an existing git ref.
+`scripts/publish-release-assets.sh` with `github-release-draft-until-assets-attach`: the script
+checks out the tag and GoReleaser resolves it before publishing, so both need an existing git ref.
 A workflow that defers the tag must build from the release's `targetCommitish` instead of
 checking out the tag, and use tooling that can build without that tag ref.
 
@@ -840,126 +813,6 @@ for `release` to resume that draft. It does not open another pull request for th
 including after switching per-component releases to a shared pull request. Publishing the
 draft creates the tag and unblocks `pr`; deleting the draft also unblocks it, so the next
 run can create the release again.
-
-## `include-v-in-release-name`
-
-Keeps the `v` before the version in the GitHub release's name, default `true`: `vX.Y.Z` for
-the implicit `main` component, `<name> vX.Y.Z` for a configured one. `false` names it
-`X.Y.Z` or `<name> X.Y.Z`. Only the release's name changes: the tag keeps its prefix, and the
-release pull request title, which `release` reads the version back from, keeps its `v`. A
-component overrides it through its own `include-v-in-release-name` key.
-
-## `skip-github-release`
-
-Tags a merged release pull request without creating a GitHub release, default `false`, for a
-repository whose own workflow creates the release from the tag, such as a GoReleaser step that
-reads the action's `tags` output. Everything else still happens: the tag, the
-[major tag](#major-tag), the label swap from `pending` to `tagged`, the `released-tag` marker
-and every action output, so a later step knows which tag to release. With
-[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach) on, a component that skips its
-release has no draft to attach assets to or to resume, and
-[`github-release-draft`](#github-release-draft) has no effect at
-all. [`force-tag-creation: false`](#force-tag-creation) beside this key is refused when
-release-me.yaml loads: it leaves the tag to a release that is never created. A component
-overrides it through its own `skip-github-release` key.
-
-Unlike release-please, release-me creates the tag even with this key on. After migrating,
-remove any external tagging step that release-please needed for `skip-github-release`.
-
-## `github-release-draft`
-
-Creates each GitHub release as a draft and leaves it one, default `false`, for a human to
-review and publish. The tag, the label swap, the `released-tag` marker and the action outputs
-still happen on the same run, exactly as for a published release, so a publish step already
-sees this tag before any human has acted. It differs from
-[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach) in one way: a draft left on purpose
-is never resumed, so a later run does not print its `released-tag` marker again while it
-waits. That holds with both keys on too: the component that drafts on purpose is left out of
-the resume. Neither key makes a publish step wait for a human on its own: the
-[draft until assets attach](action.md#draft-until-assets-attach) workflow this repository
-runs publishes every draft its `tags` output carries, this one included, with no way to tell
-a deliberate draft from one only waiting on assets. Filter the component out of that step, or
-run no automatic publish step for it, where the release genuinely needs a human to publish it
-first. A component overrides `github-release-draft` through its own `github-release-draft` key.
-
-With [`skip-github-release`](#skip-github-release) on, this key has no effect: there is no
-release to draft. With [`major-tag`](#major-tag) on, the major tag moves when the draft is
-created, not when it is published; see `major-tag`.
-
-## `comment-mention`
-
-The mention prefix a comment on the release pull request names to issue a `release-as` or
-`release-notes` command, default `@release-me`. See
-[comment commands](overrides.md#comment-commands). Cannot be empty.
-
-## `workspaces`
-
-The package managers whose manifests link components to each other, default none:
-
-- `node`, an npm, pnpm or yarn workspace, read from each component's `<path>/package.json`;
-- `cargo`, a Cargo workspace, read from each component's `<path>/Cargo.toml`;
-- `maven`, a Maven multi-module build, read from each component's `<path>/pom.xml`.
-
-A component without that manifest is no member of the workspace. Without a component at path
-`.`, the manifest at the repository root, such as a virtual Cargo workspace's `Cargo.toml` or a
-Maven aggregator `pom.xml`, is read too: its dependencies on a released component move,
-`[workspace.dependencies]` or `<dependencyManagement>` included, but it releases nothing
-itself.
-
-```yaml
-release-pull-request: shared
-workspaces: [node]
-components:
-  core:
-    path: packages/core
-  web:
-    path: packages/web
-```
-
-A component that releases moves every other component's dependency on it, declared under
-`dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies` by the package
-name, to its new version, and that dependent releases with it in the same release pull request:
-a patch bump on its own last tag in `independent`, the family's version in `linked`, and in
-`locked` every component releases anyway. A dependent of a dependent releases too. In
-`independent`, the dependent's own `versioning-strategy` is ignored for that patch, since it
-has no changes of its own to bump by. Each dependent's changelog gets a
-`- **deps:** update <package> to <version>` line under Bug Fixes.
-A range keeps its operator and protocol: `^1.2.0` becomes `^1.3.0`, `workspace:~1.2.0`
-becomes `workspace:~1.3.0`, while one naming no single version, such as `workspace:*`, `*`,
-`file:../core` or `>=1.0.0 <2`, stays as written and still releases the dependent. A
-component's own version moves through its `files` as always. `next` and `changelog` report a
-component's own changes only: the dependents join the release at `pr`.
-
-For `node`, the dependency objects must open on a line of their own and declare one
-dependency per line, the layout npm, pnpm and yarn write; `pr` fails naming the file and the
-dependency otherwise.
-
-For `cargo`, a dependency on a crate by its `[package]` name, or through `package =` when
-renamed, links under `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`, their
-`[target.<cfg>.…]` forms and `[workspace.dependencies]`. Its version moves as a plain
-requirement, `acme-core = "1.2.0"`, inside a one-line inline table,
-`{ path = "../core", version = "=1.2.0" }`, or as the `version` of a
-`[dependencies.acme-core]` table, keeping its operator; `1.2`, a partial version, becomes the
-full new one. A dependency without a version, `{ workspace = true }` or a bare `path`, stays as
-written and still releases the dependent. A dependency spread over several lines is not read.
-
-For `maven`, a module is named `<groupId>:<artifactId>`, its `groupId` inherited from its
-`<parent>` where it sets none. It links through its `<parent>`, its `<dependencies>` and its
-`<dependencyManagement>`, a `${project.groupId}` read as its own group; a build plugin's
-dependencies do not link. The `<version>` text moves, in a profile's dependencies too, and
-every other byte stays. A version given through a property, `${core.version}`, or as a range,
-`[1.0,2.0)`, stays as written and still releases the dependent. A module's own `<version>` is
-not moved by `workspaces`, only by its `files`.
-
-Lockfiles, `package-lock.json`, `pnpm-lock.yaml` or `Cargo.lock`, are not updated.
-
-A dependent releases together with its dependency, so `workspaces` needs `components` and
-one release pull request for all of them, `release-pull-request: shared` or
-`versioning: locked`; an unknown or repeated package manager is a configuration error too.
-
-Inherited `workspace = true` dependencies resolve renamed package aliases from the root
-workspace declarations. The root keeps the version requirement, and the child keeps its
-workspace declaration unchanged.
 
 ## `delete-release-branch`
 
@@ -974,40 +827,75 @@ merged from it has been released. The
 [shared release pull request's leftover sweep](versioning-modes.md#shared-release-pull-request)
 depends on finding that branch. Both can be on: a branch GitHub already deleted is not an error.
 
-## `always-link-local`
+## `labels`
 
-Whether every `node` dependency on a local package name links the two components, default
-`true`, release-please's default too. `false` links one only where it resolves to the local
-package anyway: a `workspace:`, `file:`, `link:` or `portal:` protocol, or a range the local
-package's current version satisfies, such as `^1.2.0` for a local `1.4.1`. Any other
-dependency on the name, `~1.1.0` for that `1.4.1` or a dist-tag like `latest`, is left to the
-registry: its range stays as written and it releases nothing. A dependent still linked through
-another dependency releases as usual. Ranges are read the way npm reads them: `||`, hyphen
-ranges, partial and `x` versions and the `=`, `<`, `<=`, `>`, `>=`, `~` and `^` operators.
-Setting the key without `node` in [`workspaces`](#workspaces) is a configuration error.
-
-## `exclude-paths`
-
-Paths whose changes never count for a component, default none. Each one is relative to the
-repository root, like a `files` path, and names a directory or a file nested inside the
-component's `path`: a commit, or a merged pull request, that changed only files under its
-excluded paths does not reach the component's version or changelog, one that changed a file
-outside them does. A [Release-Component footer](overrides.md#release-component-footer) naming
-the component still counts, and an empty commit counts as it does without the key.
+`labels.pending` and `labels.tagged`: the label names `pr`, `release` and `check` use, default
+`release: pending` and `release: tagged`. Each is one name or a list of names, the way
+release-please's comma separated `label` and `release-label` work:
 
 ```yaml
-components:
-  web:
-    path: packages/web
-    exclude-paths:
-      - packages/web/docs
-      - packages/web/package-lock.json
+labels:
+  pending: ["autorelease: pending", release]
+  tagged: "autorelease: tagged"
+  extra: ["team: platform", automerge]
 ```
 
-A component carries its own `exclude-paths`; the top-level key applies to the implicit `main`
-component of a repository without `components` and is a configuration error beside them. An
-entry that is empty, absolute, holds a backslash, leaves the repository, equals the
-component's `path` or lies outside it is a configuration error.
+`pr` opens a release pull request with every pending label and adds back any one it lost. A
+merged release pull request is pending, and `release` tags it, only while it carries every
+pending label; `release` then removes all of them and adds every tagged label, and a draft is
+resumed only on a pull request carrying every tagged label. A configuration written with one
+name per role keeps working unchanged. Neither list can be empty, no name in it can be empty,
+and one name configured for two roles, or twice in one, is a configuration error.
+
+`labels.extra`: labels `pr` adds to a release pull request it opens, beside the pending ones,
+release-please's `extra-label`, default none. Nothing reads them, `release` leaves them in
+place, and `pr` never adds one back after a human removed it. `check` and `pr` expect them on
+the repository like every other configured label.
+
+`labels.prerelease`: the pre-release type labels `pr`, `release` and `check` use. The built-in
+types are `alpha`, `beta` and `rc`, in that order, default `release: alpha`, `release: beta` and
+`release: rc`:
+
+```yaml
+labels:
+  prerelease:
+    alpha: "release: alpha"
+    beta: false
+    rc: "release: rc"
+    next: "release: next"
+```
+
+A key naming `alpha`, `beta` or `rc` renames its label, keeping its position in the order.
+`false`, or `""`, turns that type off, so a repository that never cuts pre-releases needs none
+of the three labels. Any other key, `next` above, adds a further pre-release type, appended
+after the built-in three in the order this block declares it; its value must be a non-empty
+string, `false` for a type that does not exist yet is pointless and a configuration error.
+
+See [Pre-releases](commands.md#pre-releases): a type's label on the release pull request turns
+the next run into `X.Y.Z-<type>.N`, with a counter of its own, `check` reports the label missing
+by name, the guide in the pull request body lists every enabled type in order, and `release`
+swaps it for `tagged`. A pull request carrying more than one type label is an error naming them
+in that same order.
+
+A type name is one semver pre-release identifier: ASCII letters, digits and `-`, not only
+digits, so `next`, `preview` and `nightly-build` work, `pre.view` and `2024` do not. A label
+must differ from every other label, `labels.pending` and `labels.tagged` included; anything
+else is a configuration error naming the key.
+
+This is release-please's `prerelease-type` with a free name. A pre-release stays something a
+human asks for on the release pull request: there is no key that cuts every release as a
+pre-release, as release-please's `prerelease: true` does.
+
+## `comment-mention`
+
+The mention prefix a comment on the release pull request names to issue a `release-as` or
+`release-notes` command, default `@release-me`. See
+[comment commands](overrides.md#comment-commands). Cannot be empty.
+
+## `versioning`
+
+`independent` (default), `locked` or `linked`. See [versioning modes](versioning-modes.md).
+There is no per-component override: it applies to the whole family.
 
 ## `components`
 
@@ -1098,3 +986,115 @@ components:
   api:
     path: packages/api
 ```
+
+## `exclude-paths`
+
+Paths whose changes never count for a component, default none. Each one is relative to the
+repository root, like a `files` path, and names a directory or a file nested inside the
+component's `path`: a commit, or a merged pull request, that changed only files under its
+excluded paths does not reach the component's version or changelog, one that changed a file
+outside them does. A [Release-Component footer](overrides.md#release-component-footer) naming
+the component still counts, and an empty commit counts as it does without the key.
+
+```yaml
+components:
+  web:
+    path: packages/web
+    exclude-paths:
+      - packages/web/docs
+      - packages/web/package-lock.json
+```
+
+A component carries its own `exclude-paths`; the top-level key applies to the implicit `main`
+component of a repository without `components` and is a configuration error beside them. An
+entry that is empty, absolute, holds a backslash, leaves the repository, equals the
+component's `path` or lies outside it is a configuration error.
+
+## `workspaces`
+
+The package managers whose manifests link components to each other, default none:
+
+- `node`, an npm, pnpm or yarn workspace, read from each component's `<path>/package.json`;
+- `cargo`, a Cargo workspace, read from each component's `<path>/Cargo.toml`;
+- `maven`, a Maven multi-module build, read from each component's `<path>/pom.xml`.
+
+A component without that manifest is no member of the workspace. Without a component at path
+`.`, the manifest at the repository root, such as a virtual Cargo workspace's `Cargo.toml` or a
+Maven aggregator `pom.xml`, is read too: its dependencies on a released component move,
+`[workspace.dependencies]` or `<dependencyManagement>` included, but it releases nothing
+itself.
+
+```yaml
+release-pull-request: shared
+workspaces: [node]
+components:
+  core:
+    path: packages/core
+  web:
+    path: packages/web
+```
+
+A component that releases moves every other component's dependency on it, declared under
+`dependencies`, `devDependencies`, `peerDependencies` or `optionalDependencies` by the package
+name, to its new version, and that dependent releases with it in the same release pull request:
+a patch bump on its own last tag in `independent`, the family's version in `linked`, and in
+`locked` every component releases anyway. A dependent of a dependent releases too. In
+`independent`, the dependent's own `versioning-strategy` is ignored for that patch, since it
+has no changes of its own to bump by. Each dependent's changelog gets a
+`- **deps:** update <package> to <version>` line under Bug Fixes.
+A range keeps its operator and protocol: `^1.2.0` becomes `^1.3.0`, `workspace:~1.2.0`
+becomes `workspace:~1.3.0`, while one naming no single version, such as `workspace:*`, `*`,
+`file:../core` or `>=1.0.0 <2`, stays as written and still releases the dependent. A
+component's own version moves through its `files` as always. `next` and `changelog` report a
+component's own changes only: the dependents join the release at `pr`.
+
+For `node`, the dependency objects must open on a line of their own and declare one
+dependency per line, the layout npm, pnpm and yarn write; `pr` fails naming the file and the
+dependency otherwise.
+
+For `cargo`, a dependency on a crate by its `[package]` name, or through `package =` when
+renamed, links under `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`, their
+`[target.<cfg>.…]` forms and `[workspace.dependencies]`. Its version moves as a plain
+requirement, `acme-core = "1.2.0"`, inside a one-line inline table,
+`{ path = "../core", version = "=1.2.0" }`, or as the `version` of a
+`[dependencies.acme-core]` table, keeping its operator; `1.2`, a partial version, becomes the
+full new one. A dependency without a version, `{ workspace = true }` or a bare `path`, stays as
+written and still releases the dependent. A dependency spread over several lines is not read.
+
+For `maven`, a module is named `<groupId>:<artifactId>`, its `groupId` inherited from its
+`<parent>` where it sets none. It links through its `<parent>`, its `<dependencies>` and its
+`<dependencyManagement>`, a `${project.groupId}` read as its own group; a build plugin's
+dependencies do not link. The `<version>` text moves, in a profile's dependencies too, and
+every other byte stays. A version given through a property, `${core.version}`, or as a range,
+`[1.0,2.0)`, stays as written and still releases the dependent. A module's own `<version>` is
+not moved by `workspaces`, only by its `files`.
+
+Lockfiles, `package-lock.json`, `pnpm-lock.yaml` or `Cargo.lock`, are not updated.
+
+A dependent releases together with its dependency, so `workspaces` needs `components` and
+one release pull request for all of them, `release-pull-request: shared` or
+`versioning: locked`; an unknown or repeated package manager is a configuration error too.
+
+Inherited `workspace = true` dependencies resolve renamed package aliases from the root
+workspace declarations. The root keeps the version requirement, and the child keeps its
+workspace declaration unchanged.
+
+## `always-link-local`
+
+Whether every `node` dependency on a local package name links the two components, default
+`true`, release-please's default too. `false` links one only where it resolves to the local
+package anyway: a `workspace:`, `file:`, `link:` or `portal:` protocol, or a range the local
+package's current version satisfies, such as `^1.2.0` for a local `1.4.1`. Any other
+dependency on the name, `~1.1.0` for that `1.4.1` or a dist-tag like `latest`, is left to the
+registry: its range stays as written and it releases nothing. A dependent still linked through
+another dependency releases as usual. Ranges are read the way npm reads them: `||`, hyphen
+ranges, partial and `x` versions and the `=`, `<`, `<=`, `>`, `>=`, `~` and `^` operators.
+Setting the key without `node` in [`workspaces`](#workspaces) is a configuration error.
+
+## `token-env`
+
+The environment variable holding the GitHub token, default `GITHUB_TOKEN`. It governs every API
+call, the release commit `pr` creates included, so the kind of token decides whether GitHub
+signs that commit: see [signed release commits](commands.md#signed-release-commits). Reading
+and publishing the release branch go through the git credentials the checkout's
+`origin` remote already carries.

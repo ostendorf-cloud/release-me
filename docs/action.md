@@ -1,8 +1,8 @@
 # GitHub Action reference
 
 Full reference for the composite action: every input and output, the
-`github-release-draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and bootstrapping the
-first release. See the [README](../README.md#install) for the short version.
+`github-release-draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
+bootstrapping the first release. See the [README](../README.md#install) for the short version.
 
 ## Inputs
 
@@ -42,9 +42,9 @@ phase fails still lists in `prs` the pull request its `pr` phase opened.
   a GitHub release. With `force-tag-creation: false`, a draft's tag name is included before
   its git ref exists; publish the release before using that name as a git ref.
 - `released`: `true` when this run tagged a release for any component, `false` otherwise and
-  always in dry-run. With `github-release-draft: true` or `github-release-draft-until-assets-attach: true`, this and
-  `components.<name>.released` become true while the GitHub release is still an unpublished
-  draft; `tags` includes its tag too.
+  always in dry-run. With `github-release-draft: true` or
+  `github-release-draft-until-assets-attach: true`, this and `components.<name>.released` become
+  true while the GitHub release is still an unpublished draft; `tags` includes its tag too.
 - `components`: a JSON object keyed by every component this run handled, every configured
   one unless `component` limits it, the implicit one as `main`. Each entry is
   `{"released", "version", "tag", "major", "minor", "patch", "sha", "body", "html_url",
@@ -88,8 +88,8 @@ A component name with a `-` in it needs the index form,
 
 ## Draft for human review
 
-`github-release-draft: true` in `release-me.yaml`, or on a component, creates its GitHub release as a
-draft for a human to review and publish. The run that creates it reports the tag the same
+`github-release-draft: true` in `release-me.yaml`, or on a component, creates its GitHub release as
+a draft for a human to review and publish. The run that creates it reports the tag the same
 way a published release's is reported, in the outputs above and in `released-tag`; only a
 later run's resume is skipped, so that marker is not printed again while the draft waits.
 That first run's tag still reaches the publish step below: `publish-release-assets.sh` acts
@@ -103,8 +103,8 @@ needs human approval. See [configuration](configuration.md#github-release-draft)
 
 `github-release-draft-until-assets-attach` in `release-me.yaml` decides whether each tagged release
 publishes immediately or starts as a draft, default `false`, no behavior change from before
-this key existed. See [configuration](configuration.md#github-release-draft-until-assets-attach) for what
-each setting needs from the calling workflow:
+this key existed. See [configuration](configuration.md#github-release-draft-until-assets-attach)
+for what each setting needs from the calling workflow:
 
 - `false`, the default: the release publishes the moment it is tagged, same as every
   release-me release before this key existed. A caller that attaches binary assets waits on

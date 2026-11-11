@@ -354,7 +354,9 @@ func TestFromReleasePleaseCarriesOverThePreReleaseTypeAsALabel(t *testing.T) {
 
 	cfg := load(t, got.YAML)
 	want := []config.PreReleaseType{
-		{Type: "alpha", Label: ""}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: ""},
+		{Type: "alpha", Label: ""},
+		{Type: "beta", Label: "release: beta"},
+		{Type: "rc", Label: ""},
 		{Type: "next", Label: "release: next"},
 	}
 	if kinds := cfg.Labels.PreRelease; !reflect.DeepEqual(kinds, want) {

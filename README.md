@@ -92,8 +92,9 @@ print nothing for a component with nothing to release.
 
 `pr` creates or updates the release pull requests, one per component or one shared by every
 component. `release` tags and releases merged release pull requests still carrying the pending
-label, and resumes publishing a release left a draft under `github-release-draft-until-assets-attach`. `run`
-is `pr` then `release` for every component, the CI entry point. `check` validates the
+label, and resumes publishing a release left a draft under
+`github-release-draft-until-assets-attach`. `run` is `pr` then `release` for every component, the
+CI entry point. `check` validates the
 configuration, the release labels and the token. `comment` applies a release-as or
 release-notes comment command posted on the release pull request. `migrate release-please`
 translates a release-please setup to `release-me.yaml`, writing nothing itself. A pre-release

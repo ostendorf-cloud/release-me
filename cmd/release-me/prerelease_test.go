@@ -16,7 +16,9 @@ func TestSelectPreReleaseType(t *testing.T) {
 	lbl := config.Labels{
 		Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
 		PreRelease: []config.PreReleaseType{
-			{Type: "alpha", Label: "release: alpha"}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: "release: rc"},
+			{Type: "alpha", Label: "release: alpha"},
+			{Type: "beta", Label: "release: beta"},
+			{Type: "rc", Label: "release: rc"},
 			{Type: "next", Label: "release: next"},
 		},
 	}
