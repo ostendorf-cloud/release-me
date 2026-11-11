@@ -500,15 +500,15 @@ type Config struct {
 }
 
 // Component is one entry of the "components" key: a name mapped to a path
-// and optional overrides of the top-level initial-version,
-// bump-minor-pre-major, bump-patch-for-minor-pre-major, release-as,
-// versioning-strategy, hidden-types, files, major-tag, changelog-source,
-// changelog-type, skip-changelog, force-tag-creation,
-// include-v-in-release-name, skip-github-release and github-release-draft,
-// plus its own tag-prefix, changelog path and exclude-paths. A nil
-// field was left out of release-me.yaml and falls back to the top-level
-// value, the same left-out-versus-zero-value distinction Load applies to
-// the top level itself.
+// and optional overrides of the top-level initial-version, release-as,
+// versioning-strategy, bump-minor-pre-major, bump-patch-for-minor-pre-major,
+// changelog-source, changelog-type, skip-changelog, hidden-types,
+// changelog-sections, files, major-tag, include-v-in-release-name,
+// skip-github-release, github-release-draft and force-tag-creation, plus
+// its own tag-prefix, changelog path and exclude-paths. A nil field was
+// left out of release-me.yaml and falls back to the top-level value, the
+// same left-out-versus-zero-value distinction Load applies to the top
+// level itself.
 type Component struct {
 	Name string
 	Path string
@@ -883,19 +883,18 @@ type raw struct {
 	Labels         *rawLabels `yaml:"labels"`
 	CommentMention *string    `yaml:"comment-mention"`
 
-	Versioning      *string   `yaml:"versioning"`
-	ExcludePaths    *[]string `yaml:"exclude-paths"`
-	Workspaces      *[]string `yaml:"workspaces"`
-	AlwaysLinkLocal *bool     `yaml:"always-link-local"`
-
-	TokenEnv *string `yaml:"token-env"`
-
+	Versioning *string `yaml:"versioning"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
 	// left out: yaml.v3 only special cases decoding into a Node field by
 	// value, never through a pointer.
-	Components yaml.Node `yaml:"components"`
+	Components      yaml.Node `yaml:"components"`
+	ExcludePaths    *[]string `yaml:"exclude-paths"`
+	Workspaces      *[]string `yaml:"workspaces"`
+	AlwaysLinkLocal *bool     `yaml:"always-link-local"`
+
+	TokenEnv *string `yaml:"token-env"`
 }
 
 // rawComponent mirrors Component with pointer fields, the yaml shape of one

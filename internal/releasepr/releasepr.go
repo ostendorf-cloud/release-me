@@ -30,7 +30,10 @@ func Title(name, version string) string {
 type GuideLabels struct {
 	Tagged []string
 	// PreRelease is the label of every enabled pre-release type, in
-	// configured order: a type turned off carries no entry here.
+	// configured order, as config.Labels.PreReleaseLabels builds it for the
+	// production caller: a type turned off carries no entry there.
+	// preReleaseLabelList still filters an empty entry defensively, so a
+	// caller that passes one, as a test may, renders no line for it either.
 	PreRelease []string
 }
 
