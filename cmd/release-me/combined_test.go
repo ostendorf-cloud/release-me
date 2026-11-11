@@ -8,7 +8,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ostendorf-cloud/release-me/internal/changelog"
 	"github.com/ostendorf-cloud/release-me/internal/config"
 	"github.com/ostendorf-cloud/release-me/internal/forge"
 	"github.com/ostendorf-cloud/release-me/internal/forge/forgetest"
@@ -218,10 +220,14 @@ components:
 // major tags and a release branch that survives the release.
 func TestLockedFamilyReleaseCarriesEveryConfiguredFeature(t *testing.T) {
 	dir, origin := newPRRepo(t)
+	// The heading date comes from time.Now(), so the expected heading is
+	// rendered through the same formatter and the same format the
+	// configuration sets.
+	const dateFormat = "%d %B %Y"
 	writeConfig(t, dir, `versioning: locked
 changelog-sentence-case: true
 changelog-authors: true
-changelog-date-format: "%d %B %Y"
+changelog-date-format: "`+dateFormat+`"
 release-pull-request-layout: details
 release-pull-request-guide: false
 release-pull-request-draft: true
@@ -271,7 +277,7 @@ components:
 		t.Errorf("body = %q, want no guide: release-pull-request-guide is off", body)
 	}
 	for _, want := range []string{
-		"## v1.3.0 (11 ",
+		"## v1.3.0 (" + changelog.FormatDate(time.Now(), dateFormat) + ")",
 		"<details><summary>core v1.3.0</summary>",
 		"<details><summary>ui v1.3.0</summary>",
 		"- **core:** Format a price in the account's currency (release-me tests)",
