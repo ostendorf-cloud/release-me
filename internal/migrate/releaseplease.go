@@ -72,27 +72,29 @@ var packageKeys = append([]string{
 	"prerelease", "changelog-sections", "versioning",
 }, releaseFlagKeys()...)
 
-// releaseFlag is a boolean release-please package setting release-me reads
-// under the same key, top level and per component, and release-me's own
-// default for it: a value equal to the default is left out of
-// release-me.yaml. An absent source key also adopts this target default.
-// For force-tag-creation that deliberately differs from release-please:
-// release-please's draft bears on when it creates the tag, release-me's
-// own draft never does, so both defaults still create the tag during
-// immediate publication regardless of draft. A setting with different
-// absence semantics needs a separate source default.
+// releaseFlag is a boolean release-please package setting release-me reads,
+// top level and per component, under key on the release-please side and
+// target on the release-me side, and release-me's own default for it: a
+// value equal to the default is left out of release-me.yaml. An absent
+// source key also adopts this target default. For force-tag-creation that
+// deliberately differs from release-please: release-please's draft bears
+// on when it creates the tag, release-me's own github-release-draft never
+// does, so both defaults still create the tag during immediate publication
+// regardless of draft. A setting with different absence semantics needs a
+// separate source default.
 type releaseFlag struct {
-	key string
-	def bool
+	key    string
+	target string
+	def    bool
 }
 
 // releaseFlags are the release-flag settings this translation carries
 // over, in the order release-me.yaml lists them.
 var releaseFlags = []releaseFlag{
-	{key: "force-tag-creation", def: true},
-	{key: "skip-github-release", def: false},
-	{key: "include-v-in-release-name", def: true},
-	{key: "draft", def: false},
+	{key: "force-tag-creation", target: "force-tag-creation", def: true},
+	{key: "skip-github-release", target: "skip-github-release", def: false},
+	{key: "include-v-in-release-name", target: "include-v-in-release-name", def: true},
+	{key: "draft", target: "github-release-draft", def: false},
 }
 
 // releaseFlagKeys returns the key of every entry in releaseFlags.
@@ -1577,7 +1579,7 @@ func render(components []component, top topLevel) ([]byte, error) {
 		value := components[0].flags[flag.key]
 		same := slices.IndexFunc(components, func(c component) bool { return c.flags[flag.key] != value }) == -1
 		if same && value != flag.def {
-			add(doc, flag.key, boolean(value))
+			add(doc, flag.target, boolean(value))
 			topFlags[flag.key] = true
 		}
 	}
@@ -1689,7 +1691,7 @@ func addSettings(
 	}
 	for _, flag := range releaseFlags {
 		if value := c.flags[flag.key]; !topFlags[flag.key] && value != flag.def {
-			add(m, flag.key, boolean(value))
+			add(m, flag.target, boolean(value))
 		}
 	}
 	if len(c.files) > 0 {

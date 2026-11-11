@@ -4,7 +4,7 @@
 # Runs release-me with the inputs mapped to flags, and fills the action's
 # "tags" output from every "released-tag: <tag>" line it prints: the tags
 # this run tagged a release for, one per released component. With
-# draft-until-assets-attach off, the default, each one already published;
+# github-release-draft-until-assets-attach off, the default, each one already published;
 # on, each is still a draft, so a caller attaches assets and publishes
 # those releases itself. Every other output, "released", "components",
 # "pr" and "prs", release-me writes itself to the file

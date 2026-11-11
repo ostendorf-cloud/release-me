@@ -40,26 +40,26 @@ Accepted
 
 ## Decision
 
-Release-me gains a repository-level opt-in, `release-me.yaml`'s `draft-until-assets-attach`
+Release-me gains a repository-level opt-in, `release-me.yaml`'s `github-release-draft-until-assets-attach`
 key, default `false`. Off, `Forge.CreateRelease` keeps publishing every release immediately,
 exactly as release-me did before this ADR: a repository without GitHub's immutable releases
 setting on, the common case, sees no behavior change at all. On, release-me drafts every
 release instead, and `release.yaml`, the same workflow run that just created it, builds and
 attaches the assets and publishes it itself, instead of waiting on a second, webhook-triggered
 workflow. This repository is the one that actually needs it, so its own `release-me.yaml`
-sets `draft-until-assets-attach: true`.
+sets `github-release-draft-until-assets-attach: true`.
 
 - `Forge.CreateRelease` takes a `draft bool` parameter now, the caller's own choice, instead
   of always passing `draft: true`. `Run`, `RunLocked`, `releaseOne` and `releaseLockedFamily`
-  thread `draft-until-assets-attach`'s value through to it, the same way they already thread
+  thread `github-release-draft-until-assets-attach`'s value through to it, the same way they already thread
   `dryRun`.
 - `release.yaml` runs `goreleaser release --clean --skip=announce,validate,publish` right
   after release-me tags and drafts a release, to build archives and checksums without
   goreleaser ever calling the GitHub release API, then attaches those archives with
   `gh release upload` and publishes with `gh release edit <tag> --draft=false`, both
   confirmed live to work against a draft. This is the workflow shape a repository runs once it
-  sets `draft-until-assets-attach: true`; it carries no `publish.yaml` `assets` job at all.
-- A repository that leaves `draft-until-assets-attach` off keeps the workflow shape from
+  sets `github-release-draft-until-assets-attach: true`; it carries no `publish.yaml` `assets` job at all.
+- A repository that leaves `github-release-draft-until-assets-attach` off keeps the workflow shape from
   before this ADR instead: `publish.yaml`'s `assets` job, triggered by the `release: published`
   webhook release-me's immediate publish already fires, runs plain `goreleaser release --clean`
   to attach assets the old way. Either shape's `image` job keeps its `release: types:
@@ -69,12 +69,12 @@ sets `draft-until-assets-attach: true`.
   un-draft a release, only the workflow does, once assets are attached, through `gh`.
 - The pull request's label still swaps from pending to tagged immediately after
   `CreateRelease` succeeds, the same point as before this ADR, whichever way
-  `draft-until-assets-attach` is set: that swap is release-me's own signal that a pull request
+  `github-release-draft-until-assets-attach` is set: that swap is release-me's own signal that a pull request
   already has a tag and a release, the one issue #45's fix relies on, not a signal that the
   release is finished. `Run` and `RunLocked` additionally scan merged pull requests already
   carrying the tagged label, through a new `Forge.IsReleaseDraft`, and resume any whose
   release is still a draft by reprinting its released-tag marker, without calling `CreateTag`
-  or `CreateRelease` again, but only when `draft-until-assets-attach` is on: off, a release
+  or `CreateRelease` again, but only when `github-release-draft-until-assets-attach` is on: off, a release
   publishes the moment it is created, so a tagged pull request never has anything left to
   resume, and this scan, and the extra `IsReleaseDraft` call it would otherwise make per
   tagged pull request, is skipped outright. `IsReleaseDraft` needs its own lookup, listing
@@ -86,11 +86,11 @@ sets `draft-until-assets-attach: true`.
 
 ## Consequences
 
-- Turning `draft-until-assets-attach` on makes a release invisible to anyone outside the
+- Turning `github-release-draft-until-assets-attach` on makes a release invisible to anyone outside the
   repository's write access between tagging and the workflow's publish step, a window of
   roughly one CI run instead of none. Off, the default, there is no such window: a repository
   that never sets the key sees nothing about this ADR at all.
-- The config key and the workflow shape must agree: turning `draft-until-assets-attach` on
+- The config key and the workflow shape must agree: turning `github-release-draft-until-assets-attach` on
   without adopting `release.yaml`'s build-attach-publish step leaves every release stuck an
   unpublished draft forever, since a draft fires no webhook a second workflow could ever wait
   on. Turning it off while still running `scripts/publish-release-assets.sh` is harmless, its
@@ -98,15 +98,15 @@ sets `draft-until-assets-attach: true`.
 - `.goreleaser.yaml`'s `release:` block (`mode: keep-existing`, `prerelease: auto`) is dead in
   this repository's own configuration, since it runs the new workflow shape and goreleaser
   never reaches its publish phase; removed here, along with the regression test it existed
-  for (issue #41). A repository that leaves `draft-until-assets-attach` off and keeps the old
+  for (issue #41). A repository that leaves `github-release-draft-until-assets-attach` off and keeps the old
   workflow shape keeps that block too: goreleaser still owns the GitHub release call there,
   same as before this ADR.
 - A consumer of release-me other than this repository sees no behavior change at all unless it
-  explicitly sets `draft-until-assets-attach: true` in its own `release-me.yaml`: the default
+  explicitly sets `github-release-draft-until-assets-attach: true` in its own `release-me.yaml`: the default
   stays `false`, `CreateRelease` keeps publishing immediately, and the generic action and CLI
   contract is exactly what it was before this ADR. Turning the key on is only useful, and only
   safe, together with adopting the new workflow shape above.
-- If a CI run fails between tagging and publishing, with `draft-until-assets-attach` on, the
+- If a CI run fails between tagging and publishing, with `github-release-draft-until-assets-attach` on, the
   release stays a draft until the next CI run resumes it: not because `CreateRelease` tolerates
   `ErrReleaseExists` on retry, since by then the pull request's label has already swapped away
   from pending and a rerun would never reach that call again. It resumes instead because `Run`

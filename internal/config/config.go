@@ -9,8 +9,8 @@
 // versioning, signoff, release-pull-request-title,
 // release-pull-request-shared-title, release-pull-request-draft,
 // release-pull-request-header, release-pull-request-footer,
-// draft-until-assets-attach, draft, force-tag-creation,
-// include-v-in-release-name, skip-github-release, comment-mention,
+// github-release-draft-until-assets-attach, github-release-draft,
+// force-tag-creation, include-v-in-release-name, skip-github-release, comment-mention,
 // delete-release-branch, workspaces, always-link-local, exclude-paths and
 // components.
 package config
@@ -416,14 +416,15 @@ type Config struct {
 	// Signoff is the top-level "signoff" key: "Name <email>" the release
 	// commit's message carries a "Signed-off-by:" trailer for, "" for none.
 	Signoff string
-	// DraftUntilAssetsAttach is the top-level "draft-until-assets-attach"
-	// key, default false: when true, release creates every release as a
-	// draft instead of publishing it immediately, and resumes publishing
-	// one left a draft by an earlier, interrupted run. Only a repository
-	// with GitHub's immutable releases setting turned on needs this; it
-	// applies to the whole repository, there is no per-component
-	// override. See docs/adr/0001-draft-releases-until-assets-attach.md.
-	DraftUntilAssetsAttach bool
+	// GitHubReleaseDraftUntilAssetsAttach is the top-level
+	// "github-release-draft-until-assets-attach" key, default false: when
+	// true, release creates every release as a draft instead of publishing
+	// it immediately, and resumes publishing one left a draft by an
+	// earlier, interrupted run. Only a repository with GitHub's immutable
+	// releases setting turned on needs this; it applies to the whole
+	// repository, there is no per-component override. See
+	// docs/adr/0001-draft-releases-until-assets-attach.md.
+	GitHubReleaseDraftUntilAssetsAttach bool
 	// ForceTagCreation is the top-level "force-tag-creation" key, default
 	// true: release creates the tag itself, before the release, even for
 	// a draft. False leaves the tag to GitHub, which creates it from the
@@ -444,12 +445,13 @@ type Config struct {
 	// whose own workflow creates the release from the tag. A component
 	// overrides it through its own "skip-github-release" key.
 	SkipGitHubRelease bool
-	// Draft is the top-level "draft" key, default false: when true,
-	// release creates the GitHub release as a draft and leaves it one, for
-	// a human to publish. Unlike DraftUntilAssetsAttach it never resumes
-	// a draft on a later run. A component overrides it through its own
-	// "draft" key.
-	Draft bool
+	// GitHubReleaseDraft is the top-level "github-release-draft" key,
+	// default false: when true, release creates the GitHub release as a
+	// draft and leaves it one, for a human to publish. Unlike
+	// GitHubReleaseDraftUntilAssetsAttach it never resumes a draft on a
+	// later run. A component overrides it through its own
+	// "github-release-draft" key.
+	GitHubReleaseDraft bool
 	// CommentMention is the top-level "comment-mention" key: the mention
 	// prefix a write-access commenter's "release-as" or "release-notes"
 	// command on the release pull request must start with, default
@@ -492,8 +494,8 @@ type Config struct {
 // bump-minor-pre-major, bump-patch-for-minor-pre-major, release-as,
 // versioning-strategy, hidden-types, files, major-tag, changelog-source,
 // changelog-type, skip-changelog, force-tag-creation,
-// include-v-in-release-name, skip-github-release and draft, plus its own
-// tag-prefix, changelog path and exclude-paths. A nil
+// include-v-in-release-name, skip-github-release and github-release-draft,
+// plus its own tag-prefix, changelog path and exclude-paths. A nil
 // field was left out of release-me.yaml and falls back to the top-level
 // value, the same left-out-versus-zero-value distinction Load applies to
 // the top level itself.
@@ -516,8 +518,9 @@ type Component struct {
 	// "include-v-in-release-name" key.
 	IncludeVInReleaseName *bool
 	SkipGitHubRelease     *bool
-	Draft                 *bool
-	ChangelogSections     *[]ChangelogSection
+	// GitHubReleaseDraft is the component's "github-release-draft" key.
+	GitHubReleaseDraft *bool
+	ChangelogSections  *[]ChangelogSection
 	// TagPrefix is the component's "tag-prefix" key, nil when it was left
 	// out and the component keeps the derived "<name>/v".
 	TagPrefix *string
@@ -582,9 +585,9 @@ type ResolvedComponent struct {
 	// SkipGitHubRelease is true when release tags this component without
 	// creating a GitHub release for the tag.
 	SkipGitHubRelease bool
-	// Draft is true when release creates this component's GitHub release
-	// as a draft and leaves it one.
-	Draft bool
+	// GitHubReleaseDraft is true when release creates this component's
+	// GitHub release as a draft and leaves it one.
+	GitHubReleaseDraft bool
 	// ExcludePaths are the paths inside Path whose changes never count for
 	// the component, see history.Counts.
 	ExcludePaths []string
@@ -621,7 +624,7 @@ func (cfg Config) Resolve() []ResolvedComponent {
 			ForceTagCreation:          cfg.ForceTagCreation,
 			IncludeVInReleaseName:     cfg.IncludeVInReleaseName,
 			SkipGitHubRelease:         cfg.SkipGitHubRelease,
-			Draft:                     cfg.Draft,
+			GitHubReleaseDraft:        cfg.GitHubReleaseDraft,
 			ExcludePaths:              cfg.ExcludePaths,
 			ChangelogSections:         cfg.ChangelogSections,
 		}}
@@ -661,7 +664,7 @@ func (cfg Config) Resolve() []ResolvedComponent {
 			ForceTagCreation:          cfg.ForceTagCreation,
 			IncludeVInReleaseName:     cfg.IncludeVInReleaseName,
 			SkipGitHubRelease:         cfg.SkipGitHubRelease,
-			Draft:                     cfg.Draft,
+			GitHubReleaseDraft:        cfg.GitHubReleaseDraft,
 			ExcludePaths:              c.ExcludePaths,
 			ChangelogSections:         cfg.ChangelogSections,
 		}
@@ -717,8 +720,8 @@ func (cfg Config) Resolve() []ResolvedComponent {
 		if c.SkipGitHubRelease != nil {
 			rc.SkipGitHubRelease = *c.SkipGitHubRelease
 		}
-		if c.Draft != nil {
-			rc.Draft = *c.Draft
+		if c.GitHubReleaseDraft != nil {
+			rc.GitHubReleaseDraft = *c.GitHubReleaseDraft
 		}
 		out = append(out, rc)
 	}
@@ -815,49 +818,49 @@ type rawAuthor struct {
 // raw mirrors Config with pointer fields, so Load can tell a key left out of
 // the file apart from one set to its zero value.
 type raw struct {
-	InitialVersion                *string                `yaml:"initial-version"`
-	BumpMinorPreMajor             *bool                  `yaml:"bump-minor-pre-major"`
-	BumpPatchForMinorPreMajor     *bool                  `yaml:"bump-patch-for-minor-pre-major"`
-	ReleaseAs                     *string                `yaml:"release-as"`
-	VersioningStrategy            *string                `yaml:"versioning-strategy"`
-	HiddenTypes                   *[]string              `yaml:"hidden-types"`
-	FallbackType                  *string                `yaml:"fallback-type"`
-	TokenEnv                      *string                `yaml:"token-env"`
-	Files                         *[]rawFile             `yaml:"files"`
-	ChangelogPath                 *string                `yaml:"changelog-path"`
-	ChangelogSource               *string                `yaml:"changelog-source"`
-	ChangelogType                 *string                `yaml:"changelog-type"`
-	ChangelogSentenceCase         *bool                  `yaml:"changelog-sentence-case"`
-	ChangelogAuthors              *bool                  `yaml:"changelog-authors"`
-	ChangelogHost                 *string                `yaml:"changelog-host"`
-	ChangelogDateFormat           *string                `yaml:"changelog-date-format"`
-	ChangelogCommitLinks          *bool                  `yaml:"changelog-commit-links"`
-	ChangelogIssueRefs            *bool                  `yaml:"changelog-issue-references"`
-	ChangelogSections             *[]rawChangelogSection `yaml:"changelog-sections"`
-	Labels                        *rawLabels             `yaml:"labels"`
-	Author                        *rawAuthor             `yaml:"author"`
-	MajorTag                      *bool                  `yaml:"major-tag"`
-	SkipChangelog                 *bool                  `yaml:"skip-changelog"`
-	Versioning                    *string                `yaml:"versioning"`
-	ReleasePullRequest            *string                `yaml:"release-pull-request"`
-	ReleasePullRequestLayout      *string                `yaml:"release-pull-request-layout"`
-	ReleasePullRequestGuide       *bool                  `yaml:"release-pull-request-guide"`
-	ReleasePullRequestDraft       *bool                  `yaml:"release-pull-request-draft"`
-	ReleasePullRequestHeader      *string                `yaml:"release-pull-request-header"`
-	ReleasePullRequestFooter      *string                `yaml:"release-pull-request-footer"`
-	Signoff                       *string                `yaml:"signoff"`
-	DraftUntilAssetsAttach        *bool                  `yaml:"draft-until-assets-attach"`
-	ForceTagCreation              *bool                  `yaml:"force-tag-creation"`
-	IncludeVInReleaseName         *bool                  `yaml:"include-v-in-release-name"`
-	SkipGitHubRelease             *bool                  `yaml:"skip-github-release"`
-	Draft                         *bool                  `yaml:"draft"`
-	CommentMention                *string                `yaml:"comment-mention"`
-	ReleasePullRequestTitle       *string                `yaml:"release-pull-request-title"`
-	ReleasePullRequestSharedTitle *string                `yaml:"release-pull-request-shared-title"`
-	Workspaces                    *[]string              `yaml:"workspaces"`
-	DeleteReleaseBranch           *bool                  `yaml:"delete-release-branch"`
-	AlwaysLinkLocal               *bool                  `yaml:"always-link-local"`
-	ExcludePaths                  *[]string              `yaml:"exclude-paths"`
+	InitialVersion                      *string                `yaml:"initial-version"`
+	BumpMinorPreMajor                   *bool                  `yaml:"bump-minor-pre-major"`
+	BumpPatchForMinorPreMajor           *bool                  `yaml:"bump-patch-for-minor-pre-major"`
+	ReleaseAs                           *string                `yaml:"release-as"`
+	VersioningStrategy                  *string                `yaml:"versioning-strategy"`
+	HiddenTypes                         *[]string              `yaml:"hidden-types"`
+	FallbackType                        *string                `yaml:"fallback-type"`
+	TokenEnv                            *string                `yaml:"token-env"`
+	Files                               *[]rawFile             `yaml:"files"`
+	ChangelogPath                       *string                `yaml:"changelog-path"`
+	ChangelogSource                     *string                `yaml:"changelog-source"`
+	ChangelogType                       *string                `yaml:"changelog-type"`
+	ChangelogSentenceCase               *bool                  `yaml:"changelog-sentence-case"`
+	ChangelogAuthors                    *bool                  `yaml:"changelog-authors"`
+	ChangelogHost                       *string                `yaml:"changelog-host"`
+	ChangelogDateFormat                 *string                `yaml:"changelog-date-format"`
+	ChangelogCommitLinks                *bool                  `yaml:"changelog-commit-links"`
+	ChangelogIssueRefs                  *bool                  `yaml:"changelog-issue-references"`
+	ChangelogSections                   *[]rawChangelogSection `yaml:"changelog-sections"`
+	Labels                              *rawLabels             `yaml:"labels"`
+	Author                              *rawAuthor             `yaml:"author"`
+	MajorTag                            *bool                  `yaml:"major-tag"`
+	SkipChangelog                       *bool                  `yaml:"skip-changelog"`
+	Versioning                          *string                `yaml:"versioning"`
+	ReleasePullRequest                  *string                `yaml:"release-pull-request"`
+	ReleasePullRequestLayout            *string                `yaml:"release-pull-request-layout"`
+	ReleasePullRequestGuide             *bool                  `yaml:"release-pull-request-guide"`
+	ReleasePullRequestDraft             *bool                  `yaml:"release-pull-request-draft"`
+	ReleasePullRequestHeader            *string                `yaml:"release-pull-request-header"`
+	ReleasePullRequestFooter            *string                `yaml:"release-pull-request-footer"`
+	Signoff                             *string                `yaml:"signoff"`
+	GitHubReleaseDraftUntilAssetsAttach *bool                  `yaml:"github-release-draft-until-assets-attach"`
+	ForceTagCreation                    *bool                  `yaml:"force-tag-creation"`
+	IncludeVInReleaseName               *bool                  `yaml:"include-v-in-release-name"`
+	SkipGitHubRelease                   *bool                  `yaml:"skip-github-release"`
+	GitHubReleaseDraft                  *bool                  `yaml:"github-release-draft"`
+	CommentMention                      *string                `yaml:"comment-mention"`
+	ReleasePullRequestTitle             *string                `yaml:"release-pull-request-title"`
+	ReleasePullRequestSharedTitle       *string                `yaml:"release-pull-request-shared-title"`
+	Workspaces                          *[]string              `yaml:"workspaces"`
+	DeleteReleaseBranch                 *bool                  `yaml:"delete-release-branch"`
+	AlwaysLinkLocal                     *bool                  `yaml:"always-link-local"`
+	ExcludePaths                        *[]string              `yaml:"exclude-paths"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
@@ -884,7 +887,7 @@ type rawComponent struct {
 	ForceTagCreation          *bool                  `yaml:"force-tag-creation"`
 	IncludeVInReleaseName     *bool                  `yaml:"include-v-in-release-name"`
 	SkipGitHubRelease         *bool                  `yaml:"skip-github-release"`
-	Draft                     *bool                  `yaml:"draft"`
+	GitHubReleaseDraft        *bool                  `yaml:"github-release-draft"`
 	ChangelogSections         *[]rawChangelogSection `yaml:"changelog-sections"`
 	TagPrefix                 *string                `yaml:"tag-prefix"`
 	ChangelogPath             *string                `yaml:"changelog-path"`
@@ -1244,8 +1247,8 @@ func Load(path string) (cfg Config, err error) {
 		}
 		cfg.Signoff = *r.Signoff
 	}
-	if r.DraftUntilAssetsAttach != nil {
-		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach
+	if r.GitHubReleaseDraftUntilAssetsAttach != nil {
+		cfg.GitHubReleaseDraftUntilAssetsAttach = *r.GitHubReleaseDraftUntilAssetsAttach
 	}
 	if r.ForceTagCreation != nil {
 		cfg.ForceTagCreation = *r.ForceTagCreation
@@ -1256,8 +1259,8 @@ func Load(path string) (cfg Config, err error) {
 	if r.SkipGitHubRelease != nil {
 		cfg.SkipGitHubRelease = *r.SkipGitHubRelease
 	}
-	if r.Draft != nil {
-		cfg.Draft = *r.Draft
+	if r.GitHubReleaseDraft != nil {
+		cfg.GitHubReleaseDraft = *r.GitHubReleaseDraft
 	}
 	if r.CommentMention != nil {
 		if *r.CommentMention == "" {
@@ -1576,7 +1579,7 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 			ForceTagCreation:      rc.ForceTagCreation,
 			IncludeVInReleaseName: rc.IncludeVInReleaseName,
 			SkipGitHubRelease:     rc.SkipGitHubRelease,
-			Draft:                 rc.Draft,
+			GitHubReleaseDraft:    rc.GitHubReleaseDraft,
 		}
 		if rc.Files != nil {
 			files, err := decodeFiles(path, *rc.Files)

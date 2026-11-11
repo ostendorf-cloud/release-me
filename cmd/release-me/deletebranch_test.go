@@ -288,14 +288,14 @@ func TestSharedReleaseSweepDeletesALeftoverBranchOnlyOnceItsPullRequestIsTagged(
 			releaseErr: true, wantErr: true, wantTagCount: 1,
 		},
 		{
-			name:   "keeps the leftover branch with draft-until-assets-attach, so the sweep can resume its draft",
+			name:   "keeps the leftover branch with github-release-draft-until-assets-attach, so the sweep can resume its draft",
 			drafts: true, wantTagCount: 1,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, origin, cfg := newSharedRepo(t)
-			cfg.DraftUntilAssetsAttach = tc.drafts
+			cfg.GitHubReleaseDraftUntilAssetsAttach = tc.drafts
 			runGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/release-me/api")
 			f := mergedReleaseBranchFake("release-me/api", "chore(api): release v1.3.0", headSHA(t, dir))
 			if tc.releaseErr {
@@ -318,7 +318,7 @@ func TestSharedReleaseSweepDeletesALeftoverBranchOnlyOnceItsPullRequestIsTagged(
 }
 
 // TestReleaseResumesADraftAfterItsReleaseBranchWasDeleted covers
-// "draft-until-assets-attach" with "delete-release-branch": the first run
+// "github-release-draft-until-assets-attach" with "delete-release-branch": the first run
 // drafts the release and deletes the branch, the publish step after it
 // fails, and the rerun must still find the tagged pull request to resume.
 // GitHub's head filter still lists a merged pull request whose branch is
@@ -345,7 +345,7 @@ func TestReleaseResumesADraftAfterItsReleaseBranchWasDeleted(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			const branch = "release-me/main"
 			dir, cfg, head := mergedReleaseRepo(t, tc.config, branch)
-			cfg.DraftUntilAssetsAttach = true
+			cfg.GitHubReleaseDraftUntilAssetsAttach = true
 			f := mergedReleaseBranchFake(branch, tc.title, head)
 
 			var stdout bytes.Buffer

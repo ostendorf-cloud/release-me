@@ -54,7 +54,7 @@ jobs:
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
         if: steps.release-me.outputs.tags != ''
 
-      # release-me.yaml sets draft-until-assets-attach: true, so this
+      # release-me.yaml sets github-release-draft-until-assets-attach: true, so this
       # repository's own release is a draft, and publishing it is on this
       # same job: a draft fires no "release" webhook at all, so a second,
       # webhook-triggered workflow would never run. A repository that

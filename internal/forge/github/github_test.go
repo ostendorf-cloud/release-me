@@ -566,7 +566,7 @@ func TestCreateReleaseCreatesADraftRelease(t *testing.T) {
 	if _, err := f.CreateRelease(context.Background(), "owner", "repo", "v0.1.0", "", "v0.1.0", "Release v0.1.0", false, true); err != nil {
 		t.Fatalf("CreateRelease() error = %v", err)
 	}
-	// draft-until-assets-attach is on: immutable releases rejects any
+	// github-release-draft-until-assets-attach is on: immutable releases rejects any
 	// later change to a published release, assets included, and a
 	// draft is exempt from that, so the caller asks CreateRelease to
 	// hold it back until assets are ready to attach.
@@ -647,7 +647,7 @@ func TestCreateReleasePublishesImmediatelyWhenDraftIsFalse(t *testing.T) {
 	})
 	f := newTestForge(t, mux)
 
-	// draft-until-assets-attach is off, the default: CreateRelease
+	// github-release-draft-until-assets-attach is off, the default: CreateRelease
 	// publishes immediately, exactly as release-me did before that key
 	// existed, so a repository that never turns it on sees no behavior
 	// change at all.

@@ -115,7 +115,7 @@ looks for one while the component's own `release-me/<name>` branch exists on the
 the pull request merges, so merge the switch only after `release` has tagged every
 per-component pull request merged before it, or tag a missed one by hand.
 `delete-release-branch` never does that to the sweep: it deletes a per-component branch only
-after `release` tagged its pull request, and with `draft-until-assets-attach: true` leaves a
+after `release` tagged its pull request, and with `github-release-draft-until-assets-attach: true` leaves a
 swept one in place, so the sweep can still resume its unpublished draft. Switching back
 to `per-component` does not read `release-me/main` any more: merge or close the shared pull
 request first.

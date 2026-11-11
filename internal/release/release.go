@@ -143,7 +143,7 @@ type planned struct {
 // version and merge commit: the release per component as Run already
 // renders it, drawing each one's own slice of the combined changelog from
 // the single pull request body. draftUntilAssetsAttach is release-me.yaml's
-// "draft-until-assets-attach" key: false, the default, releases
+// "github-release-draft-until-assets-attach" key: false, the default, releases
 // immediately, published, exactly as release-me did before that key
 // existed; true drafts instead, and also resumes a release a prior,
 // interrupted run already tagged and drafted but never got to publish.
@@ -295,9 +295,10 @@ func resumeShared(
 	var results []Result
 	sha := ""
 	for _, p := range plan {
-		// A component with its own "draft" key drafts on purpose: that
-		// draft waits for a human, so it is no interrupted run and never
-		// resumes, whatever draft-until-assets-attach is set to.
+		// A component with its own "github-release-draft" key drafts on
+		// purpose: that draft waits for a human, so it is no interrupted
+		// run and never resumes, whatever
+		// github-release-draft-until-assets-attach is set to.
 		if p.comp.SkipGitHubRelease || p.comp.Draft {
 			continue
 		}
@@ -445,15 +446,15 @@ type Component struct {
 	// key turned off: the release is named "X.Y.Z", or "<name> X.Y.Z",
 	// without the "v". False, the zero value, keeps the "v".
 	OmitVInReleaseName bool
-	// Draft is comp's resolved "draft" key: when true, the GitHub release
-	// is created as a draft, for a human to publish. Unlike
-	// draft-until-assets-attach it never resumes one: a draft left on
-	// purpose is no interrupted run.
+	// Draft is comp's resolved "github-release-draft" key: when true, the
+	// GitHub release is created as a draft, for a human to publish. Unlike
+	// github-release-draft-until-assets-attach it never resumes one: a
+	// draft left on purpose is no interrupted run.
 	Draft bool
 }
 
 // draft reports whether comp's release is created as a draft: comp's own
-// "draft" key, or draftUntilAssetsAttach for the whole repository.
+// "github-release-draft" key, or draftUntilAssetsAttach for the whole repository.
 func (comp Component) draft(draftUntilAssetsAttach bool) bool {
 	return comp.Draft || draftUntilAssetsAttach
 }
@@ -607,7 +608,7 @@ func applyMajorTag(
 // pull request on comp's branch, for the component comp names. dryRun
 // reports what would happen and calls neither CreateTag, CreateRelease nor
 // SetLabels. draftUntilAssetsAttach is release-me.yaml's
-// "draft-until-assets-attach" key: false, the default, releases
+// "github-release-draft-until-assets-attach" key: false, the default, releases
 // immediately, published, exactly as release-me did before that key
 // existed; true drafts instead, and also resumes a release a prior,
 // interrupted run already tagged and drafted but never got to publish.
@@ -652,9 +653,10 @@ func Run(
 		if dryRun || !draftUntilAssetsAttach || !HasAll(pr.Labels, labels.Tagged) {
 			continue
 		}
-		// A component with its own "draft" key drafts on purpose: that
-		// draft waits for a human, so it is no interrupted run and never
-		// resumes, whatever draft-until-assets-attach is set to.
+		// A component with its own "github-release-draft" key drafts on
+		// purpose: that draft waits for a human, so it is no interrupted
+		// run and never resumes, whatever
+		// github-release-draft-until-assets-attach is set to.
 		if comp.SkipGitHubRelease || comp.Draft {
 			continue
 		}
@@ -790,8 +792,8 @@ func releaseOne(
 // without a GitHub release, drafted with the tag left to its publish,
 // tagged with a release left a draft on purpose for a human, or tagged
 // and released. Only comp's own TagOnPublish and Draft change the
-// message; a temporary draft from draft-until-assets-attach alone keeps
-// the plain tagged and released wording.
+// message; a temporary draft from github-release-draft-until-assets-attach
+// alone keeps the plain tagged and released wording.
 func releasedMessage(comp Component, tag string, alreadyTagged, draft bool) string {
 	switch {
 	case alreadyTagged:

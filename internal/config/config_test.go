@@ -147,7 +147,7 @@ major-tag: true
 release-pull-request: shared
 release-pull-request-layout: details
 release-pull-request-guide: false
-draft-until-assets-attach: true
+github-release-draft-until-assets-attach: true
 delete-release-branch: false
 files:
   - path: cmd/cli/version.go
@@ -174,17 +174,17 @@ files:
 						{Type: "alpha", Label: "needs-alpha"}, {Type: "beta", Label: "needs-beta"}, {Type: "rc", Label: "needs-rc"},
 					},
 				},
-				Author:                   config.Author{Name: "renovate", Email: "renovate@example.com", Set: []string{"author.name", "author.email"}},
-				MajorTag:                 true,
-				Versioning:               config.DefaultVersioning,
-				ReleasePullRequest:       config.ReleasePullRequestShared,
-				ReleasePullRequestLayout: config.LayoutDetails,
-				DraftUntilAssetsAttach:   true,
-				CommentMention:           config.DefaultCommentMention,
-				ForceTagCreation:         true,
-				IncludeVInReleaseName:    true,
-				DeleteReleaseBranch:      false,
-				AlwaysLinkLocal:          true,
+				Author:                              config.Author{Name: "renovate", Email: "renovate@example.com", Set: []string{"author.name", "author.email"}},
+				MajorTag:                            true,
+				Versioning:                          config.DefaultVersioning,
+				ReleasePullRequest:                  config.ReleasePullRequestShared,
+				ReleasePullRequestLayout:            config.LayoutDetails,
+				GitHubReleaseDraftUntilAssetsAttach: true,
+				CommentMention:                      config.DefaultCommentMention,
+				ForceTagCreation:                    true,
+				IncludeVInReleaseName:               true,
+				DeleteReleaseBranch:                 false,
+				AlwaysLinkLocal:                     true,
 				Files: []config.File{
 					{Path: "cmd/cli/version.go", Updater: "marker"},
 					{Path: "deploy/values.yaml", Updater: "marker"},
@@ -320,6 +320,12 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{
 			name:    "rejects the renamed changelog key on a component",
 			content: "components:\n  web:\n    path: web\n    changelog: CHANGELOG.md\n",
+		},
+		{name: "rejects the renamed top-level draft key", content: "draft: true\n"},
+		{name: "rejects the renamed draft-until-assets-attach key", content: "draft-until-assets-attach: true\n"},
+		{
+			name:    "rejects the renamed draft key on a component",
+			content: "components:\n  web:\n    path: web\n    draft: true\n",
 		},
 		{name: "rejects malformed YAML", content: "initial-version: [0.1.0\n"},
 		{name: "rejects a fallback type that bumps the version", content: "fallback-type: feat\n"},
@@ -834,7 +840,7 @@ func TestResolveAppliesTheGitHubReleaseKeysFromTheTopLevelAndPerComponentOverrid
 	t.Parallel()
 	forceTag := func(c config.ResolvedComponent) bool { return c.ForceTagCreation }
 	skip := func(c config.ResolvedComponent) bool { return c.SkipGitHubRelease }
-	draft := func(c config.ResolvedComponent) bool { return c.Draft }
+	draft := func(c config.ResolvedComponent) bool { return c.GitHubReleaseDraft }
 	cases := []struct {
 		name    string
 		content string
@@ -866,21 +872,24 @@ func TestResolveAppliesTheGitHubReleaseKeysFromTheTopLevelAndPerComponentOverrid
 			content: releaseKeysConfig + "    skip-github-release: true\n",
 			get:     skip, want: []bool{false, true},
 		},
-		{name: "draft is off by default", get: draft, want: []bool{false}},
-		{name: "draft applies to the implicit main component", content: "draft: true\n", get: draft, want: []bool{true}},
+		{name: "github-release-draft is off by default", get: draft, want: []bool{false}},
 		{
-			name:    "a component overrides the top-level draft",
-			content: "draft: true\n" + releaseKeysConfig + "    draft: false\n",
+			name: "github-release-draft applies to the implicit main component", content: "github-release-draft: true\n",
+			get: draft, want: []bool{true},
+		},
+		{
+			name:    "a component overrides the top-level github-release-draft",
+			content: "github-release-draft: true\n" + releaseKeysConfig + "    github-release-draft: false\n",
 			get:     draft, want: []bool{true, false},
 		},
 		{
-			name:    "a component turns draft on for itself alone",
-			content: releaseKeysConfig + "    draft: true\n",
+			name:    "a component turns github-release-draft on for itself alone",
+			content: releaseKeysConfig + "    github-release-draft: true\n",
 			get:     draft, want: []bool{false, true},
 		},
 		{
-			name:    "draft-until-assets-attach leaves draft off",
-			content: "draft-until-assets-attach: true\n",
+			name:    "github-release-draft-until-assets-attach leaves github-release-draft off",
+			content: "github-release-draft-until-assets-attach: true\n",
 			get:     draft, want: []bool{false},
 		},
 	}
@@ -1042,14 +1051,14 @@ func TestLoadReadsDeleteReleaseBranch(t *testing.T) {
 	}
 }
 
-func TestDefaultSetsDraftUntilAssetsAttachToFalse(t *testing.T) {
+func TestDefaultSetsGitHubReleaseDraftUntilAssetsAttachToFalse(t *testing.T) {
 	t.Parallel()
-	if got := config.Default().DraftUntilAssetsAttach; got {
-		t.Fatalf("DraftUntilAssetsAttach = %v, want false", got)
+	if got := config.Default().GitHubReleaseDraftUntilAssetsAttach; got {
+		t.Fatalf("GitHubReleaseDraftUntilAssetsAttach = %v, want false", got)
 	}
 }
 
-func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
+func TestLoadReadsGitHubReleaseDraftUntilAssetsAttach(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name    string
@@ -1057,8 +1066,8 @@ func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
 		want    bool
 	}{
 		{name: "left out defaults to false", content: "", want: false},
-		{name: "explicit false stays off", content: "draft-until-assets-attach: false\n", want: false},
-		{name: "explicit true turns it on", content: "draft-until-assets-attach: true\n", want: true},
+		{name: "explicit false stays off", content: "github-release-draft-until-assets-attach: false\n", want: false},
+		{name: "explicit true turns it on", content: "github-release-draft-until-assets-attach: true\n", want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1069,8 +1078,8 @@ func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
-			if got.DraftUntilAssetsAttach != tc.want {
-				t.Fatalf("DraftUntilAssetsAttach = %v, want %v", got.DraftUntilAssetsAttach, tc.want)
+			if got.GitHubReleaseDraftUntilAssetsAttach != tc.want {
+				t.Fatalf("GitHubReleaseDraftUntilAssetsAttach = %v, want %v", got.GitHubReleaseDraftUntilAssetsAttach, tc.want)
 			}
 		})
 	}

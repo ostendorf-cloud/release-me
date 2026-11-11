@@ -141,7 +141,7 @@ func TestDoReleaseResumesAnOrphanedDraftOnARerunOfTheWholePipeline(t *testing.T)
 	// off, the default, CreateRelease publishes immediately and there is
 	// never a draft left to resume.
 	cfg := config.Default()
-	cfg.DraftUntilAssetsAttach = true
+	cfg.GitHubReleaseDraftUntilAssetsAttach = true
 	var stdout bytes.Buffer
 
 	// The first run: release-me tags, drafts and swaps the label, exactly

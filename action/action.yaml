@@ -55,8 +55,8 @@ outputs:
   tags:
     description: >-
       Newline-separated tags this run tagged a release for, one per released component, empty
-      when nothing was released or dry-run was set. release-me.yaml's draft-until-assets-attach
-      key decides what the release for each tag already is: false, the default, published
+      when nothing was released or dry-run was set. release-me.yaml's
+      github-release-draft-until-assets-attach key decides what the release for each tag already is: false, the default, published
       immediately, no action required. True drafts it instead, since GitHub's immutable
       releases setting, when on, rejects a change to a published release, so release-me never
       publishes one itself; attach any assets and publish each tag yourself, for example with

@@ -50,7 +50,7 @@ steps:
 A GitHub App token also gets the release commit signed by GitHub, see
 [signed release commits](docs/commands.md#signed-release-commits). See
 [the Action reference](docs/action.md) for every input and
-output, the `draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
+output, the `github-release-draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
 [Bootstrap](docs/action.md#bootstrap) for the first release before any binary exists.
 
 As a container image, for runners with an image cache:
@@ -92,7 +92,7 @@ print nothing for a component with nothing to release.
 
 `pr` creates or updates the release pull requests, one per component or one shared by every
 component. `release` tags and releases merged release pull requests still carrying the pending
-label, and resumes publishing a release left a draft under `draft-until-assets-attach`. `run`
+label, and resumes publishing a release left a draft under `github-release-draft-until-assets-attach`. `run`
 is `pr` then `release` for every component, the CI entry point. `check` validates the
 configuration, the release labels and the token. `comment` applies a release-as or
 release-notes comment command posted on the release pull request. `migrate release-please`
@@ -174,11 +174,11 @@ files:
 | `release-pull-request-header` | Free text above every release pull request body. | none | No |
 | `release-pull-request-footer` | Free text below every release pull request body. | none | No |
 | `signoff` | `Name <email>` the release commit carries a `Signed-off-by:` trailer for. | none | No |
-| `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
+| `github-release-draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
 | `force-tag-creation` | Creates the tag before the release; `false` leaves it to the release's publish. | `true` | No |
 | `include-v-in-release-name` | Keeps the `v` before the version in the release name. | `true` | No |
 | `skip-github-release` | Tags a merged release pull request without creating a GitHub release. | `false` | No |
-| `draft` | Creates each GitHub release as a draft and leaves it for a human to publish. | `false` | No |
+| `github-release-draft` | Creates each GitHub release as a draft and leaves it for a human to publish. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
 | `workspaces` | Package managers whose local dependencies release a dependent with its dependency. | none | No |
 | `delete-release-branch` | Deletes a release branch once `release` has tagged and released it. | `true` | No |

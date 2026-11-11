@@ -146,7 +146,7 @@ run, branch content, title and body updated accordingly.
 Tags and releases every merged pull request on a component's release branch, or the shared
 `release-me/main`, that still carries the `pending` label: a tag on the merge commit, a
 GitHub release with the pull request's notes and changelog, prerelease true for a
-pre-release version. Draft follows `draft-until-assets-attach`, default `false`: off, the
+pre-release version. Draft follows `github-release-draft-until-assets-attach`, default `false`: off, the
 release publishes immediately; on, it starts a draft, exempt from GitHub's immutable
 releases feature, until a caller, such as a workflow step that still needs to attach
 binary assets, publishes it. The label swap removes `pending`, and the matching
@@ -159,7 +159,7 @@ that already exists, left over from an earlier, interrupted run, is not an error
 release and the label swap still happen, so the pull request does not stay pending
 forever, and the run reports it as already tagged.
 
-With `draft-until-assets-attach: true`, `release` also looks at every merged pull request
+With `github-release-draft-until-assets-attach: true`, `release` also looks at every merged pull request
 already carrying the `tagged` label: one whose release is still a draft had its asset attach or
 publish step fail after an earlier run tagged and drafted it, so this reprints the same
 `released-tag` marker for it, without creating anything again, letting the workflow's asset
@@ -174,9 +174,9 @@ With `skip-github-release: true`, `release` tags the merge commit, swaps the lab
 the `released-tag` marker as usual, but creates no GitHub release, for a workflow that creates
 it from the tag itself. See [configuration](configuration.md#skip-github-release).
 
-With `draft: true`, the release starts a draft too, reported as `tagged and drafted <tag>`, but
+With `github-release-draft: true`, the release starts a draft too, reported as `tagged and drafted <tag>`, but
 it is left for a human to publish: a later run never resumes it, whatever
-`draft-until-assets-attach` is set to. See [configuration](configuration.md#draft).
+`github-release-draft-until-assets-attach` is set to. See [configuration](configuration.md#github-release-draft).
 
 With `major-tag: true`, every stable release additionally creates or force-moves the major
 tag, `vX` for the implicit `main` component or its tag prefix followed by `X` for a configured
@@ -200,7 +200,7 @@ releases exist by then; the branch stays for a human. `pr` pushes the branch afr
 next release. Deleting needs `contents: write`, the permission tagging already needs.
 `--dry-run` prints `would delete release branch <branch>` and deletes nothing.
 
-Deleting the branch keeps a draft resumable with `draft-until-assets-attach: true`: `release`
+Deleting the branch keeps a draft resumable with `github-release-draft-until-assets-attach: true`: `release`
 finds the `tagged` pull request to resume by its head branch, and GitHub still lists a merged
 pull request by a head branch that has since been deleted. Only the leftover sweep of a shared
 release pull request looks at a branch's existence first, so there a swept branch stays; see
@@ -256,9 +256,10 @@ counted every commit. It also carries over:
 - `skip-github-release`, at the top level when every package carries the same value, on the
   component otherwise; release-me still creates the tag, unlike release-please, so remove
   any external tagging step the old workflow needed;
-- `draft`, at the top level when every package carries the same value, on the component
-  otherwise; the GitHub release is left a draft for a human to publish, release-me never
-  resumes it the way `draft-until-assets-attach` does;
+- `github-release-draft`, at the top level when every package carries the same value, on the
+  component otherwise, read from release-please's `draft`; the GitHub release is left a draft
+  for a human to publish, release-me never resumes it the way
+  `github-release-draft-until-assets-attach` does;
 - `exclude-paths`, per package or as a top-level default, keeping each path that lies inside
   the package it is set on and warning about every other one, which excludes nothing there;
 - `release-as`, unless the manifest already records it as released or release-me refuses the

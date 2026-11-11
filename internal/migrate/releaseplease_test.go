@@ -843,7 +843,7 @@ func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
 	t.Parallel()
 	forceTag := func(c config.ResolvedComponent) bool { return c.ForceTagCreation }
 	skip := func(c config.ResolvedComponent) bool { return c.SkipGitHubRelease }
-	draft := func(c config.ResolvedComponent) bool { return c.Draft }
+	draft := func(c config.ResolvedComponent) bool { return c.GitHubReleaseDraft }
 	cases := []struct {
 		name       string
 		configJSON string
@@ -897,28 +897,28 @@ func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
 			get:        skip, want: []bool{false},
 		},
 		{
-			name:       "writes draft once for a root package",
+			name:       "writes github-release-draft once for a root package",
 			configJSON: `{"draft": true, "packages": {".": {"release-type": "go"}}}`,
-			wantYAML:   "\ndraft: true\n",
+			wantYAML:   "\ngithub-release-draft: true\n",
 			get:        draft, want: []bool{true},
 		},
 		{
-			name: "writes draft on the one package that carries it",
+			name: "writes github-release-draft on the one package that carries it",
 			configJSON: `{"packages": {
 			  "api": {"component": "api", "release-type": "go"},
 			  "web": {"component": "web", "release-type": "go", "draft": true}}}`,
-			wantYAML: "    path: web\n    tag-prefix: web-v\n    draft: true\n",
+			wantYAML: "    path: web\n    tag-prefix: web-v\n    github-release-draft: true\n",
 			get:      draft, want: []bool{false, true},
 		},
 		{
-			name: "writes draft once at the top level when every package carries it",
+			name: "writes github-release-draft once at the top level when every package carries it",
 			configJSON: `{"draft": true, "packages": {
 			  "api": {"component": "api", "release-type": "go"}, "web": {"component": "web", "release-type": "go"}}}`,
-			wantYAML: "\ndraft: true\ncomponents:\n",
+			wantYAML: "\ngithub-release-draft: true\ncomponents:\n",
 			get:      draft, want: []bool{true, true},
 		},
 		{
-			name:       "leaves out draft at release-me's default",
+			name:       "leaves out github-release-draft at release-me's default",
 			configJSON: `{"draft": false, "packages": {".": {"release-type": "go"}}}`,
 			get:        draft, want: []bool{false},
 		},
