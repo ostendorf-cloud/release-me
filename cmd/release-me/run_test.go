@@ -20,7 +20,7 @@ func TestRunIsPRThenRelease(t *testing.T) {
 	dir, _ := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
@@ -71,7 +71,7 @@ func TestRunDoesNotDuplicateTheReleasePullRequestOnTheMergeThatReleasesIt(t *tes
 	dir, _ := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	var stdout bytes.Buffer
 
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {

@@ -40,7 +40,7 @@ func TestRunRetriesAnUnpublishedDeferredTagWithoutAnotherReleasePR(t *testing.T)
 			writeFiles(t, dir, "feat: export reports", map[string]string{"api/export.go": "package api\n"})
 			cfg.ForceTagCreation = false
 			cfg.DraftUntilAssetsAttach = true
-			f := newFake()
+			f := newPRFake(remote)
 			var out bytes.Buffer
 			if err := doRun(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 				t.Fatal(err)
@@ -133,7 +133,7 @@ func TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppeared(t *testing.T) 
 	writeFiles(t, dir, "feat: export reports", map[string]string{"api/export.go": "package api\n"})
 	cfg.ForceTagCreation = false
 	cfg.DraftUntilAssetsAttach = true
-	f := newFake()
+	f := newPRFake(remote)
 	var out bytes.Buffer
 	if err := doRun(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 		t.Fatal(err)
@@ -191,7 +191,7 @@ func TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppearedWithoutDrafts(t
 	writeFiles(t, dir, "feat: export reports", map[string]string{"api/export.go": "package api\n"})
 	cfg.ForceTagCreation = false
 	cfg.DraftUntilAssetsAttach = false
-	f := newFake()
+	f := newPRFake(remote)
 	var out bytes.Buffer
 	if err := doRun(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 		t.Fatal(err)

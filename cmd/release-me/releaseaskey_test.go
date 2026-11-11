@@ -100,7 +100,7 @@ func TestDoPRLetsTheReleaseAsCommentOverrideWinOverTheReleaseAsKey(t *testing.T)
 	cfg := config.Default()
 	cfg.ReleaseAs = "2.0.0"
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)

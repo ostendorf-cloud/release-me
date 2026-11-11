@@ -40,6 +40,7 @@ func TestDoPRPointsEveryChangelogLinkAtTheChangelogHost(t *testing.T) {
 	f := withHostedPullRequests(forge.PullRequest{
 		Number: 12, Title: "fix: handle the empty case", URL: "https://github.com/owner/repo/pull/12",
 	})
+	f.GitDir = origin
 	if err := doPR(t.Context(), dir, cfg, "", withChangelogHost(cfg, f), discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() error = %v", err)
 	}

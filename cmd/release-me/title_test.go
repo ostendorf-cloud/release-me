@@ -59,7 +59,7 @@ func TestTitlePatternRoundTripsThroughPRAndRelease(t *testing.T) {
 				dir, _, cfg := family.repo(t)
 				cfg.ReleasePullRequestGuide = guide
 				setTitlePattern(&cfg, family.pattern, family.sharedTitle)
-				f := newFake()
+				f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 				var stdout bytes.Buffer
 				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 					t.Fatalf("doPR() error = %v", err)
@@ -85,7 +85,7 @@ func TestTitlePatternStillReleasesAPullRequestOpenedBeforeIt(t *testing.T) {
 	for _, family := range titleFamilies {
 		t.Run(family.name, func(t *testing.T) {
 			dir, _, cfg := family.repo(t)
-			f := newFake()
+			f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 				t.Fatalf("doPR() error = %v", err)
@@ -109,7 +109,7 @@ func TestRerunRetitlesAnOpenPullRequestWhenThePatternChanges(t *testing.T) {
 	for _, family := range titleFamilies {
 		t.Run(family.name, func(t *testing.T) {
 			dir, origin, cfg := family.repo(t)
-			f := newFake()
+			f := newPRFake(origin)
 			var first bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 				t.Fatalf("doPR() first run error = %v", err)
@@ -146,7 +146,7 @@ func TestTitlePatternStillReleasesAPullRequestTitledWithAPreviousPattern(t *test
 		t.Run(family.name, func(t *testing.T) {
 			dir, _, cfg := family.repo(t)
 			setTitlePattern(&cfg, family.pattern, family.sharedTitle)
-			f := newFake()
+			f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 				t.Fatalf("doPR() error = %v", err)
@@ -220,7 +220,7 @@ func TestRecordedOverlappingTitlesReleaseTheirOriginalVersions(t *testing.T) {
 				dir, _, cfg := tc.family.repo(t)
 				cfg.ReleasePullRequestLayout = layout
 				setTitlePattern(&cfg, tc.old, tc.shared)
-				f := newFake()
+				f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 				var out bytes.Buffer
 				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 					t.Fatal(err)

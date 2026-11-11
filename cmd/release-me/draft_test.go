@@ -25,7 +25,7 @@ func TestDoPROpensEveryReleasePullRequestAsADraftOnlyWhileTheKeyIsOn(t *testing.
 					dir, _, cfg := family.repo(t)
 					cfg.ReleasePullRequestGuide = guide
 					cfg.ReleasePullRequestDraft = draft
-					f := newFake()
+					f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 					var stdout bytes.Buffer
 					if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 						t.Fatalf("doPR() error = %v", err)
@@ -54,7 +54,7 @@ func TestDraftReleasePullRequestUpdatesAndReleasesLikeAnyOther(t *testing.T) {
 		t.Run(family.name, func(t *testing.T) {
 			dir, origin, cfg := family.repo(t)
 			cfg.ReleasePullRequestDraft = true
-			f := newFake()
+			f := newPRFake(origin)
 			var first bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 				t.Fatalf("doPR() first run error = %v", err)

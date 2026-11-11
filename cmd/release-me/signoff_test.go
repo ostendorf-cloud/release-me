@@ -23,7 +23,7 @@ func TestReleaseCommitCarriesTheSignoffTrailerOnlyWhenConfigured(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				dir, origin, cfg := family.repo(t)
 				cfg.Signoff = signoff
-				f := newFake()
+				f := newPRFake(origin)
 				var stdout bytes.Buffer
 				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 					t.Fatalf("doPR() error = %v", err)
@@ -46,8 +46,8 @@ func TestReleaseCommitCarriesTheSignoffTrailerOnlyWhenConfigured(t *testing.T) {
 				if signoff == "" && len(trailers) != 0 || signoff != "" && (len(trailers) != 1 || trailers[0] != signoff) {
 					t.Fatalf("Signed-off-by trailers = %q, want %q", trailers, signoff)
 				}
-				if got := bareBranchAuthor(t, origin); got != "release-me <release-me[bot]@users.noreply.github.com>" {
-					t.Fatalf("author = %q, want the configured author unchanged by the signoff", got)
+				if got := bareBranchAuthor(t, origin); got != forgetest.FakeAuthor {
+					t.Fatalf("author = %q, want the forge's own %q unchanged by the signoff", got, forgetest.FakeAuthor)
 				}
 			})
 		}
@@ -60,7 +60,7 @@ func TestSignoffChangesRefreshExistingReleaseCommitsAndThenSettle(t *testing.T) 
 			t.Run(family.name+"/"+previous, func(t *testing.T) {
 				dir, remote, cfg := family.repo(t)
 				cfg.Signoff = previous
-				f := newFake()
+				f := newPRFake(remote)
 				var out bytes.Buffer
 				if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 					t.Fatal(err)

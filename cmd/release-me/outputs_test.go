@@ -243,7 +243,7 @@ func TestOutputsFollowTheReleasePullRequestAndTheReleaseInEveryMode(t *testing.T
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, cfg := tc.setup(t)
-			f := newFake()
+			f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 			var stdout bytes.Buffer
 
 			prOut := &runOutputs{}
@@ -339,10 +339,10 @@ func TestOutputsRecordNothingInDryRun(t *testing.T) {
 }
 
 func TestOutputsReportAnUpToDateReleasePullRequest(t *testing.T) {
-	dir, _ := newPRRepo(t)
+	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -420,7 +420,7 @@ func TestFinishWriteEmitsWhatARunDidBeforeItsReleasePhaseFailed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "github_output")
 	t.Setenv(outputsEnv, path)
 
-	f := releaseListingFailsForge{newFake()}
+	f := releaseListingFailsForge{newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))}
 	out := &runOutputs{}
 	runErr := doRun(withOutputs(t.Context(), out), dir, config.Default(), "", f, discardLogger(), false, io.Discard)
 	if runErr == nil {

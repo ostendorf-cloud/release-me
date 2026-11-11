@@ -27,7 +27,7 @@ func TestLabelListsOpenTagAndReleaseEveryReleasePullRequest(t *testing.T) {
 	for _, family := range prFamilies {
 		t.Run(family.name, func(t *testing.T) {
 			dir, _, cfg := family.repo(t)
-			f := newFake()
+			f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 			withLabelLists(&cfg, f)
 			var stdout bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
@@ -63,7 +63,7 @@ func TestLabelListsOpenTagAndReleaseEveryReleasePullRequest(t *testing.T) {
 
 func TestDoPRAddsBackOnlyThePendingLabelAReleasePullRequestLost(t *testing.T) {
 	dir, origin, cfg := newSingleComponentRepo(t)
-	f := newFake()
+	f := newPRFake(origin)
 	withLabelLists(&cfg, f)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {

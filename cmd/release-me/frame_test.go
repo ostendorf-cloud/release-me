@@ -35,7 +35,7 @@ func TestHeaderAndFooterFrameEveryBodyAndChangeNoRelease(t *testing.T) {
 					if framed {
 						cfg.ReleasePullRequestHeader, cfg.ReleasePullRequestFooter = testHeader, testFooter
 					}
-					f := newFake()
+					f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 					var stdout bytes.Buffer
 					if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 						t.Fatalf("doPR() error = %v", err)
@@ -70,7 +70,7 @@ func TestHeaderAndFooterFrameEveryBodyAndChangeNoRelease(t *testing.T) {
 // body up to date.
 func TestRerunAddsTheHeaderWithoutAPushAndThenStaysUpToDate(t *testing.T) {
 	dir, origin, cfg := newSingleComponentRepo(t)
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)

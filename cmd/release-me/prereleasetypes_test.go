@@ -28,7 +28,7 @@ func TestDoPRTurnsAConfiguredPreReleaseTypesLabelIntoItsPreRelease(t *testing.T)
 	cfg := config.Default()
 	cfg.Labels.PreReleaseTypes = []config.PreReleaseType{{Type: "next", Label: "release: next"}}
 
-	f := newFake()
+	f := newPRFake(origin)
 	f.RepoLabels = append(f.RepoLabels, "release: next")
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {

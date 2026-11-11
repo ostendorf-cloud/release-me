@@ -4,8 +4,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -152,5 +157,78 @@ func TestDoCheckReportsAnUnknownComponentName(t *testing.T) {
 	got := doCheck(t.Context(), cfg, nil, fmt.Errorf(`release-me: unknown component "frontend"`), "GITHUB_TOKEN", "a-token", "owner", "repo", f)
 	if len(got) != 1 || !strings.Contains(got[0], `"frontend"`) {
 		t.Fatalf("doCheck() = %v, want a single line naming the unknown component", got)
+	}
+}
+
+// TestWarnIgnoredAuthorNamesEverySetAuthorKey covers the author block pr
+// no longer applies: it still loads, so an existing release-me.yaml keeps
+// working, and check warns for each key it sets, naming it as ignored,
+// while the defaults alone stay silent.
+func TestWarnIgnoredAuthorNamesEverySetAuthorKey(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		content  string
+		wantKeys []string
+	}{
+		{
+			name:    "a configuration without an author block warns about nothing",
+			content: "initial-version: 0.1.0\n",
+		},
+		{
+			name:     "a configured name and email warn for each",
+			content:  "author:\n  name: renovate\n  email: renovate@example.com\n",
+			wantKeys: []string{"author.name", "author.email"},
+		},
+		{
+			name:     "an email alone warns for the email only",
+			content:  "author:\n  email: release-me[bot]@users.noreply.github.com\n",
+			wantKeys: []string{"author.email"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), "release-me.yaml")
+			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v, want the author block to keep loading", err)
+			}
+
+			var logs bytes.Buffer
+			warnIgnoredAuthor(cfg, slog.New(slog.NewTextHandler(&logs, nil)))
+
+			got := logs.String()
+			if n := strings.Count(got, "level=WARN"); n != len(tc.wantKeys) {
+				t.Fatalf("logs = %q, want %d warnings", got, len(tc.wantKeys))
+			}
+			for _, key := range tc.wantKeys {
+				if !strings.Contains(got, key+" is ignored") || !strings.Contains(got, "key="+key) {
+					t.Fatalf("logs = %q, want a warning naming %s as ignored", got, key)
+				}
+			}
+		})
+	}
+}
+
+// TestDoPRWarnsAboutAnIgnoredAuthorKey covers a repository whose workflow
+// runs pr and never check: pr is the command that stopped applying the
+// key, so the warning reaches it there too, and the run still succeeds.
+func TestDoPRWarnsAboutAnIgnoredAuthorKey(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	commitEntry(t, dir, "feat: add the next command")
+	cfg := config.Default()
+	cfg.Author.Set = []string{"author.name"}
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	if err := doPR(t.Context(), dir, cfg, "", newPRFake(origin), logger, false, io.Discard); err != nil {
+		t.Fatalf("doPR() error = %v", err)
+	}
+	if !strings.Contains(logs.String(), "author.name is ignored") {
+		t.Fatalf("logs = %q, want a warning naming author.name as ignored", logs.String())
 	}
 }

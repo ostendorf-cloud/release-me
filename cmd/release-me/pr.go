@@ -75,6 +75,7 @@ func runPR(args []string, stdout, stderr io.Writer) int {
 // branch are checked once, shared by every component; a failure there
 // stops before any component writes anything.
 func doPR(ctx context.Context, dir string, cfg config.Config, component string, f forge.Forge, logger *slog.Logger, dryRun bool, stdout io.Writer) error {
+	warnIgnoredAuthor(cfg, logger)
 	owner, repoName, err := history.Remote(ctx, dir)
 	if err != nil {
 		return fmt.Errorf("release-me: origin remote: %w", err)
@@ -297,7 +298,7 @@ func doPRComponent(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, existing, comp.Branch, date, releasepr.CommitMessage(title, cfg.Signoff)); err != nil {
+		if err := plan.write(ctx, cfg, f, owner, repoName, existing, comp.Branch, date, releasepr.CommitMessage(title, cfg.Signoff), logger); err != nil {
 			return fmt.Errorf("release-me: component %s: %w", comp.Name, err)
 		}
 
@@ -486,7 +487,7 @@ func doPRLocked(
 		releasepr.TitlePatternMarker(cfg.SharedTitlePatterns()[0], cfg.SharedTitleKind())) +
 		releasepr.DateMarker(date, cfg.ChangelogStyle.DateFormat)
 
-	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, "locked family", names, existing, plan, date, title, body, dryRun, stdout)
+	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, "locked family", names, existing, plan, date, title, body, logger, dryRun, stdout)
 }
 
 // publishSharedPR creates, updates or leaves alone the one release pull
@@ -497,7 +498,7 @@ func doPRLocked(
 // components names every component the pull request releases.
 func publishSharedPR(
 	ctx context.Context, cfg config.Config, f forge.Forge, owner, repoName, base, branch, who string, components []string,
-	existing *forge.PullRequest, plan *releasePlan, date time.Time, title, body string, dryRun bool, stdout io.Writer,
+	existing *forge.PullRequest, plan *releasePlan, date time.Time, title, body string, logger *slog.Logger, dryRun bool, stdout io.Writer,
 ) error {
 	switch {
 	case existing != nil && !plan.changed && body == existing.Body && title == existing.Title:
@@ -531,7 +532,7 @@ func publishSharedPR(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, existing, branch, date, releasepr.CommitMessage(title, cfg.Signoff)); err != nil {
+		if err := plan.write(ctx, cfg, f, owner, repoName, existing, branch, date, releasepr.CommitMessage(title, cfg.Signoff), logger); err != nil {
 			return fmt.Errorf("release-me: %s: %w", who, err)
 		}
 
@@ -1076,59 +1077,237 @@ func headingReadsBack(version, compareURL string) bool {
 	return ok
 }
 
-// write commits the changelog update and the bumped files onto branch and
-// pushes it, through the temporary worktree planned in p. A fresh branch,
-// with no existing pull request to lease against, is pushed without
-// force; otherwise the lease is the existing pull request's head SHA from
-// the forge, not a locally fetched ref, so a concurrent fetch can never
-// defeat it. The commit carries cfg's configured author and committer,
-// never written into any git config, only passed to that one subprocess.
+// write commits the changelog update and the bumped files onto branch
+// through the forge's API, f.CommitBranch, never through a local commit
+// and push: the forge signs a commit it creates itself, GitHub for a
+// GitHub App installation token only, so a ruleset requiring signed
+// commits accepts the release pull request, which a local commit made
+// with a token that has no signing key never satisfies. A commit the
+// forge left unsigned, the outcome of a personal access token, is
+// reported through logger by warnUnsigned, never an error: the branch
+// is already written and only a ruleset decides whether it matters.
+// The commit's parent is the commit the temporary worktree planned in p is
+// checked out at, dir's HEAD, the same one a local commit there would get,
+// and it carries exactly the content a local commit would: every
+// changelog with its section prepended and every bumped file. A fresh
+// branch, with no existing pull request to lease against, is created, or
+// moved only as a fast-forward; otherwise the lease is the existing pull
+// request's head SHA from the forge. The forge attributes the commit to
+// the token's own identity: cfg's author is not passed, since GitHub
+// leaves a commit with a custom author or committer unsigned.
 func (p *releasePlan) write(
-	ctx context.Context, cfg config.Config, existing *forge.PullRequest, branch string, date time.Time, commitMessage string,
+	ctx context.Context, cfg config.Config, f forge.Forge, owner, repoName string, existing *forge.PullRequest, branch string, date time.Time, commitMessage string,
+	logger *slog.Logger,
 ) error {
-	if err := gitRun(ctx, p.tmp, "checkout", "--quiet", "-B", branch); err != nil {
-		return fmt.Errorf("release-me: checkout %s: %w", branch, err)
+	parent, err := gitOutput(ctx, p.tmp, "rev-parse", "HEAD")
+	if err != nil {
+		return fmt.Errorf("release-me: release branch %s: resolve parent commit: %w", branch, err)
 	}
 
+	contents := make(map[string]string, len(p.changelogs)+len(p.desiredFiles))
+	var order []string
+	set := func(path, content string) {
+		if _, seen := contents[path]; !seen {
+			order = append(order, path)
+		}
+		contents[path] = content
+	}
 	for _, c := range p.changelogs {
 		if c.skip {
 			continue
 		}
 		section := changelog.RenderHeading(c.version, date, c.compareURL, cfg.ChangelogStyle.DateFormat) + "\n\n" + c.entriesBody + "\n"
-		fullChangelogPath := filepath.Join(p.tmp, c.path)
-		// A configured changelog may name a directory that does not exist
-		// yet; os.WriteFile creates the file only.
-		if err := os.MkdirAll(filepath.Dir(fullChangelogPath), 0o755); err != nil {
-			return fmt.Errorf("release-me: write %s: %w", c.path, err)
-		}
-		if err := os.WriteFile(fullChangelogPath, []byte(changelog.Prepend(c.baseline, section)), 0o644); err != nil {
-			return fmt.Errorf("release-me: write %s: %w", c.path, err)
-		}
+		set(c.path, changelog.Prepend(c.baseline, section))
 	}
-	for path, content := range p.desiredFiles {
-		if err := os.WriteFile(filepath.Join(p.tmp, path), []byte(content), 0o644); err != nil {
-			return fmt.Errorf("release-me: write %s: %w", path, err)
-		}
+	paths := make([]string, 0, len(p.desiredFiles))
+	for path := range p.desiredFiles {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	for _, path := range paths {
+		set(path, p.desiredFiles[path])
 	}
 
-	if err := gitRun(ctx, p.tmp, "add", "-A"); err != nil {
-		return fmt.Errorf("release-me: stage release branch: %w", err)
-	}
-	if _, err := gitOutputEnv(ctx, p.tmp, commitEnv(cfg), "commit", "--quiet", "--allow-empty", "-m", commitMessage); err != nil {
-		return fmt.Errorf("release-me: commit release branch: %w", err)
+	// A symlink and its target both listed resolve to one path, which gets
+	// one tree entry: the later one wins, as it did writing to disk.
+	files := make([]forge.CommitFile, 0, len(order))
+	entry := make(map[string]int, len(order))
+	for _, path := range order {
+		target, err := releaseFileTarget(ctx, p.tmp, path)
+		if err != nil {
+			return fmt.Errorf("release-me: release branch %s: %w", branch, err)
+		}
+		executable, err := executableAt(ctx, p.tmp, target)
+		if err != nil {
+			return fmt.Errorf("release-me: release branch %s: %w", branch, err)
+		}
+		file := forge.CommitFile{Path: target, Content: []byte(contents[path]), Executable: executable}
+		if i, seen := entry[target]; seen {
+			files[i] = file
+			continue
+		}
+		entry[target] = len(files)
+		files = append(files, file)
 	}
 
-	pushArgs := []string{"push", "--quiet", "origin", "HEAD:refs/heads/" + branch}
-	if existing != nil && existing.HeadSHA != "" {
-		pushArgs = []string{
-			"push", "--force-with-lease=refs/heads/" + branch + ":" + existing.HeadSHA,
-			"--quiet", "origin", "HEAD:refs/heads/" + branch,
+	sha, err := f.CommitBranch(ctx, owner, repoName, forge.BranchCommit{Branch: branch, Parent: parent, Message: commitMessage, Files: files})
+	if err != nil {
+		if existing != nil {
+			return fmt.Errorf("release-me: commit release branch %s for pull request #%d: %w", branch, existing.Number, err)
 		}
+		return fmt.Errorf("release-me: commit release branch %s: %w", branch, err)
 	}
-	if err := gitRun(ctx, p.tmp, pushArgs...); err != nil {
-		return fmt.Errorf("release-me: push %s: %w", branch, err)
+	lease := ""
+	if existing != nil {
+		lease = existing.HeadSHA
+	}
+	if err := publishReleaseCommit(ctx, p.tmp, branch, sha, lease); err != nil {
+		if existing != nil {
+			return fmt.Errorf("release-me: publish release branch %s for pull request #%d: %w", branch, existing.Number, err)
+		}
+		return fmt.Errorf("release-me: publish release branch %s: %w", branch, err)
+	}
+	warnUnsigned(ctx, f, owner, repoName, branch, sha, logger)
+	return nil
+}
+
+// publishReleaseCommit fetches the API-created object before publishing it.
+// The receive-pack comparison is atomic, including a writer arriving after
+// the fetch. A new branch retains the ordinary fast-forward-only push rule.
+func publishReleaseCommit(ctx context.Context, dir, branch, sha, expected string) error {
+	pushURL, err := gitOutput(ctx, dir, "remote", "get-url", "--push", "origin")
+	if err != nil {
+		return fmt.Errorf("resolve publication remote: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, "git", "fetch", "--quiet", "--no-tags", pushURL, sha)
+	cmd.Dir = dir
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("fetch prepared release commit from origin: %w: %s", err,
+			strings.ReplaceAll(strings.TrimSpace(stderr.String()), pushURL, "origin"))
+	}
+	args := []string{"push", "--porcelain"}
+	if expected != "" {
+		args = append(args, "--force-with-lease=refs/heads/"+branch+":"+expected)
+	}
+	args = append(args, "origin", sha+":refs/heads/"+branch)
+	cmd = exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	var stdout bytes.Buffer
+	stderr.Reset()
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if leaseLost(stdout.String()) {
+			return fmt.Errorf("publish branch %s: %w", branch, forge.ErrBranchMoved)
+		}
+		return fmt.Errorf("publish branch %s: %w: %s", branch, err,
+			strings.ReplaceAll(strings.TrimSpace(stderr.String()), pushURL, "origin"))
 	}
 	return nil
+}
+
+// leaseLost reports whether the porcelain status lines of a failed push
+// say the lease was lost, which git words in two ways. Its own check
+// against the ref advertisement prints "[rejected] (stale info)", for a
+// branch that already moved when the push started; receive-pack's
+// compare-and-swap prints "[remote rejected] (incorrect old value
+// provided)", for one that moves while the push runs, which is the
+// concurrent case the lease exists for. Every other "[remote rejected]"
+// stays a plain error carrying git's own reason, a ruleset declining an
+// unsigned commit through the pre-receive hook above all.
+func leaseLost(porcelain string) bool {
+	return strings.Contains(porcelain, "[rejected]") ||
+		strings.Contains(porcelain, "(incorrect old value provided)")
+}
+
+// warnUnsigned reads the signature the forge verified on sha, the commit
+// just written to branch, and logs a warning when it has none: GitHub
+// signs a commit created through its API only for a GitHub App
+// installation token, so a personal access token or an OAuth token
+// yields an unsigned one, and a ruleset requiring signed commits then
+// blocks the release pull request from merging. A signature that cannot
+// be read is a warning too, never an error, since the commit itself
+// landed.
+func warnUnsigned(ctx context.Context, f forge.Forge, owner, repoName, branch, sha string, logger *slog.Logger) {
+	sig, err := f.CommitSignature(ctx, owner, repoName, sha)
+	if err != nil {
+		logger.Warn("could not check whether the release commit is signed",
+			"branch", branch, "commit", sha, "error", err)
+		return
+	}
+	if sig.Verified {
+		logger.Debug("release commit is signed", "branch", branch, "commit", sha)
+		return
+	}
+	logger.Warn("the release commit is unsigned: the forge signs a commit it creates only for a GitHub App "+
+		"installation token, a user token such as a personal access token yields an unsigned one, and a "+
+		"ruleset requiring signed commits blocks the release pull request from merging",
+		"branch", branch, "commit", sha, "reason", sig.Reason)
+}
+
+// releaseFileTarget follows symlinks as the worktree writer does, while
+// refusing to replace a link or write outside the scratch repository.
+func releaseFileTarget(ctx context.Context, dir, path string) (string, error) {
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve release file %s: %w", path, err)
+	}
+	candidate := filepath.Join(dir, filepath.FromSlash(path))
+	ancestor := candidate
+	var suffix []string
+	for {
+		_, err := os.Lstat(ancestor)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("resolve release file %s: %w", path, err)
+		}
+		suffix = append(suffix, filepath.Base(ancestor))
+		next := filepath.Dir(ancestor)
+		if next == ancestor {
+			return "", fmt.Errorf("resolve release file %s: %w", path, err)
+		}
+		ancestor = next
+	}
+	real, err := filepath.EvalSymlinks(ancestor)
+	if err != nil {
+		return "", fmt.Errorf("resolve release file %s: %w", path, err)
+	}
+	for i := len(suffix) - 1; i >= 0; i-- {
+		real = filepath.Join(real, suffix[i])
+	}
+	rel, err := filepath.Rel(dir, real)
+	if err != nil {
+		return "", fmt.Errorf("resolve release file %s: %w", path, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("release file %s: symlink target escapes the repository", path)
+	}
+	target := filepath.ToSlash(rel)
+	if target != path {
+		entry, err := gitOutput(ctx, dir, "ls-tree", "HEAD", "--", target)
+		if err != nil {
+			return "", fmt.Errorf("release file %s: read symlink target: %w", path, err)
+		}
+		if !strings.HasPrefix(entry, "100644 ") && !strings.HasPrefix(entry, "100755 ") {
+			return "", fmt.Errorf("release file %s: symlink target %s is not a tracked regular file", path, target)
+		}
+	}
+	return target, nil
+}
+
+// executableAt reports whether path is tracked as an executable file at
+// HEAD of the worktree dir, so the commit keeps its mode; a path HEAD does
+// not track, a changelog created by this release, is not.
+func executableAt(ctx context.Context, dir, path string) (bool, error) {
+	out, err := gitOutput(ctx, dir, "ls-tree", "HEAD", "--", path)
+	if err != nil {
+		return false, fmt.Errorf("read the mode of %s: %w", path, err)
+	}
+	return strings.HasPrefix(out, "100755 "), nil
 }
 
 // cleanup removes the temporary worktree. It is safe to call more than
@@ -1166,47 +1345,9 @@ func gitOutputEnv(ctx context.Context, dir string, env []string, args ...string)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+		return strings.TrimSpace(stdout.String()), fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
 	return strings.TrimSpace(stdout.String()), nil
-}
-
-// commitEnv returns the environment for the commit subprocess: the
-// process environment, extended with GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL,
-// GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL from cfg.Author wherever the
-// process environment does not already carry one of them. The identity
-// never reaches git config, only this one subprocess's environment.
-func commitEnv(cfg config.Config) []string {
-	env := os.Environ()
-	for key, value := range map[string]string{
-		"GIT_AUTHOR_NAME":     cfg.Author.Name,
-		"GIT_AUTHOR_EMAIL":    cfg.Author.Email,
-		"GIT_COMMITTER_NAME":  cfg.Author.Name,
-		"GIT_COMMITTER_EMAIL": cfg.Author.Email,
-	} {
-		if _, ok := os.LookupEnv(key); !ok {
-			env = append(env, key+"="+value)
-		}
-	}
-	return env
-}
-
-// resolvedAuthorName and resolvedAuthorEmail report the git author name
-// and email the commit call would use: GIT_AUTHOR_NAME and
-// GIT_AUTHOR_EMAIL from the process environment when set, cfg.Author
-// otherwise, the same precedence commitEnv applies.
-func resolvedAuthorName(cfg config.Config) string {
-	if v, ok := os.LookupEnv("GIT_AUTHOR_NAME"); ok {
-		return v
-	}
-	return cfg.Author.Name
-}
-
-func resolvedAuthorEmail(cfg config.Config) string {
-	if v, ok := os.LookupEnv("GIT_AUTHOR_EMAIL"); ok {
-		return v
-	}
-	return cfg.Author.Email
 }
 
 // gitShowFile returns the exact, untrimmed content of path at ref in dir.

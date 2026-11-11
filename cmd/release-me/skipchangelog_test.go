@@ -47,7 +47,7 @@ func TestDoPRLeavesTheChangelogAloneWithSkipChangelog(t *testing.T) {
 			if err != nil {
 				t.Fatalf("config.Load() error = %v", err)
 			}
-			f := newFake()
+			f := newPRFake(origin)
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 				t.Fatalf("doPR() error = %v", err)
 			}
@@ -106,7 +106,7 @@ func TestDoPRSkipsTheChangelogOfOnlyTheComponentThatAsksTo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() error = %v", err)
 	}
@@ -159,7 +159,7 @@ func TestEnablingSkipChangelogDiscardsExistingBranchEdits(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			f := newFake()
+			f := newPRFake(origin)
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 				t.Fatal(err)
 			}

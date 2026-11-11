@@ -70,7 +70,7 @@ func newNodeWorkspaceRepo(t *testing.T, head string) (dir, origin string, cfg co
 func TestNodeWorkspaceReleasesEveryDependentWithTheNewDependencyVersion(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\nworkspaces: [node]\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -124,7 +124,7 @@ func TestNodeWorkspaceReleasesEveryDependentWithTheNewDependencyVersion(t *testi
 func TestNodeWorkspaceMovesDependenciesInALockedFamily(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "versioning: locked\nworkspaces: [node]\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -147,7 +147,7 @@ func TestNodeWorkspaceMovesDependenciesInALockedFamily(t *testing.T) {
 func TestNodeWorkspaceReleasesADependentAtTheLinkedFamilysVersion(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "versioning: linked\nrelease-pull-request: shared\nworkspaces: [node]\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -199,7 +199,7 @@ components:
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -232,7 +232,7 @@ func TestNodeWorkspaceWithoutAlwaysLinkLocalLeavesARangeTheLocalVersionMissesAlo
 			"    \"@acme/core\": \"~1.1.0\",\n    \"@acme/ui\": \"workspace:*\"\n  }\n}\n",
 	})
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -296,7 +296,7 @@ components:
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -319,7 +319,7 @@ components:
 func TestNodeWorkspaceLeftOutReleasesNoDependent(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -336,7 +336,7 @@ func TestNodeWorkspaceLeftOutReleasesNoDependent(t *testing.T) {
 func TestNodeWorkspaceReleasesADependentWithAPatchUnderServicePack(t *testing.T) {
 	dir, origin, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\nworkspaces: [node]\nversioning-strategy: service-pack\n")
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -381,7 +381,7 @@ func TestNodeWorkspaceReleasesADependentWithAPatchUnderServicePack(t *testing.T)
 func TestNodeWorkspaceReleasesADependentWithAPatchUnderAlwaysBumpMajor(t *testing.T) {
 	dir, _, cfg := newNodeWorkspaceRepo(t, "release-pull-request: shared\nworkspaces: [node]\nversioning-strategy: always-bump-major\n")
 
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -410,7 +410,7 @@ func TestCargoWorkspaceReleasesDependentsThroughInheritedAliases(t *testing.T) {
 			runGit(t, dir, "tag", "core/v1.0.0")
 			runGit(t, dir, "tag", "cli/v1.0.0")
 			writeFiles(t, dir, "feat: add the core API", map[string]string{"crates/core/src/lib.rs": "pub fn export() {}\n"})
-			f := newFake()
+			f := newPRFake(remote)
 			var out bytes.Buffer
 			if err := doPR(t.Context(), dir, loadConfig(t, dir), "", f, discardLogger(), false, &out); err != nil {
 				t.Fatal(err)
@@ -444,7 +444,7 @@ func TestNodeWorkspaceFiltersEachDeclarationOfTheSameDependency(t *testing.T) {
 			cfg.AlwaysLinkLocal = tc.always
 			content := "{\n  \"name\": \"@acme/web\",\n  \"version\": \"0.4.0\",\n  \"dependencies\": {\n    \"@acme/core\": \"^1.2.0\"\n  },\n  \"devDependencies\": {\n    \"@acme/core\": \"^9.0.0\"\n  }\n}\n"
 			writeFiles(t, dir, "chore: pin the registry development dependency", map[string]string{"packages/web/package.json": content})
-			f := newFake()
+			f := newPRFake(remote)
 			var out bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 				t.Fatal(err)
@@ -489,7 +489,7 @@ components:
 			if err != nil {
 				t.Fatal(err)
 			}
-			f := newFake()
+			f := newPRFake(origin)
 			var out bytes.Buffer
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 				t.Fatal(err)

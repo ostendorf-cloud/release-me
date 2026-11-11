@@ -109,6 +109,7 @@ func TestChangelogOptionsLeavesTheConfiguredHiddenTypesUntouched(t *testing.T) {
 func prChangelog(t *testing.T, f *forgetest.Fake, configYAML string, build func(t *testing.T, dir string)) (section, body string) {
 	t.Helper()
 	dir, origin := newPRRepo(t)
+	f.GitDir = origin
 	writeConfig(t, dir, configYAML)
 	commitEntry(t, dir, "chore: initial commit")
 	tagRepo(t, dir)

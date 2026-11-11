@@ -64,7 +64,7 @@ func TestDoPRLinksTheChangelogHeadingToTheCompareViewFromTheLastStableTag(t *tes
 			}
 			commitEntry(t, dir, "feat: add the compare link")
 
-			f := newFake()
+			f := newPRFake(origin)
 			if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, io.Discard); err != nil {
 				t.Fatalf("doPR() error = %v", err)
 			}
@@ -100,7 +100,7 @@ func TestDoPRLinksAComponentsHeadingBetweenItsOwnPrefixedTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() error = %v", err)
 	}
@@ -145,7 +145,7 @@ func TestDoPRLinksAPreReleaseHeadingFromWhereItsEntriesStart(t *testing.T) {
 			}
 
 			cfg := config.Default()
-			f := newFake()
+			f := newPRFake(origin)
 			if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 				t.Fatalf("doPR() create error = %v", err)
 			}
@@ -190,7 +190,7 @@ func TestDoPRLinksEachLockedComponentsOwnChangelog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	f := newFake()
+	f := newPRFake(origin)
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() error = %v", err)
 	}
@@ -218,7 +218,7 @@ func TestDoPRPushesTheCompareLinkOntoABranchWrittenWithoutIt(t *testing.T) {
 	commitEntry(t, dir, "feat: add the compare link")
 
 	cfg := config.Default()
-	f := newFake()
+	f := newPRFake(origin)
 	if err := doPR(t.Context(), dir, cfg, "", unlinkedForge{f}, discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() without the link error = %v", err)
 	}
@@ -293,7 +293,7 @@ func TestDoPRSettlesWhenTheHeadingItWritesDoesNotReadBack(t *testing.T) {
 	commitEntry(t, dir, "feat: add the compare link")
 
 	cfg := config.Default()
-	f := newFake()
+	f := newPRFake(origin)
 	t.Setenv("GIT_AUTHOR_DATE", "2026-01-01T00:00:00+00:00")
 	t.Setenv("GIT_COMMITTER_DATE", "2026-01-01T00:00:00+00:00")
 	if err := doPR(t.Context(), dir, cfg, "", parenForge{f}, discardLogger(), false, io.Discard); err != nil {
@@ -339,7 +339,7 @@ func TestDoPRRewritesAReleasePleaseHeadingOnceAndThenSettles(t *testing.T) {
 	commitEntry(t, dir, "feat: add the compare link")
 
 	cfg := config.Default()
-	f := newFake()
+	f := newPRFake(origin)
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
 	}

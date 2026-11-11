@@ -255,7 +255,7 @@ func doPRShared(
 	for _, m := range members {
 		names = append(names, m.comp.Name)
 	}
-	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, sharedWho, names, existing, plan, date, title, body, dryRun, stdout)
+	return publishSharedPR(ctx, cfg, f, owner, repoName, base, branch, sharedWho, names, existing, plan, date, title, body, logger, dryRun, stdout)
 }
 
 // checkSharedTitleLength refuses a shared release pull request title past

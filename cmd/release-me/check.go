@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -46,9 +47,6 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	}
 	token := os.Getenv(tokenEnv)
 	logger.Debug("read token", "env", tokenEnv, "set", token != "")
-	if cfgErr == nil {
-		logger.Debug("resolved author", "name", resolvedAuthorName(cfg), "email", resolvedAuthorEmail(cfg))
-	}
 
 	var f forge.Forge
 	owner, repoName := "", ""
@@ -70,6 +68,7 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	var componentErr error
 	if cfgErr == nil {
 		_, componentErr = resolveComponents(cfg, component)
+		warnIgnoredAuthor(cfg, logger)
 	}
 
 	missing := doCheck(ctx, cfg, cfgErr, componentErr, tokenEnv, token, owner, repoName, f)
@@ -81,6 +80,22 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, "ok")
 	return 0
+}
+
+// warnIgnoredAuthor logs a warning for every key of the "author" block
+// release-me.yaml sets. pr no longer applies it: the release commit is
+// created through the forge under the token's own identity, the only way
+// GitHub signs it. The key still loads, since Load rejects unknown keys
+// and an existing configuration must keep working, so this warning is
+// the one signal a repository gets that its configured identity is gone,
+// from check and from pr, the command that stopped applying it. A
+// repository whose workflow never runs check hears it from pr. A warning,
+// never a missing item: both still succeed.
+func warnIgnoredAuthor(cfg config.Config, logger *slog.Logger) {
+	for _, key := range cfg.Author.Set {
+		logger.Warn(key+" is ignored: pr creates the release commit through the forge under the token's own identity",
+			"key", key)
+	}
 }
 
 // doCheck validates config, the --component name, the configured labels

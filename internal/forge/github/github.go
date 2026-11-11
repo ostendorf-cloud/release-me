@@ -7,6 +7,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -202,6 +203,86 @@ func (f *Forge) MoveTag(ctx context.Context, owner, repo, tag, sha string) error
 		return fmt.Errorf("github: move tag %s: %w", tag, err)
 	}
 	return nil
+}
+
+// CommitBranch implements forge.Forge through the Git Data REST API: a
+// blob per file, a tree on top of the parent's and a commit with that
+// one parent. No reference moves. The commit is sent without author or
+// committer, so GitHub fills both from the token. GitHub signs it only
+// when neither is set and the token is a GitHub App installation token,
+// secrets.GITHUB_TOKEN included; for a personal access token or an
+// OAuth token the commit stays unsigned, which CommitSignature reports.
+//
+// GraphQL's createCommitOnBranch is documented to sign its commits "if
+// supported", without saying which credentials that covers, but it only
+// appends to a branch's current tip: it cannot rebuild a release branch
+// from the default branch's tip, which every push to an existing release
+// branch does.
+// Resetting the branch to the default branch's tip first and appending
+// after is no way around that: for a moment the open release pull
+// request's head is a commit its base already contains, which GitHub may
+// take as the pull request merged or close it. The command layer publishes
+// the returned commit with a Git transport lease; the API never moves a ref.
+func (f *Forge) CommitBranch(ctx context.Context, owner, repo string, c forge.BranchCommit) (string, error) {
+	parent, _, err := f.client.Git.GetCommit(ctx, owner, repo, c.Parent)
+	if err != nil {
+		return "", fmt.Errorf("github: branch %s: read parent commit %s: %w", c.Branch, c.Parent, err)
+	}
+
+	entries := make([]*gogithub.TreeEntry, 0, len(c.Files))
+	for _, file := range c.Files {
+		blob, _, err := f.client.Git.CreateBlob(ctx, owner, repo, gogithub.Blob{
+			Content:  base64.StdEncoding.EncodeToString(file.Content),
+			Encoding: new("base64"),
+		})
+		if err != nil {
+			return "", fmt.Errorf("github: branch %s: create blob for %s: %w", c.Branch, file.Path, err)
+		}
+		mode := "100644"
+		if file.Executable {
+			mode = "100755"
+		}
+		entries = append(entries, &gogithub.TreeEntry{
+			Path: new(file.Path),
+			Mode: new(mode),
+			Type: new("blob"),
+			SHA:  blob.SHA,
+		})
+	}
+
+	// A commit changing no file, a release with skip-changelog and no
+	// version file, stays on the parent's tree: there is nothing to build.
+	treeSHA := parent.GetTree().GetSHA()
+	if len(entries) > 0 {
+		tree, _, err := f.client.Git.CreateTree(ctx, owner, repo, treeSHA, entries)
+		if err != nil {
+			return "", fmt.Errorf("github: branch %s: create tree: %w", c.Branch, err)
+		}
+		treeSHA = tree.GetSHA()
+	}
+
+	commit, _, err := f.client.Git.CreateCommit(ctx, owner, repo, gogithub.Commit{
+		Message: new(c.Message),
+		Tree:    &gogithub.Tree{SHA: new(treeSHA)},
+		Parents: []*gogithub.Commit{{SHA: new(c.Parent)}},
+	}, nil)
+	if err != nil {
+		return "", fmt.Errorf("github: branch %s: create commit: %w", c.Branch, err)
+	}
+
+	return commit.GetSHA(), nil
+}
+
+// CommitSignature implements forge.Forge through the commits REST API,
+// "GET /repos/{owner}/{repo}/commits/{sha}", whose commit.verification
+// carries GitHub's verdict on the commit's signature.
+func (f *Forge) CommitSignature(ctx context.Context, owner, repo, sha string) (forge.Signature, error) {
+	commit, _, err := f.client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
+	if err != nil {
+		return forge.Signature{}, fmt.Errorf("github: read signature of commit %s: %w", sha, err)
+	}
+	v := commit.GetCommit().GetVerification()
+	return forge.Signature{Verified: v.GetVerified(), Reason: v.GetReason()}, nil
 }
 
 // CreateRelease implements forge.Forge. draft is the caller's own choice,

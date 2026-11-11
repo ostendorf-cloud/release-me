@@ -34,21 +34,20 @@ inputs:
     default: ""
   author-name:
     description: >-
-      Git author and committer name for the release commit. Wins over app-slug. Defaults to
-      the tool's own configured or default identity.
+      Ignored, still accepted so an existing workflow keeps working. The release commit is
+      created through the GitHub API under the token's own identity.
     required: false
     default: ""
   author-email:
     description: >-
-      Git author and committer email for the release commit. Wins over app-slug. Defaults to
-      the tool's own configured or default identity.
+      Ignored, still accepted so an existing workflow keeps working. The release commit is
+      created through the GitHub API under the token's own identity.
     required: false
     default: ""
   app-slug:
     description: >-
-      GitHub App slug whose bot account, "<slug>[bot]", the release commit is attributed to
-      when author-name or author-email is not set. Its id is resolved through the API with
-      download-token.
+      Ignored, still accepted so an existing workflow keeps working. A GitHub App token already
+      makes the app's bot account, "<slug>[bot]", author the release commit.
     required: false
     default: ""
 
@@ -154,15 +153,6 @@ runs:
         OS: ${{ steps.platform.outputs.os }}
         ARCH: ${{ steps.platform.outputs.arch }}
       run: ${{ github.action_path }}/extract.sh
-
-    - name: Resolve the release commit author
-      shell: bash
-      env:
-        INPUT_AUTHOR_NAME: ${{ inputs.author-name }}
-        INPUT_AUTHOR_EMAIL: ${{ inputs.author-email }}
-        INPUT_APP_SLUG: ${{ inputs.app-slug }}
-        GH_TOKEN: ${{ inputs.download-token || github.token }}
-      run: ${{ github.action_path }}/resolve-author.sh
 
     - name: Run release-me
       id: release-me

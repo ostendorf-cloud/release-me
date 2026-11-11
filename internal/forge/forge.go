@@ -28,6 +28,13 @@ var ErrReleaseExists = errors.New("release already exists")
 // has no release at all.
 var ErrReleaseNotFound = errors.New("release not found")
 
+// ErrBranchMoved reports that publishing a release commit was rejected
+// because the branch is somewhere other than the caller expected. The
+// command layer returns it when git refuses the push, a stale
+// "--force-with-lease" or a non-fast-forward, and the branch is left where
+// it is then. No Forge method returns it: CommitBranch moves no reference.
+var ErrBranchMoved = errors.New("branch moved")
+
 // ErrUnauthorized is returned when the forge rejects the request's
 // credentials, as opposed to any other failure.
 var ErrUnauthorized = errors.New("unauthorized")
@@ -60,6 +67,38 @@ type Release struct {
 	Draft     bool
 	HTMLURL   string
 	UploadURL string
+}
+
+// CommitFile is one file a commit made through CommitBranch writes: its
+// path from the repository root, its full new content and whether it is
+// executable. Every path of the parent's tree no CommitFile names stays
+// exactly as it is.
+type CommitFile struct {
+	Path       string
+	Content    []byte
+	Executable bool
+}
+
+// BranchCommit describes the commit to create for Branch, built on
+// Parent's tree. Parent must already exist on the forge. CommitBranch
+// creates objects only; the command layer publishes the returned SHA and
+// holds the lease that guards it.
+type BranchCommit struct {
+	Branch  string
+	Parent  string
+	Message string
+	Files   []CommitFile
+}
+
+// Signature is what the forge reports about one commit's signature.
+// Verified is true only when the forge checked a signature on the commit
+// and accepted it, the condition a ruleset requiring signed commits
+// enforces. Reason is the forge's own word for the outcome, on GitHub
+// "valid" for a verified commit and "unsigned" for one with no signature
+// at all.
+type Signature struct {
+	Verified bool
+	Reason   string
 }
 
 // Forge reads and writes pull request, label, tag and release data on a
@@ -149,6 +188,18 @@ type Forge interface {
 	// release pull request's own comment thread, not a threaded reply to
 	// any one existing comment.
 	CreateComment(ctx context.Context, owner, repo string, number int, body string) error
+
+	// CommitBranch creates c on the forge and returns its SHA without
+	// changing any branch reference. The command layer publishes it.
+	// No author or committer is supplied: GitHub signs API commits for
+	// App installation tokens using the token's identity. User tokens
+	// yield unsigned commits, as reported by CommitSignature.
+	CommitBranch(ctx context.Context, owner, repo string, c BranchCommit) (string, error)
+
+	// CommitSignature reports what the forge verified about the
+	// signature of the commit sha, for a caller to tell a signed commit
+	// CommitBranch created from an unsigned one.
+	CommitSignature(ctx context.Context, owner, repo, sha string) (Signature, error)
 
 	// CompareURL returns the web address of the forge's compare view
 	// between the refs base and head, the tag a release is computed from

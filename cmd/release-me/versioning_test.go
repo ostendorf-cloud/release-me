@@ -126,7 +126,7 @@ func TestServicePackRefusesAPreReleaseLabelOnItsReleasePullRequest(t *testing.T)
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var out bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
@@ -178,7 +178,7 @@ func TestLockedFamilyReleasesAnUnchangedComponentAnyway(t *testing.T) {
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -244,7 +244,7 @@ func TestLockedFamilyBuildsAPreReleaseFromTheWholeFamilysTags(t *testing.T) {
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() create error = %v", err)
@@ -308,7 +308,7 @@ func TestLockedFamilyAppliesAVersionOverride(t *testing.T) {
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -369,7 +369,7 @@ func TestLockedFamilyIgnoresAVersionOverrideNotGreaterThanTheLastTag(t *testing.
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(origin)
 	var first bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &first); err != nil {
 		t.Fatalf("doPR() first run error = %v", err)
@@ -422,7 +422,7 @@ func TestLockedFamilyDoesNotDuplicateTheReleasePullRequestOnTheMergeThatReleases
 		t.Fatalf("config.Load() error = %v", err)
 	}
 
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)
@@ -484,7 +484,7 @@ func TestDoPRIndependentLeavesAnUnchangedComponentUntouched(t *testing.T) {
 		t.Fatalf("Versioning = %q, want the independent default", cfg.Versioning)
 	}
 
-	f := newFake()
+	f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 	var stdout bytes.Buffer
 	if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
 		t.Fatalf("doPR() error = %v", err)

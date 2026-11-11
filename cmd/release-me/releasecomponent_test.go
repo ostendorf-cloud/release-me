@@ -473,7 +473,7 @@ func TestLinkedSharedFirstChangelogStaysWithinTheComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config.Load() error = %v", err)
 	}
-	if err := doPR(t.Context(), dir, cfg, "", newFake(), discardLogger(), false, io.Discard); err != nil {
+	if err := doPR(t.Context(), dir, cfg, "", newPRFake(origin), discardLogger(), false, io.Discard); err != nil {
 		t.Fatalf("doPR() error = %v", err)
 	}
 

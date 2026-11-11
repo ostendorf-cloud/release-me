@@ -38,7 +38,7 @@ func TestChangelogDateSurvivesCustomFormatTransitionsUntilContentChanges(t *test
 					dir, remote, cfg := dateTransitionRepo(t, mode)
 					cfg.ReleasePullRequestLayout = layout
 					cfg.ChangelogStyle.DateFormat = "%B %e, %Y"
-					f := newFake()
+					f := newPRFake(remote)
 					var out bytes.Buffer
 					if err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
 						t.Fatal(err)
