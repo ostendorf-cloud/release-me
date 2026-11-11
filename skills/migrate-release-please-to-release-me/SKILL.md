@@ -13,8 +13,11 @@ A **lossless** switch: after it, release-me continues every component from the t
 release-please last cut, writes into the changelog release-please wrote, and nothing that
 consumed release-please's results is left waiting for a signal that never comes.
 `release-me migrate release-please` does the translation; this skill owns everything around it.
-The [release-me README](https://github.com/ostendorf-cloud/release-me#readme) at the pinned
-release is the single source of truth for every key and action input.
+Read the references at the pinned release, never `main`, and take them over the README, which
+only summarises them:
+`https://github.com/ostendorf-cloud/release-me/blob/v<version>/docs/configuration.md` for every
+`release-me.yaml` key, `.../docs/action.md` for every action input and output, and
+`.../docs/commands.md#migrate` for what `migrate` translates, sets regardless and leaves out.
 
 ## When to use
 
@@ -136,8 +139,9 @@ confirmation:
 
 - **Configuration:** the settled translation copied from the temporary directory to
   `release-me.yaml` at the repository root.
-- **Workflow:** replace the release-please step with `ostendorf-cloud/release-me/action` as the
-  README's action section shows it: `push` to the default branch plus `pull_request` with types
+- **Workflow:** replace the release-please step with `ostendorf-cloud/release-me/action` as
+  `docs/action.md`'s "Triggering the workflow" section shows it: `push` to the default branch
+  plus `pull_request` with types
   `labeled` and `unlabeled`, a job guard listing exactly the pending, tagged and pre-release
   labels in `release-me.yaml`, `labels.extra` left out, a
   checkout of the base branch with `fetch-depth: 0`, the action pinned to the release's commit
