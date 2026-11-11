@@ -5,6 +5,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -104,6 +106,44 @@ func TestRunMigrateRejectsAnExtraFilesPathThatEscapesTheRepositoryRoot(t *testin
 	}
 	if strings.Contains(stdout.String(), "outside.txt") {
 		t.Fatalf("stdout = %s, want the escaping path left out of files", stdout.String())
+	}
+}
+
+// TestRunMigrateRejectsAnExtraFilesSymlinkOutOfTheRepositoryRoot covers the
+// escape a lexical path check cannot see: the extra-files entry names a path
+// inside the repository, but that path is a committed symlink whose target
+// lies outside it. Reading it would turn migrate into a probe for files the
+// repository does not contain, so the entry is left out of files with a
+// warning, the same as a literal "..".
+func TestRunMigrateRejectsAnExtraFilesSymlinkOutOfTheRepositoryRoot(t *testing.T) {
+	dir := newRepo(t)
+	outside := filepath.Join(dir, "..", "outside-secret.toml")
+	if err := os.WriteFile(outside, []byte("version = \"9.9.9\" # x-release-please-version\n"), 0o644); err != nil {
+		t.Fatalf("write the file outside the repository: %v", err)
+	}
+	if err := os.Symlink("../outside-secret.toml", filepath.Join(dir, "escape.toml")); err != nil {
+		t.Fatalf("link escape.toml: %v", err)
+	}
+	writeFiles(t, dir, "chore: configure release-please", map[string]string{
+		"release-please-config.json": `{"packages": {
+		  ".": {"extra-files": ["escape.toml"]}}}`,
+		".release-please-manifest.json": `{".": "1.0.0"}`,
+		"package.json":                  `{"name": "@acme/api", "version": "1.0.0"}`,
+	})
+	runGit(t, dir, "tag", "v1.0.0")
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"migrate", "release-please"}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+	want := "extra-files path \"escape.toml\" does not open inside the repository root"
+	if !strings.Contains(stderr.String(), want) {
+		t.Fatalf("stderr = %q, want it to contain %q", stderr.String(), want)
+	}
+	if strings.Contains(stdout.String(), "escape.toml") {
+		t.Fatalf("stdout = %s, want the symlinked path left out of files", stdout.String())
 	}
 }
 

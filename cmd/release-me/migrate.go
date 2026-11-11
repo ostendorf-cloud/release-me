@@ -72,14 +72,25 @@ func runMigrate(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	// An extra-files entry comes out of release-please-config.json, so it
+	// names a path the repository controls, not one release-me chose. The
+	// lexical check rejects a literal "..": it names the offending entry in
+	// the warning, which the generic open error cannot. os.OpenInRoot then
+	// resolves the entry with every path element and every symlink checked
+	// against dir, so a symlink committed inside the repository and pointing
+	// out of it is refused too. filepath.Rel alone would follow that symlink,
+	// since it only compares path text.
 	readFile := func(path string) ([]byte, error) {
-		full := filepath.Join(dir, filepath.FromSlash(path))
-		rel, err := filepath.Rel(dir, full)
+		rel, err := filepath.Rel(dir, filepath.Join(dir, filepath.FromSlash(path)))
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return nil, fmt.Errorf("release-me: migrate: extra-files path %q escapes the repository root", path)
 		}
-		//nolint:gosec // full is confined to dir by the escape check above, path comes from release-please-config.json's own extra-files entries
-		return os.ReadFile(full)
+		f, err := os.OpenInRoot(dir, rel)
+		if err != nil {
+			return nil, fmt.Errorf("release-me: migrate: extra-files path %q does not open inside the repository root: %w", path, err)
+		}
+		defer func() { _ = f.Close() }()
+		return io.ReadAll(f)
 	}
 	result, err := migrate.FromReleasePlease(configJSON, manifestJSON, readFile)
 	if err != nil {
