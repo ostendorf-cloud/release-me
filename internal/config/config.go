@@ -1,20 +1,9 @@
 // Copyright 2026 Simon Ostendorf
 // SPDX-License-Identifier: Apache-2.0
 
-// Package config loads release-me.yaml: initial-version, release-as,
-// versioning-strategy, bump-minor-pre-major, bump-patch-for-minor-pre-major,
-// changelog-path, changelog-source, changelog-type, skip-changelog,
-// hidden-types, fallback-type, changelog-sections, changelog-sentence-case,
-// changelog-authors, changelog-commit-links, changelog-issue-references,
-// changelog-host, changelog-date-format, files, release-pull-request,
-// release-pull-request-layout, release-pull-request-guide,
-// release-pull-request-title, release-pull-request-shared-title,
-// release-pull-request-draft, release-pull-request-header,
-// release-pull-request-footer, author, signoff, major-tag,
-// include-v-in-release-name, skip-github-release, github-release-draft,
-// github-release-draft-until-assets-attach, force-tag-creation,
-// delete-release-branch, labels, comment-mention, versioning, components,
-// exclude-paths, workspaces, always-link-local and token-env.
+// Package config loads release-me.yaml. The Config struct below is the list
+// of keys it accepts, in the canonical order AGENTS.md records; each key's
+// behaviour is documented in docs/configuration.md.
 package config
 
 import (

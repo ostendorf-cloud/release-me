@@ -9,10 +9,12 @@ description: >-
 # setup-release-me
 
 Give a repository a working **release-me** setup: one `release-me.yaml`, the labels it names,
-handed to the human to create, one release workflow, and a dry run proving the three agree. The
-[release-me README](https://github.com/ostendorf-cloud/release-me#readme) at the pinned
-release is the single source of truth for every key and action input; this skill decides which
-of them the repository needs.
+handed to the human to create, one release workflow, and a dry run proving the three agree.
+Read the references at the pinned release, never `main`, and take them over the README, which
+only summarises them:
+`https://github.com/ostendorf-cloud/release-me/blob/v<version>/docs/configuration.md` for every
+`release-me.yaml` key and `.../docs/action.md` for every action input and output. This skill
+decides which of them the repository needs.
 
 ## When to use
 
@@ -115,7 +117,8 @@ write after confirmation:
 - The labels: every one `release-me.yaml` names, compared against
   `gh api repos/{owner}/{repo}/labels --paginate --jq '.[].name'`. Each missing one is listed
   for the human to create; labels are repository settings, and the skill creates none.
-- `.github/workflows/release.yaml` from the README's action section: `push` to the default
+- `.github/workflows/release.yaml` from `docs/action.md`'s "Triggering the workflow" section:
+  `push` to the default
   branch plus `pull_request` with types `labeled` and `unlabeled`, the job guard listing
   exactly the configured pending, tagged and pre-release label names, a checkout of the base
   branch with `fetch-depth: 0`, and `ostendorf-cloud/release-me/action` pinned to the

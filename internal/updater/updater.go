@@ -165,16 +165,19 @@ func UpdateHelm(content, version string) (string, error) {
 }
 
 // goAssignment matches a line declaring key as a string constant or
-// variable: "const key = \"...\"", "var key = \"...\"" or "key Type =
-// \"...\"", with an optional type between the name and "=".
+// variable: "const key = \"...\"" or "var key = \"...\"", with an optional
+// type between the name and "=". The keyword has to sit on the same line as
+// the identifier, so an identifier inside a grouped "const (" block is not
+// matched.
 func goAssignment(key string) *regexp.Regexp {
 	return regexp.MustCompile(`^(\s*(?:const|var)\s+` + regexp.QuoteMeta(key) + `\s+(?:[A-Za-z_][\w.]*\s+)?=\s*)"([^"]*)"(.*)$`)
 }
 
 // UpdateGo replaces the string literal assigned to the constant or variable
 // named key with version, keeping everything else - the rest of the line
-// included - unchanged. An error is returned when no such declaration is
-// found.
+// included - unchanged. Only the first such declaration is replaced. An
+// error is returned when no such declaration is found, a grouped
+// "const (" block's entry among them, see goAssignment.
 func UpdateGo(content, key, version string) (string, error) {
 	pattern := goAssignment(key)
 	lines := strings.Split(content, "\n")

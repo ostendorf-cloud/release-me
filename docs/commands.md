@@ -3,6 +3,59 @@
 Full reference for every `release-me` command beyond the one-line descriptions in the
 [README](../README.md#use).
 
+## next
+
+Prints the next version and the bump reason of every component with something to release, one
+line each, `0.2.0 (feat)`. It writes nothing, neither to the repository nor to the forge, so it
+has no `--dry-run`; `--verbose` logs each component's last tag, its entry count and the
+[changelog source](changelog-modes.md) the entries were read in.
+
+The reason names what decided the version: `breaking change`, `feat`, `fix`, `perf` or
+`revert` for the computed bump, with `, minor below 1.0.0` or `, patch below 1.0.0` appended
+where [`bump-minor-pre-major`](configuration.md#bump-minor-pre-major) or
+[`bump-patch-for-minor-pre-major`](configuration.md#bump-patch-for-minor-pre-major) changed it,
+`, <strategy>` where a [`versioning-strategy`](configuration.md#versioning-strategy) replaced
+it, `dependency <name> <part> update` under `dependency-manifest`, `initial version` for a
+component with no tag yet, and `release-as key` or `Release-As footer` for a
+[forced version](overrides.md#forced-version-precedence).
+
+- A component with nothing to release prints nothing. A run where no component releases prints
+  nothing at all and still exits 0.
+- `--component <name>` limits the run to one component. Under
+  [`versioning: locked`](versioning-modes.md) it is a usage error, exit code 2: `locked`
+  releases the whole family, so limiting it to one component means nothing. A
+  [shared release pull request](versioning-modes.md#shared-release-pull-request) keeps the
+  flag, unlike `pr`, `release` and `run`.
+- In `locked` and `linked`, the line is the family's version, printed for every component that
+  moves; `locked` moves all of them.
+- Entries come from the history since the component's own last tag, and their text from the
+  merged pull requests behind the merge commits, read through the forge with the token
+  [`token-env`](configuration.md#token-env) names.
+- A [`workspaces`](configuration.md#workspaces) dependent that only releases because its
+  dependency does is not listed: dependents join the release at `pr`.
+- An open release pull request changes nothing here: `pr` reads a
+  [pre-release label](#pre-releases) off that pull request, `next` never does, so `next` prints
+  the version the entries alone give.
+
+## changelog
+
+Prints the rendered changelog section of every component with something to release: the
+version heading `pr` writes, with its compare link, and the entries under it, exactly the text
+that reaches the changelog file, the release pull request body and the GitHub release. It
+writes nothing and has no `--dry-run`.
+
+- A component with nothing to release prints nothing, in `locked` too, where it is still
+  tagged and released.
+- `--component`, the `locked` usage error and the shared-pull-request behaviour are the same as
+  for `next` above.
+- With [`changelog-type: github`](configuration.md#changelog-type) the section is the release
+  notes GitHub generates, so the command calls GitHub for them instead of rendering the
+  entries.
+- `--verbose` logs the same per-component lines `next` does, the changelog source among them,
+  which is how a surprising set of entries is traced back to the mode that read them.
+- Output lines carry the component's name as a prefix only when the run covers more than one
+  component, the same rule every other command follows.
+
 ## pr
 
 Creates or updates one release pull request per component: branch `release-me/<name>` off the
@@ -15,9 +68,12 @@ your working copy. `versioning: locked` and `release-pull-request: shared` open 
 request for every component instead, on branch `release-me/main`: see
 [shared release pull request](versioning-modes.md#shared-release-pull-request).
 
-`pr` checks that the `pending`, `tagged`, `alpha`, `beta` and `rc` labels exist before it writes
-anything, the same check `check` runs. The labels are shared across every component; the
-default branch is resolved once and shared too.
+`pr` checks that every label `release-me.yaml` configures exists before it writes anything, the
+same check `check` runs: the `pending` and `tagged` labels, every
+[`labels.extra`](configuration.md#labels) one, and the label of every enabled pre-release type,
+`release: alpha`, `release: beta` and `release: rc` by default, a type turned off expecting
+none. The labels are shared across every component; the default branch is resolved once and
+shared too.
 
 The changelog heading, the same one `changelog` prints, links the version to the forge's compare
 view, between the tag the release's entries are collected since and the tag it will get:
@@ -214,10 +270,12 @@ updating every release pull request and releasing whatever merged since the last
 
 ## check
 
-Validates `release-me.yaml`, including an unknown `--component` name, that the `pending`,
-`tagged`, `alpha`, `beta` and `rc` labels exist on the repository, and that the token
-environment variable is both set and accepted by the forge: a rejected token is reported as
-such, not as a missing label, since the symptom from the forge is the same 401 either way.
+Validates `release-me.yaml`, including an unknown `--component` name, that every configured
+label exists on the repository, the `pending` and `tagged` ones, every
+[`labels.extra`](configuration.md#labels) one and the label of every enabled pre-release type,
+and that the token environment variable is both set and accepted by the forge: a rejected token
+is reported as such, not as a missing label, since the symptom from the forge is the same 401
+either way.
 Prints every missing or invalid item and exits 1 when anything is missing, 0 otherwise.
 
 ## comment
@@ -232,7 +290,8 @@ pull request number, author association and body, not something a human runs dir
 `migrate release-please` reads `release-please-config.json` and `.release-please-manifest.json`
 from the repository root and prints the equivalent `release-me.yaml` on stdout, so it can be
 reviewed before it is written: `release-me migrate release-please > release-me.yaml`. It writes
-nothing itself.
+nothing itself. This section is the whole translation contract: what carries over, what is set
+regardless and what is left out.
 
 Each release-please package becomes a component named after its `component`, else its
 `package-name` with a node scope removed, else the name in its `package.json`. A character a
@@ -246,6 +305,22 @@ only the files outside the other components' paths, where release-please's root 
 counted every commit. It also carries over:
 
 - `bump-minor-pre-major`, `bump-patch-for-minor-pre-major` and `initial-version`;
+- `changelog-type`, at the top level when every package carries the same value, on the
+  component otherwise;
+- `skip-changelog`, at the top level when every package carries the same value, on the
+  component otherwise;
+- `changelog-sections`, release-please's own list shape, at the top level when every package
+  carries the same list, on the component otherwise;
+- `changelog-host`, only when every package names the same one and release-me accepts the
+  address; packages naming different hosts, or an address release-me refuses, are warned about
+  and the key is left out, since release-me links every component on one host;
+- `include-commit-authors` as [`changelog-authors`](configuration.md#changelog-authors), only
+  when every package sets it: release-me credits authors for every component or for none, so a
+  value only some packages carry is warned about and left out;
+- the `sentence-case` plugin as
+  [`changelog-sentence-case`](configuration.md#changelog-sentence-case), its `specialWords`
+  option warned about, since release-me keeps `gRPC`, `npm` and any first word already holding
+  an upper case letter as written;
 - `versioning` as `versioning-strategy`, by name, for `always-bump-patch`, `always-bump-minor`,
   `always-bump-major`, `service-pack` and `dependency-manifest`, the last two warned about since
   their release-me form differs from release-please's Java one;
@@ -332,8 +407,26 @@ counted every commit. It also carries over:
   [`release-pull-request-header`](configuration.md#release-pull-request-header) and
   [`release-pull-request-footer`](configuration.md#release-pull-request-footer).
 
-`changelog-source` is set to `all`, because release-please reads every commit since the last
-release, not the first parent history.
+Three keys are set whatever the release-please configuration says, so the translated changelog
+reads the way release-please's did:
+
+- `changelog-source: all`, because release-please reads every commit since the last release,
+  not the first parent history. It is the one setting the translation changes without being
+  asked and without a warning, and it decides what every entry looks like: a repository that
+  merges with merge commits usually wants `first-parent` instead, one entry per pull request.
+  See [changelog modes](changelog-modes.md) and decide it deliberately after the migration.
+- `changelog-commit-links: true` and `changelog-issue-references: true`, the two links
+  release-please's default changelog carries and release-me's does not unless asked.
+
+Two keys are deliberately left out:
+
+- `release-pull-request-guide`, so a migrated repository's release pull request bodies open
+  with the collapsed "How this release works" guide release-please never rendered. Set it to
+  `false` to get the body without it.
+- release-please's `date-format`, which formats the date its generic updater writes into a
+  file, not the changelog's date release-me's
+  [`changelog-date-format`](configuration.md#changelog-date-format) sets; it is reported as a
+  warning saying so.
 
 Every setting it cannot carry over is printed on stderr as a `warning:` line, each naming the
 key and what to do instead, as are the differences a reader should know about. It then looks
@@ -345,3 +438,12 @@ overlap, is
 printed on stderr after the warnings and the reason, to correct by hand.
 Exits 0 with warnings, 1 when the files cannot be read or translated or the translation does not
 load.
+
+## version
+
+Prints the version of release-me itself on stdout, one line, and exits 0. It is the only
+command that reads neither `release-me.yaml` nor the repository, so it works outside a git
+checkout and without a token, and it takes no flags, `--verbose` included. The value is set at
+build time from the release tag, without the leading `v`; a binary built straight from source,
+`go build` or
+`task run -- version`, prints `dev`.

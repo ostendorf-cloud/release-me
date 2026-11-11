@@ -3,11 +3,17 @@
 Full reference for every `release-me.yaml` key. See the [README](../README.md#configuration)
 for the quick table and example.
 
-## `initial-version`
+The keys are grouped the way the configuration surface itself is ordered, version rules first
+and the environment last, the one canonical order `AGENTS.md` records for the `Config` struct
+and these headings alike.
+
+## Version rules
+
+### `initial-version`
 
 The version when no tag exists yet, default `0.1.0`.
 
-## `release-as`
+### `release-as`
 
 Forces the next version, default none:
 
@@ -35,10 +41,10 @@ At the top level, the key forces every component, each one checked against its o
 That is how release-please applies a top-level `release-as` to every package. In `linked` it
 releases every component at the forced version, changed or not, the same as `locked` always
 does. In `independent`, a component's own `release-as` key replaces the top-level one for that
-component only. `linked` and `locked` refuse a component's own key, since the family shares one
-version.
+component only. `linked` and `locked` refuse a component's own key, since the
+[family](versioning-modes.md), every component `release-me.yaml` lists, shares one version.
 
-## `versioning-strategy`
+### `versioning-strategy`
 
 How a release bumps the version, default `default`:
 
@@ -67,7 +73,7 @@ strategy and takes a plain patch instead, since it has no changes of its own to 
 The key is release-please's `versioning`, renamed because release-me's own
 [`versioning`](#versioning) already names how a family's versions relate. release-please's
 `service-pack` and `dependency-manifest` are Java specific; release-me carries over what each
-means for any repository:
+means for any repository, as [ADR 0002](adr/0002-versioning-strategy.md) records:
 
 - `service-pack` ships a maintenance release of the last version without moving it:
   `1.2.3-sp.1`, then `1.2.3-sp.2`, `N` counting up from the last `sp` tag of `1.2.3`, the
@@ -90,13 +96,13 @@ means for any repository:
   dependency, `2.0.0 (dependency react major update)`. The changelog entry keeps its own
   type, so a hidden `chore` stays hidden.
 
-## `bump-minor-pre-major`
+### `bump-minor-pre-major`
 
 Turns a major bump into a minor one below `1.0.0`, default `false`. A component overrides it
 through its own `bump-minor-pre-major` key; a `locked` or `linked` family computes its one
 shared version with the top-level value.
 
-## `bump-patch-for-minor-pre-major`
+### `bump-patch-for-minor-pre-major`
 
 Turns a minor bump, a `feat`, into a patch one below `1.0.0`, default `false`, so `0.4.1` with a
 `feat` releases `0.4.2` instead of `0.5.0`. A breaking change is not affected: it still bumps
@@ -106,18 +112,20 @@ A component overrides it through its own `bump-patch-for-minor-pre-major` key; a
 `linked` family computes its one shared version with the top-level value. `next` names the
 rule in its reason, `0.4.2 (feat, patch below 1.0.0)`.
 
-## `changelog-path`
+## Changelog
+
+### `changelog-path`
 
 The changelog file path, default `CHANGELOG.md`, release-please's own `changelog-path` key.
 `pr` prepends the new version's section to it, creating the file when it does not exist yet.
 
-## `changelog-source`
+### `changelog-source`
 
 Which commits become changelog entries, default `first-parent`. See
 [changelog modes](changelog-modes.md) for `first-parent`, `squash`, `all` and `nested`. A
 component overrides it through its own `changelog-source` key.
 
-## `changelog-type`
+### `changelog-type`
 
 Where the changelog section comes from, release-please's `changelog-type`: `default`, the
 entries `changelog-source` reads, or `github`, the release notes GitHub generates for the release,
@@ -151,7 +159,7 @@ A component overrides it through its own `changelog-type` key, so a shared relea
 can carry GitHub's notes for one component and entries for another. Any other value is a
 configuration error.
 
-## `skip-changelog`
+### `skip-changelog`
 
 Leaves the changelog file alone, default `false`, release-please's `skip-changelog`: `pr`
 neither creates nor prepends to it, for a repository that keeps its changelog elsewhere, or by
@@ -161,19 +169,19 @@ release branch carries an empty release commit, so the release pull request stil
 merge. A component overrides it through its own `skip-changelog` key, so one component of a
 shared release pull request can skip its changelog while the others keep theirs.
 
-## `hidden-types`
+### `hidden-types`
 
 Hides entries of these types from the changelog, default `chore`, `docs`, `ci`, `style`,
 `refactor`, `test`, `build`, `other`. Without [`changelog-sections`](#changelog-sections), only
 `feat`, `fix`, `perf`, `revert` and a breaking change ever render a section; a type outside
 those five never renders, hidden or not.
 
-## `fallback-type`
+### `fallback-type`
 
 The type assigned to text that does not parse as a conventional commit, default `other`.
 `feat`, `fix`, `perf` and `revert` are refused, unparseable text never bumps the version.
 
-## `changelog-sections`
+### `changelog-sections`
 
 Renames, reorders or adds the sections after `Breaking Changes`, release-please's shape: a list
 of `type`, `section` and an optional `hidden`, default `false`. Left out, the sections are
@@ -208,7 +216,7 @@ Renaming a section changes the next release only: `CHANGELOG.md` keeps every ear
 it was written, and an open release pull request picks the new headings up on the next `pr`
 run.
 
-## `changelog-sentence-case`
+### `changelog-sentence-case`
 
 Upper cases the first letter of every entry's description, default `false`, the counterpart of
 release-please's `sentence-case` plugin: `feat(cli): add the widget` renders as
@@ -217,7 +225,7 @@ word that already holds an upper case letter, such as `iOS` or `gRPC`, stays as 
 do `npm` and a description starting with a backtick or a digit. The pull request title or
 commit stays as it is; only the rendered line changes. There is no per-component override.
 
-## `changelog-authors`
+### `changelog-authors`
 
 Credits each entry's author after its description, default `false`, the counterpart of
 release-please's `include-commit-authors`:
@@ -236,7 +244,7 @@ parent line already credits the pull request. An `@<login>` mentions that accoun
 renders the text, in the release pull request body and the release, which notifies it the way
 release-please's mention does. There is no per-component override.
 
-## `changelog-commit-links`
+### `changelog-commit-links`
 
 Links each entry's commit after the pull request link, default `false`, the shape
 release-please renders:
@@ -250,7 +258,7 @@ The commit is the one the entry comes from: the merge commit for a pull request 
 [override block](overrides.md#override-block) links the oldest commit of its pull request. A
 `nested` sub item links its own commit. There is no per-component override.
 
-## `changelog-issue-references`
+### `changelog-issue-references`
 
 Links the issues an entry closes, default `false`, after every other link:
 
@@ -266,10 +274,7 @@ release-please renders it, not `closes`. The release pull request body carries t
 and a closing keyword there would close the issue again when that pull request merges. There is
 no per-component override.
 
-`release-me migrate` turns both keys on, since release-please's default changelog carries both
-links.
-
-## `changelog-host`
+### `changelog-host`
 
 The web address every changelog link points at, release-please's `changelog-host`, default
 none: the forge's own. Set it when the changelog should link a host other than the one
@@ -288,7 +293,7 @@ fragment or credentials; a trailing `/` is dropped. Whitespace and parentheses a
 they break the markdown link the heading's compare link is read back from. There is no
 per-component override.
 
-## `changelog-date-format`
+### `changelog-date-format`
 
 The format of the date in each version heading, a strftime expression, default `%Y-%m-%d`:
 
@@ -309,184 +314,189 @@ every earlier heading as it was written, and a release pull request opened befor
 keeps its date, rendered in the new format on the next `pr` run. There is no per-component
 override.
 
-release-please's own `date-format` formats the date its generic updater writes into a file, not
-the changelog's, so `release-me migrate` leaves it out with a warning saying so.
-
 Custom-formatted pull request bodies record the canonical date in machine metadata outside
 the rendered body. Changing to another custom format, or back to the default, keeps that
 date until release content changes. Older bodies fall back to the current format and ISO.
 
-## `files`
+## Version files
+
+### `files`
 
 Files `pr` bumps to the next version, each a `path`, an optional `updater`, default `marker`,
 and a `key` where the updater needs one. Every updater keeps the rest of the file byte for
-byte: order, comments, indentation. A file that does not exist, or a `key` not found in it,
-fails `pr`, naming the path and the key.
+byte: order, comments, indentation. A file that does not exist, a file whose shape the updater
+does not match, or a `key` not found in it, fails `pr`, naming the path and the key. Every
+entry is validated when release-me.yaml loads too: an unknown `updater`, a `key` missing where
+the updater requires one, and a `key` given to an updater that takes none are all errors.
 
-- `marker` replaces the version on a line ending in `# release-me: version` or
-  `// release-me: version`, keeping the rest of the line, including the comment, as it is. No
-  `key`:
+Pick an updater by the file in front of you:
 
-  ```go
-  const Version = "0.1.0" // release-me: version
-  ```
+| Updater | `key` | What it bumps |
+| --- | --- | --- |
+| `marker` | none | Every line ending in `# release-me: version` or `// release-me: version`, the rest of the line kept. The default updater. |
+| `generic` | none | Every line and block release-please's `x-release-please-*` markers name, so a file release-please bumped needs no change. |
+| `plain` | none | The whole content of a file holding nothing but the version, a `VERSION` or `version.txt`, where a line has no room for a marker comment. The surrounding whitespace, a trailing newline or none, is kept; an empty file, or one holding anything besides the version, is an error. |
+| `json` | dotted path of object keys | The first string value at that path, `version` or `a.b.version`. A `composer.json`, which release-please's `php` release type bumps, takes `version`. |
+| `yaml` | dotted path of mapping keys | The first scalar at that path. |
+| `toml` | table and key | The first scalar at that path, `package.version` meaning `version` under `[package]`, `tool.poetry.version` under `[tool.poetry]`. |
+| `xml` | dotted path of element names | The text of every element at that path, `project.version` for a `pom.xml`, `Project.PropertyGroup.Version` for a `.csproj`. |
+| `npm-lock` | none | A `package-lock.json`'s or `npm-shrinkwrap.json`'s own version: its top-level `version` and, in lockfile version 2 or 3, the root package's entry `packages[""].version`. Dependencies and workspace packages are left alone. |
+| `cargo-lock` | crate name | That crate's `[[package]]` entry in a `Cargo.lock`. |
+| `gemfile-lock` | gem name | That gem's specs entry, `name (version)`, in a `Gemfile.lock`. |
+| `go` | constant or variable name | The string literal that `const` or `var` declaration assigns. |
+| `helm` | none | A `Chart.yaml`'s top-level `version` field, `version: 0.1.0`. |
+| `python` | none | The first `__version__ = "..."` or `version = 1.2.3` line, the shape of an `__init__.py`, a `version.py`, `setup.py`'s `version="..."` keyword and `setup.cfg`'s bare value alike. A bare value must start with a digit, so `version=get_version()` is never taken for one. A `pyproject.toml` takes `toml`. |
+| `ruby` | none | A `version.rb`'s `VERSION = "..."` constant, a trailing `.freeze` kept. |
+| `elixir` | none | A `mix.exs`'s `@version "..."` attribute, else its `version: "..."` keyword. |
+| `ocaml` | none | An `.opam` or `.opam.locked` file's top-level `version: "..."`, or a `dune-project`'s `(version ...)` stanza. |
+| `r` | none | A `DESCRIPTION` file's `Version:` field, a development suffix such as `.9000` included. |
+| `bazel` | none | The `version` attribute of a `MODULE.bazel`'s `module()` call, never a `bazel_dep()`'s. |
+| `dart` | none | A `pubspec.yaml`'s top-level `version`, its numeric build number counted up by one: `1.4.0+12` becomes `1.5.0+13`, as release-please bumps it. |
+| `sfdx` | none | The `versionNumber` of an `sfdx-project.json`'s default package directory, written as the version followed by `.NEXT`. Other package directories and dependencies are left alone. |
+| `terraform-module` | none | Every `v`-prefixed version of a Terraform module's `versions.tf` or `versions.tf.tmpl`. |
+| `expo` | Expo SDK version | A React Native Expo project's `app.json`: `expo.version`, plus `expo.ios.buildNumber` and `expo.android.versionCode` where the file carries them. |
+| `krm-blueprint` | none | Every `cnrm/<blueprint>/v1.4.0` value of a Kubernetes Resource Model manifest. |
 
-- `generic` reads release-please's version markers, so a file release-please bumped needs no
-  change. A line carrying `x-release-please-version` gets its first full version replaced; one
-  carrying `x-release-please-major`, `-minor` or `-patch` gets its first number replaced by
-  that part of the version. A block opened by `x-release-please-start-version` (or `-major`,
-  `-minor`, `-patch`) bumps every line up to and including the one carrying
-  `x-release-please-end`. The markers sit in any comment, which is how a Markdown file is
-  bumped. No `key`:
+The updaters below carry constraints a row cannot hold; the rest behave exactly as their row
+says.
 
-  ```markdown
-  <!-- x-release-please-start-version -->
-  curl -fsSL https://example.com/notes/1.4.0/install.sh | sh
-  <!-- x-release-please-end -->
-  ```
+#### `marker` and `generic`
 
-  The `date` and `version-date` scopes are an error, since an updater is given the version
-  only, not the release date. So are a file with no marker and a block that is never closed.
-  As in release-please, an inline marker inside a block takes precedence for that line;
-  put the end marker on its own line so it closes the block. An end marker outside a block
-  has no effect. The major scope also matches a number prefixed with `v`,
-  whereas minor and patch require a word boundary before the number.
+`marker` needs nothing but the comment at the end of the line, in a file of any language:
 
-- `helm` replaces a `Chart.yaml`'s top-level `version` field. No `key`:
+```go
+const Version = "0.1.0" // release-me: version
+```
 
-  ```yaml
-  version: 0.1.0
-  ```
+`generic` reads release-please's own markers instead. A line carrying
+`x-release-please-version` gets its first full version replaced; one carrying
+`x-release-please-major`, `-minor` or `-patch` gets its first number replaced by that part of
+the version. A block opened by `x-release-please-start-version` (or `-major`, `-minor`,
+`-patch`) bumps every line up to and including the one carrying `x-release-please-end`. The
+markers sit in any comment, which is how a Markdown file is bumped:
 
-- `go` replaces the string literal assigned to the constant or variable `key` names:
+```markdown
+<!-- x-release-please-start-version -->
+curl -fsSL https://example.com/notes/1.4.0/install.sh | sh
+<!-- x-release-please-end -->
+```
 
-  ```yaml
-  files:
-    - path: internal/version/version.go
-      updater: go
-      key: Version
-  ```
+The `date` and `version-date` scopes are an error, since an updater is given the version only,
+not the release date. So are a file with no marker and a block that is never closed. As in
+release-please, an inline marker inside a block takes precedence for that line; put the end
+marker on its own line so it closes the block. An end marker outside a block has no effect.
+The major scope also matches a number prefixed with `v`, whereas minor and patch require a
+word boundary before the number.
 
-- `json`, `yaml` and `toml` replace the value at `key`, a dotted path of object keys, mapping
-  keys or table-and-key, such as `tool.poetry.version`. A `composer.json`, which release-please's
-  `php` release type bumps, takes `json` with key `version`.
+#### `json`, `yaml` and `toml`
 
-- `npm-lock` bumps a `package-lock.json` or `npm-shrinkwrap.json`: its top-level `version` and,
-  in lockfile version 2 or 3, the root package's entry `packages[""].version`. Dependencies and
-  workspace packages are left alone. No `key`.
+Each one reads the file as lines rather than parsing it, which is what keeps every other byte
+in place, so the layout is part of the contract:
 
-- `cargo-lock` bumps the `[[package]]` entry of the crate `key` names in a `Cargo.lock`. Only an
-  entry without a `source` matches, which is how Cargo records a crate of the workspace itself,
-  so a same-named crate from a registry is never touched. A workspace releasing several crates
-  lists the file once per crate:
+- `json`: every object a path segment but the last names has to open on a line of its own,
+  `"segment": {`, and the leaf has to be a string on a line of its own, `"version": "1.2.3"`.
+  A single-segment key names the top level only, and nesting is tracked through unquoted
+  braces, so a same-named leaf at another depth is never taken for the match.
+- `yaml`: every mapping a path segment but the last names has to be a bare `segment:` line,
+  its block found through indentation, any consistent width. A single-segment key matches at
+  indentation zero only, never a deeper leaf of the same name. The leaf's value may be bare,
+  single or double quoted, and a trailing comment is kept.
+- `toml`: the leading segments name the enclosing table, `a.b.version` meaning key `version`
+  under `[a.b]`, and a key before any table header is addressed by its name alone. The leaf's
+  value may be bare, single or double quoted.
 
-  ```yaml
-  files:
-    - path: Cargo.toml
-      updater: toml
-      key: package.version
-    - path: Cargo.lock
-      updater: cargo-lock
-      key: release-core
-  ```
+#### `go`
 
-- `gemfile-lock` bumps the specs entry `name (version)` of the gem `key` names in a
-  `Gemfile.lock`, indented by four spaces as Bundler lists a resolved gem; a dependency's
-  constraint, indented deeper, is left alone. A pre-release is written the way Bundler records
-  it, `1.2.0-rc.1` as `1.2.0.pre.rc.1`.
+The `const` or `var` keyword has to sit on the same line as the identifier, with an optional
+type between the name and the `=`: `const Version = "0.1.0"`, `var Version = "0.1.0"` and
+`const Version string = "0.1.0"` match. An identifier inside a grouped `const (` block does
+not, and the entry fails `pr` naming the identifier as not found.
 
-- `xml` replaces the text of every element at `key`, a dotted path of element names from the
-  root element down. Names match without their namespace prefix, and the whitespace around the
+```yaml
+files:
+  - path: internal/version/version.go
+    updater: go
+    key: Version
+```
+
+#### `cargo-lock`, `gemfile-lock` and `xml`
+
+- `cargo-lock`: only a `[[package]]` entry without a `source` matches, which is how Cargo
+  records a crate of the workspace itself, so a same-named crate from a registry is never
+  touched. A workspace releasing several crates lists the file once per crate.
+- `gemfile-lock`: the specs entry is indented by four spaces, as Bundler lists a resolved gem;
+  a dependency's constraint, indented deeper, is left alone. A pre-release is written the way
+  Bundler records it, `1.2.0-rc.1` as `1.2.0.pre.rc.1`.
+- `xml`: element names match without their namespace prefix, and the whitespace around the
   text is kept. An element that is empty-tagged, `<version/>`, or holds a child element or a
-  comment is an error. A `pom.xml` and a `.csproj`:
+  comment is an error.
 
-  ```yaml
-  files:
-    - path: pom.xml
-      updater: xml
-      key: project.version
-    - path: src/Acme.Notes/Acme.Notes.csproj
-      updater: xml
-      key: Project.PropertyGroup.Version
-  ```
+```yaml
+files:
+  - path: Cargo.toml
+    updater: toml
+    key: package.version
+  - path: Cargo.lock
+    updater: cargo-lock
+    key: release-core
+  - path: pom.xml
+    updater: xml
+    key: project.version
+```
 
-- `plain` replaces the whole content of a file holding nothing but the version, such as a
-  `version.txt` or a `VERSION` file, where a line has no room for a marker comment. The
-  whitespace around the version, a trailing newline or none, is kept. An empty file, or one
-  holding anything besides the version, is an error. No `key`.
+#### `expo`
 
-- `expo` bumps a React Native Expo project's `app.json`: `expo.version`, which must be there,
-  `expo.ios.buildNumber` and `expo.android.versionCode`, the last two only where the file
-  carries them. The version code is an integer Android requires to grow with every upload, so
-  it is computed rather than copied, the way release-please computes it:
+`expo.version` must be there; `expo.ios.buildNumber` and `expo.android.versionCode` are bumped
+only where the file carries them. The version code is an integer Android requires to grow with
+every upload, so it is computed rather than copied, the way release-please computes it:
 
-  ```text
-  sdk-major * 10000000 + major * 10000 + minor * 100 + patch
-  ```
+```text
+sdk-major * 10000000 + major * 10000 + minor * 100 + patch
+```
 
-  A pre-release suffix does not reach it, so `1.5.0-rc.1` and `1.5.0` give the same code. The
-  `key` is the Expo SDK version, which only the version code needs: release-please reads it
-  from the `expo` dependency of the project's `package.json`, which an updater given one file
-  cannot do. The dependency's own value is accepted, so `54`, `54.0.0` and `~54.0.0` all mean
-  SDK 54. The project's `package.json` version takes a `json` entry of its own:
+A pre-release suffix does not reach it, so `1.5.0-rc.1` and `1.5.0` give the same code. The
+`key` is the Expo SDK version, which only the version code needs: release-please reads it from
+the `expo` dependency of the project's `package.json`, which an updater given one file cannot
+do. The dependency's own value is accepted, so `54`, `54.0.0` and `~54.0.0` all mean SDK 54.
+The project's `package.json` version takes a `json` entry of its own:
 
-  ```yaml
-  files:
-    - path: package.json
-      updater: json
-      key: version
-    - path: app.json
-      updater: expo
-      key: "54"
-  ```
+```yaml
+files:
+  - path: package.json
+    updater: json
+    key: version
+  - path: app.json
+    updater: expo
+    key: "54"
+```
 
-  Under SDK 54, version `1.5.0` gives the version code `540010500`.
+Under SDK 54, version `1.5.0` gives the version code `540010500`.
 
-- One updater per release-please release type whose version file none of the above fits, each
-  named after it and taking no `key`. Each bumps the first match only, except the last two,
-  whose version is part of a longer string the file may carry more than once. A file without a
-  match is an error:
-  - `python`: the first `__version__ = "..."` or `version = ...` line, the shape of an
-    `__init__.py`, a `version.py`, `setup.py`'s `version="..."` keyword and `setup.cfg`'s bare
-    `version = 1.2.3` alike. A bare value must start with a digit, so `version=get_version()`
-    or `version = attr: pkg.__version__` is never taken for one. A `pyproject.toml` takes
-    `toml`.
-  - `ruby`: a `version.rb`'s `VERSION = "..."` constant, a trailing `.freeze` kept.
-  - `elixir`: a `mix.exs`'s `@version "..."` attribute, else its `version: "..."` keyword.
-  - `ocaml`: an `.opam` or `.opam.locked` file's top-level `version: "..."`, or a
-    `dune-project`'s `(version ...)` stanza.
-  - `r`: a `DESCRIPTION` file's `Version:` field, a development suffix such as `.9000`
-    included.
-  - `bazel`: the `version` attribute of a `MODULE.bazel`'s `module()` call, never a
-    `bazel_dep()`'s.
-  - `dart`: a `pubspec.yaml`'s top-level `version`. A numeric build number counts up by one,
-    `1.4.0+12` becoming `1.5.0+13`, as release-please bumps it.
-  - `sfdx`: the `versionNumber` of an `sfdx-project.json`'s default package directory, written
-    as the version followed by `.NEXT`. Other package directories and dependencies are left
-    alone.
-  - `terraform-module`: every `v`-prefixed version of a Terraform module's `versions.tf` or
-    `versions.tf.tmpl`, such as the `blueprints/terraform/terraform-google-notes/v1.4.0` its
-    `provider_meta` block reports as the module name. A constraint carries no `v`, so
-    `required_version = ">= 1.3"` and `version = "~> 5.0"` in the same file are left alone. A
-    module's `metadata.yaml` takes `yaml` with key `version`; the `version = "~> 1.4"` usage
-    example of its README is not rewritten.
-  - `krm-blueprint`: every `cnrm/<blueprint>/v1.4.0` value of a Kubernetes Resource Model
-    manifest, the form of its `cnrm.cloud.google.com/blueprint` annotation. The `cnrm/` anchor
-    is what keeps a pinned kpt function image such as
-    `gcr.io/kpt-fn/set-annotations:v0.1.4` out of it. A manifest carrying no such value is an
-    error, which is how a YAML that is no blueprint is rejected.
+#### `terraform-module` and `krm-blueprint`
 
-Every file entry is validated when release-me.yaml loads: an unknown `updater`, a `key`
-missing where the updater requires one, and a `key` given to an updater that takes none are
-all errors.
+Both bump a version that is part of a longer string rather than a field of its own, which is
+why they replace every match in the file.
 
-## `release-pull-request`
+- `terraform-module`: the module's own version is the last segment of the module name its
+  `provider_meta` block reports, such as
+  `blueprints/terraform/terraform-google-notes/v1.4.0`. A constraint carries no `v`, so
+  `required_version = ">= 1.3"` and `version = "~> 5.0"` in the same file are left alone. A
+  module's `metadata.yaml` takes `yaml` with key `version`; the `version = "~> 1.4"` usage
+  example of its README is not rewritten.
+- `krm-blueprint`: the version is the last segment of the `cnrm.cloud.google.com/blueprint`
+  annotation's value. That `cnrm/` anchor is what keeps a pinned kpt function image such as
+  `gcr.io/kpt-fn/set-annotations:v0.1.4` out of it. A manifest carrying no such value is an
+  error, which is how a YAML that is no blueprint is rejected.
+
+## Pull request
+
+### `release-pull-request`
 
 `per-component`, the default for `independent` and `linked`, or `shared`, always the case for
 `locked`, which rejects `per-component`. See
 [shared release pull request](versioning-modes.md#shared-release-pull-request).
 
-## `release-pull-request-layout`
+### `release-pull-request-layout`
 
 How the changelog in the body of a release pull request carrying several components lays out
 each component, default `headings`. It applies to every such body, the
@@ -550,7 +560,7 @@ block whose summary reads `<name> vX.Y.Z`, at the changelog's top level and clos
 section, an override block's text carried into an entry, never marks `details`; the release
 notes and version override blocks are never read for components.
 
-## `release-pull-request-guide`
+### `release-pull-request-guide`
 
 Every release pull request body, per component, shared or locked, opens with a collapsed
 `<details><summary>How this release works</summary>` guide below its version line. The
@@ -584,9 +594,7 @@ A team that turns the guide off finds everything it says documented here:
 - What a push to the default branch updates and which edits survive it: [pr](commands.md#pr)
   and the [notes block](overrides.md#notes-block).
 
-`migrate` leaves the key out, so a migrated repository keeps the guide.
-
-## `release-pull-request-title`
+### `release-pull-request-title`
 
 The title pattern of every component's own release pull request, default
 `chore(${component}): release v${version}`. Literal text with these placeholders:
@@ -616,7 +624,7 @@ comment, `<!-- release-me-title-pattern: ... -->`, written for any non-default p
 then tries the legacy default shape before the current configured pattern, so an ambiguous
 new setting never reinterprets an older title.
 
-## `release-pull-request-shared-title`
+### `release-pull-request-shared-title`
 
 The title pattern of the release pull request every component shares, with
 [`release-pull-request: shared`](#release-pull-request) or in `locked`. The placeholders depend
@@ -636,7 +644,7 @@ release-pull-request-shared-title: "chore(${branch}): release ${releases}"
 The pattern is checked, parsed back, length checked and read back after a change the same way
 as [`release-pull-request-title`](#release-pull-request-title).
 
-## `release-pull-request-draft`
+### `release-pull-request-draft`
 
 Opens every release pull request as a draft, default `false`:
 
@@ -654,7 +662,7 @@ GitHub offers drafts on public repositories and on private ones with a paid plan
 does not, creating the pull request fails with the forge's error and `pr` reports it, the
 release branch already pushed.
 
-## `release-pull-request-header`
+### `release-pull-request-header`
 
 Free text every release pull request body carries, per component, shared or locked: the header
 above the version line, and its counterpart
@@ -679,12 +687,14 @@ pull request is open updates its body on the next `pr` run without pushing the r
 the notes block and a version override kept. Neither reaches the changelog file or the GitHub
 release.
 
-## `release-pull-request-footer`
+### `release-pull-request-footer`
 
 Free text below the changelog of every release pull request body, default none. It follows the
 same rules as [`release-pull-request-header`](#release-pull-request-header).
 
-## `author`
+## Release commit
+
+### `author`
 
 `author.name` and `author.email`: accepted, default `release-me` and
 `release-me[bot]@users.noreply.github.com`, but ignored. The forge creates the release commit
@@ -693,7 +703,7 @@ under the token's own identity, since GitHub signs it only when no author is pas
 existing configuration keeps working, and `check` and `pr` warn about each one that is set,
 naming it as ignored. `GIT_AUTHOR_*` and `GIT_COMMITTER_*` in the environment change nothing either.
 
-## `signoff`
+### `signoff`
 
 The identity, `Name <email>`, the release commit is signed off by, default none:
 
@@ -710,7 +720,9 @@ an email in angle brackets on one line is a configuration error. Enabling or cha
 `signoff` also refreshes an already open release commit whose trailer is missing or names the
 previous identity. An unchanged rerun then leaves that commit alone.
 
-## `major-tag`
+## Tags and releases
+
+### `major-tag`
 
 Moves the major tag on every stable release, default `false`. See [release](commands.md#release)
 for what `true` changes. A component overrides it through its own `major-tag` key.
@@ -725,7 +737,7 @@ someone publishes that draft. Deferring the move is not an option: nothing in re
 after that publish, so a deferred major tag would never be created at all. Keep
 `force-tag-creation: true` where the major tag matters, which is the default.
 
-## `include-v-in-release-name`
+### `include-v-in-release-name`
 
 Keeps the `v` before the version in the GitHub release's name, default `true`: `vX.Y.Z` for
 the implicit `main` component, `<name> vX.Y.Z` for a configured one. `false` names it
@@ -733,7 +745,7 @@ the implicit `main` component, `<name> vX.Y.Z` for a configured one. `false` nam
 release pull request title, which `release` reads the version back from, keeps its `v`. A
 component overrides it through its own `include-v-in-release-name` key.
 
-## `skip-github-release`
+### `skip-github-release`
 
 Tags a merged release pull request without creating a GitHub release, default `false`, for a
 repository whose own workflow creates the release from the tag, such as a GoReleaser step that
@@ -747,10 +759,10 @@ all. [`force-tag-creation: false`](#force-tag-creation) beside this key is refus
 release-me.yaml loads: it leaves the tag to a release that is never created. A component
 overrides it through its own `skip-github-release` key.
 
-Unlike release-please, release-me creates the tag even with this key on. After migrating,
-remove any external tagging step that release-please needed for `skip-github-release`.
+Unlike release-please, release-me creates the tag even with this key on; see
+[migrate](commands.md#migrate) for what a migrated repository has to change because of it.
 
-## `github-release-draft`
+### `github-release-draft`
 
 Creates each GitHub release as a draft and leaves it one, default `false`, for a human to
 review and publish. The tag, the label swap, the `released-tag` marker and the action outputs
@@ -770,7 +782,7 @@ With [`skip-github-release`](#skip-github-release) on, this key has no effect: t
 release to draft. With [`major-tag`](#major-tag) on, the major tag moves when the draft is
 created, not when it is published; see `major-tag`.
 
-## `github-release-draft-until-assets-attach`
+### `github-release-draft-until-assets-attach`
 
 Drafts every release instead of publishing it immediately, default `false`. There is no
 per-component override: it applies to the whole repository. Only a repository with GitHub's
@@ -781,17 +793,17 @@ See [release](commands.md#release) for what `true` changes, and
 setting needs: `publish.yaml`'s own webhook-triggered asset step for `false`, `release.yaml`
 attaching and publishing the release itself for `true`.
 
-## `force-tag-creation`
+### `force-tag-creation`
 
 Creates the tag on the merge commit before the release, default `true`, the way release-me
 always has, so a draft's tag exists while the draft waits. `false` leaves the tag to GitHub
 instead, the release-please default: the release is created with the merge commit as its
 target, and GitHub creates the tag on it when the release is published, right away for a
 published release, on publish for a draft from
-[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach). That tag
-creation on publish is GitHub behaviour release-me relies on but GitHub does not document anywhere,
-and it is not verified against a live repository either. If the tag does not appear after a
-publish, `pr` reports the missing tag and waits instead of releasing the same version again. The
+[`github-release-draft-until-assets-attach`](#github-release-draft-until-assets-attach). GitHub
+creates the tag on publish; release-me relies on this and GitHub does not document it. If the tag
+does not appear, `pr` reports the missing tag and waits instead of releasing the same version
+again, and [ADR 0001](adr/0001-draft-releases-until-assets-attach.md) records the caveat. The
 run then reports `drafted <tag>, tagged on publish`. Until that publish the tag does not exist: a
 later step must not expect it, a rerun cannot tell a draft it tagged before, and the [major
 tag](#major-tag) already points at the merge commit. The draft is still found by its tag name, so
@@ -814,7 +826,7 @@ including after switching per-component releases to a shared pull request. Publi
 draft creates the tag and unblocks `pr`; deleting the draft also unblocks it, so the next
 run can create the release again.
 
-## `delete-release-branch`
+### `delete-release-branch`
 
 Deletes a release branch once `release` has tagged and released every pull request merged from
 it, default `true`; `false` keeps it. There is no per-component override. See
@@ -827,7 +839,9 @@ merged from it has been released. The
 [shared release pull request's leftover sweep](versioning-modes.md#shared-release-pull-request)
 depends on finding that branch. Both can be on: a branch GitHub already deleted is not an error.
 
-## `labels`
+## Labels and comments
+
+### `labels`
 
 `labels.pending` and `labels.tagged`: the label names `pr`, `release` and `check` use, default
 `release: pending` and `release: tagged`. Each is one name or a list of names, the way
@@ -886,24 +900,27 @@ This is release-please's `prerelease-type` with a free name. A pre-release stays
 human asks for on the release pull request: there is no key that cuts every release as a
 pre-release, as release-please's `prerelease: true` does.
 
-## `comment-mention`
+### `comment-mention`
 
 The mention prefix a comment on the release pull request names to issue a `release-as` or
 `release-notes` command, default `@release-me`. See
 [comment commands](overrides.md#comment-commands). Cannot be empty.
 
-## `versioning`
+## Components and workspaces
+
+### `versioning`
 
 `independent` (default), `locked` or `linked`. See [versioning modes](versioning-modes.md).
 There is no per-component override: it applies to the whole family.
 
-## `components`
+### `components`
 
 Maps a name to a `path` and optional overrides of `initial-version`, `bump-minor-pre-major`,
 `bump-patch-for-minor-pre-major`, `release-as` (only with `versioning: independent`),
 `versioning-strategy`, `hidden-types`, `changelog-sections`, `files`, `major-tag`,
 `changelog-source`, `changelog-type`, `force-tag-creation`, `include-v-in-release-name`,
-`skip-github-release`, `github-release-draft`, `skip-changelog` and `changelog-path`, plus its own
+`skip-github-release`, `github-release-draft`, `skip-changelog` and `changelog-path`, plus two
+keys only a component has: `tag-prefix`, described below, and
 [`exclude-paths`](#exclude-paths), which the top-level key cannot apply beside configured
 components. A key left out of a component falls back to the top-level setting above. A
 repository without `components` is one component named `main` at path `.`, tag prefix `v`,
@@ -962,7 +979,7 @@ An unknown key is an error, inside a component too. The file is read from the re
 root, found through `git rev-parse --show-toplevel`, whatever directory the command runs
 from.
 
-### Root component
+#### Root component
 
 A component at path `.` may sit beside other components, the shape of a root package that
 versions the whole repository while its packages version themselves. It owns every file
@@ -987,7 +1004,7 @@ components:
     path: packages/api
 ```
 
-## `exclude-paths`
+### `exclude-paths`
 
 Paths whose changes never count for a component, default none. Each one is relative to the
 repository root, like a `files` path, and names a directory or a file nested inside the
@@ -1010,9 +1027,10 @@ component of a repository without `components` and is a configuration error besi
 entry that is empty, absolute, holds a backslash, leaves the repository, equals the
 component's `path` or lies outside it is a configuration error.
 
-## `workspaces`
+### `workspaces`
 
-The package managers whose manifests link components to each other, default none:
+The package managers whose manifests link components to each other, default none. One key
+covers all three, and manifests only; [ADR 0003](adr/0003-workspaces.md) records why.
 
 - `node`, an npm, pnpm or yarn workspace, read from each component's `<path>/package.json`;
 - `cargo`, a Cargo workspace, read from each component's `<path>/Cargo.toml`;
@@ -1079,7 +1097,7 @@ Inherited `workspace = true` dependencies resolve renamed package aliases from t
 workspace declarations. The root keeps the version requirement, and the child keeps its
 workspace declaration unchanged.
 
-## `always-link-local`
+### `always-link-local`
 
 Whether every `node` dependency on a local package name links the two components, default
 `true`, release-please's default too. `false` links one only where it resolves to the local
@@ -1091,7 +1109,9 @@ another dependency releases as usual. Ranges are read the way npm reads them: `|
 ranges, partial and `x` versions and the `=`, `<`, `<=`, `>`, `>=`, `~` and `^` operators.
 Setting the key without `node` in [`workspaces`](#workspaces) is a configuration error.
 
-## `token-env`
+## Environment
+
+### `token-env`
 
 The environment variable holding the GitHub token, default `GITHUB_TOKEN`. It governs every API
 call, the release commit `pr` creates included, so the kind of token decides whether GitHub
