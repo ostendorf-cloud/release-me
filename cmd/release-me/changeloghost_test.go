@@ -59,6 +59,25 @@ func TestDoPRPointsEveryChangelogLinkAtTheChangelogHost(t *testing.T) {
 	}
 }
 
+// TestChangelogHostMovesTheCommitAndIssueLinks covers the two links
+// changelog-commit-links and changelog-issue-references add to an entry:
+// they come from the forge like the compare link and the pull request's,
+// so changelog-host has to move them too.
+func TestChangelogHostMovesTheCommitAndIssueLinks(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.ChangelogStyle.Host = "https://github.example.com"
+	f := withChangelogHost(cfg, newFake())
+
+	want := "https://github.example.com/owner/repo/commit/de0cdef403266cc487d5609359645b652c89b568"
+	if got := f.CommitURL("owner", "repo", "de0cdef403266cc487d5609359645b652c89b568"); got != want {
+		t.Errorf("CommitURL() = %q, want %q", got, want)
+	}
+	if got, want := f.IssueURL("owner", "repo", 412), "https://github.example.com/owner/repo/issues/412"; got != want {
+		t.Errorf("IssueURL() = %q, want %q", got, want)
+	}
+}
+
 func TestChangelogHostKeepsAPathPrefixAndLeavesOtherCallsAlone(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()

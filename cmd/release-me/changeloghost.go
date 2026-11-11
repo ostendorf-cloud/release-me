@@ -13,9 +13,9 @@ import (
 )
 
 // withChangelogHost returns f with every link a changelog renders moved to
-// cfg's "changelog-host": the compare view and a pull request's. It
-// returns f unchanged without the key. Everything else f does, the
-// requests it makes included, stays on the host f talks to.
+// cfg's "changelog-host": the compare view, a pull request's, a commit's
+// and an issue's. It returns f unchanged without the key. Everything else
+// f does, the requests it makes included, stays on the host f talks to.
 func withChangelogHost(cfg config.Config, f forge.Forge) forge.Forge {
 	if cfg.ChangelogStyle.Host == "" {
 		return f
@@ -62,4 +62,16 @@ func (h hostedForge) PullRequest(ctx context.Context, owner, repo string, number
 // CompareURL implements forge.Forge on h.host.
 func (h hostedForge) CompareURL(owner, repo, base, head string) string {
 	return h.rehost(h.Forge.CompareURL(owner, repo, base, head))
+}
+
+// CommitURL implements forge.Forge on h.host. The changelog links an
+// entry's commit through it under "changelog-commit-links".
+func (h hostedForge) CommitURL(owner, repo, sha string) string {
+	return h.rehost(h.Forge.CommitURL(owner, repo, sha))
+}
+
+// IssueURL implements forge.Forge on h.host. The changelog links an
+// entry's issue references through it under "changelog-issue-references".
+func (h hostedForge) IssueURL(owner, repo string, number int) string {
+	return h.rehost(h.Forge.IssueURL(owner, repo, number))
 }
