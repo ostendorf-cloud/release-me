@@ -78,6 +78,35 @@ func TestRunMigrateShowsARefusedDeferredTagWithoutAGitHubRelease(t *testing.T) {
 	}
 }
 
+// TestRunMigrateRejectsAnExtraFilesPathThatEscapesTheRepositoryRoot covers a
+// release-please-config.json whose extra-files entry climbs out of the
+// repository root with "..": migrate leaves it out of files and warns about
+// the escape, instead of reading whatever that path resolves to outside the
+// repository.
+func TestRunMigrateRejectsAnExtraFilesPathThatEscapesTheRepositoryRoot(t *testing.T) {
+	dir := newRepo(t)
+	writeFiles(t, dir, "chore: configure release-please", map[string]string{
+		"release-please-config.json": `{"packages": {
+		  ".": {"extra-files": ["../outside.txt"]}}}`,
+		".release-please-manifest.json": `{".": "1.0.0"}`,
+		"package.json":                  `{"name": "@acme/api", "version": "1.0.0"}`,
+	})
+	runGit(t, dir, "tag", "v1.0.0")
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"migrate", "release-please"}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0, stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "extra-files path \"../outside.txt\" escapes the repository root") {
+		t.Fatalf("stderr = %q, want it to warn that the extra-files path escapes the repository root", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "outside.txt") {
+		t.Fatalf("stdout = %s, want the escaping path left out of files", stdout.String())
+	}
+}
+
 func TestRunMigrateRejectsAMissingOrUnknownSource(t *testing.T) {
 	for _, args := range [][]string{{"migrate"}, {"migrate", "semantic-release"}} {
 		var stdout, stderr bytes.Buffer
