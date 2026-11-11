@@ -3,6 +3,59 @@
 Full reference for every `release-me` command beyond the one-line descriptions in the
 [README](../README.md#use).
 
+## next
+
+Prints the next version and the bump reason of every component with something to release, one
+line each, `0.2.0 (feat)`. It writes nothing, neither to the repository nor to the forge, so it
+has no `--dry-run`; `--verbose` logs each component's last tag, its entry count and the
+[changelog source](changelog-modes.md) the entries were read in.
+
+The reason names what decided the version: `breaking change`, `feat`, `fix`, `perf` or
+`revert` for the computed bump, with `, minor below 1.0.0` or `, patch below 1.0.0` appended
+where [`bump-minor-pre-major`](configuration.md#bump-minor-pre-major) or
+[`bump-patch-for-minor-pre-major`](configuration.md#bump-patch-for-minor-pre-major) changed it,
+`, <strategy>` where a [`versioning-strategy`](configuration.md#versioning-strategy) replaced
+it, `dependency <name> <part> update` under `dependency-manifest`, `initial version` for a
+component with no tag yet, and `release-as key` or `Release-As footer` for a
+[forced version](overrides.md#forced-version-precedence).
+
+- A component with nothing to release prints nothing. A run where no component releases prints
+  nothing at all and still exits 0.
+- `--component <name>` limits the run to one component. Under
+  [`versioning: locked`](versioning-modes.md) it is a usage error, exit code 2: `locked`
+  releases the whole family, so limiting it to one component means nothing. A
+  [shared release pull request](versioning-modes.md#shared-release-pull-request) keeps the
+  flag, unlike `pr`, `release` and `run`.
+- In `locked` and `linked`, the line is the family's version, printed for every component that
+  moves; `locked` moves all of them.
+- Entries come from the history since the component's own last tag, and their text from the
+  merged pull requests behind the merge commits, read through the forge with the token
+  [`token-env`](configuration.md#token-env) names.
+- A [`workspaces`](configuration.md#workspaces) dependent that only releases because its
+  dependency does is not listed: dependents join the release at `pr`.
+- An open release pull request changes nothing here: `pr` reads a
+  [pre-release label](#pre-releases) off that pull request, `next` never does, so `next` prints
+  the version the entries alone give.
+
+## changelog
+
+Prints the rendered changelog section of every component with something to release: the
+version heading `pr` writes, with its compare link, and the entries under it, exactly the text
+that reaches the changelog file, the release pull request body and the GitHub release. It
+writes nothing and has no `--dry-run`.
+
+- A component with nothing to release prints nothing, in `locked` too, where it is still
+  tagged and released.
+- `--component`, the `locked` usage error and the shared-pull-request behaviour are the same as
+  for `next` above.
+- With [`changelog-type: github`](configuration.md#changelog-type) the section is the release
+  notes GitHub generates, so the command calls GitHub for them instead of rendering the
+  entries.
+- `--verbose` logs the same per-component lines `next` does, the changelog source among them,
+  which is how a surprising set of entries is traced back to the mode that read them.
+- Output lines carry the component's name as a prefix only when the run covers more than one
+  component, the same rule every other command follows.
+
 ## pr
 
 Creates or updates one release pull request per component: branch `release-me/<name>` off the
@@ -350,3 +403,12 @@ overlap, is
 printed on stderr after the warnings and the reason, to correct by hand.
 Exits 0 with warnings, 1 when the files cannot be read or translated or the translation does not
 load.
+
+## version
+
+Prints the version of release-me itself on stdout, one line, and exits 0. It is the only
+command that reads neither `release-me.yaml` nor the repository, so it works outside a git
+checkout and without a token, and it takes no flags, `--verbose` included. The value is set at
+build time from the release tag, without the leading `v`; a binary built straight from source,
+`go build` or
+`task run -- version`, prints `dev`.
