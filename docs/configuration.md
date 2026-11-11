@@ -73,7 +73,7 @@ strategy and takes a plain patch instead, since it has no changes of its own to 
 The key is release-please's `versioning`, renamed because release-me's own
 [`versioning`](#versioning) already names how a family's versions relate. release-please's
 `service-pack` and `dependency-manifest` are Java specific; release-me carries over what each
-means for any repository:
+means for any repository, as [ADR 0002](adr/0002-versioning-strategy.md) records:
 
 - `service-pack` ships a maintenance release of the last version without moving it:
   `1.2.3-sp.1`, then `1.2.3-sp.2`, `N` counting up from the last `sp` tag of `1.2.3`, the
@@ -1029,7 +1029,8 @@ component's `path` or lies outside it is a configuration error.
 
 ### `workspaces`
 
-The package managers whose manifests link components to each other, default none:
+The package managers whose manifests link components to each other, default none. One key
+covers all three, and manifests only; [ADR 0003](adr/0003-workspaces.md) records why.
 
 - `node`, an npm, pnpm or yarn workspace, read from each component's `<path>/package.json`;
 - `cargo`, a Cargo workspace, read from each component's `<path>/Cargo.toml`;
