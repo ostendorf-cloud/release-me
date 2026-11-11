@@ -49,6 +49,11 @@ task run -- next     # run the CLI from source
 - Errors wrap with `%w` and name the component and the pull request where one is involved.
 - Logging through `log/slog`, configured in `main`, quiet by default, `--verbose` for debug.
 - Secrets never reach a log line or an error message. The token is read from the environment.
+- The config surface has one canonical key order: identity (components only), version rules,
+  changelog, files, pull request, release commit, tags and releases, labels and comments,
+  components, environment. It lives in the `Config` struct in `internal/config/config.go` and
+  in `docs/configuration.md`'s headings. Every config struct, `Load` and `Resolve`'s literals,
+  the doc headings and a new key follow it.
 - License header first in every `.go` file, a blank line, then the package comment where one
   exists:
 

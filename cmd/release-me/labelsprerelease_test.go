@@ -26,7 +26,7 @@ func TestDoPRTurnsAConfiguredPreReleaseTypesLabelIntoItsPreRelease(t *testing.T)
 	commitEntry(t, dir, "fix: stop the panic on empty history")
 
 	cfg := config.Default()
-	cfg.Labels.PreReleaseTypes = []config.PreReleaseType{{Type: "next", Label: "release: next"}}
+	cfg.Labels.PreRelease = append(cfg.Labels.PreRelease, config.PreReleaseType{Type: "next", Label: "release: next"})
 
 	f := newPRFake(origin)
 	f.RepoLabels = append(f.RepoLabels, "release: next")

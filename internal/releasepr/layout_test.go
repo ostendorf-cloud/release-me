@@ -273,7 +273,7 @@ func sharedPRBody(layout releasepr.Layout, notes string) string {
 }
 
 var testGuide = releasepr.Guide{Show: true, Labels: releasepr.GuideLabels{
-	Tagged: []string{"autorelease: tagged"}, Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
+	Tagged: []string{"autorelease: tagged"}, PreRelease: []string{"release: alpha", "release: beta", "release: rc"},
 }}
 
 func TestEveryLayoutReadsBackTheSameComponentsAndDateFromAPullRequestBody(t *testing.T) {

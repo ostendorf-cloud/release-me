@@ -518,9 +518,9 @@ func TestRunNextReadsTheLastTagThroughAConfiguredTagPrefix(t *testing.T) {
 	}
 }
 
-// TestDoPRWritesAComponentsConfiguredChangelog exercises the changelog key
-// through doPR: a component whose changelog lives outside its own path, at
-// the repository root, gets its section prepended there and nowhere else.
+// TestDoPRWritesAComponentsConfiguredChangelog exercises the changelog-path
+// key through doPR: a component whose changelog lives outside its own path,
+// at the repository root, gets its section prepended there and nowhere else.
 func TestDoPRWritesAComponentsConfiguredChangelog(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	writeFiles(t, dir, "chore: scaffold the layer", map[string]string{
@@ -528,7 +528,7 @@ func TestDoPRWritesAComponentsConfiguredChangelog(t *testing.T) {
 		"CHANGELOG.md":            "# Changelog\n",
 	})
 	mergePullRequest(t, dir, 2, "layer-fix", map[string]string{"packages/duxt/sections.ts": "export {}\n"})
-	writeConfig(t, dir, "components:\n  duxt:\n    path: packages/duxt\n    changelog: CHANGELOG.md\n")
+	writeConfig(t, dir, "components:\n  duxt:\n    path: packages/duxt\n    changelog-path: CHANGELOG.md\n")
 
 	f := newPRFake(origin)
 	f.Responses = map[int]forgetest.Response{
@@ -560,7 +560,7 @@ func TestDoPRCreatesTheDirectoryOfAConfiguredChangelog(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	writeFiles(t, dir, "chore: scaffold the layer", map[string]string{"packages/duxt/README.md": "duxt\n"})
 	mergePullRequest(t, dir, 2, "layer-fix", map[string]string{"packages/duxt/sections.ts": "export {}\n"})
-	writeConfig(t, dir, "components:\n  duxt:\n    path: packages/duxt\n    changelog: docs/release/CHANGELOG.md\n")
+	writeConfig(t, dir, "components:\n  duxt:\n    path: packages/duxt\n    changelog-path: docs/release/CHANGELOG.md\n")
 
 	f := newPRFake(origin)
 	f.Responses = map[int]forgetest.Response{

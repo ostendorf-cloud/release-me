@@ -97,7 +97,7 @@ func doPRShared(
 	// opening a shared release pull request. Only a component that defers
 	// its tag can leave that state behind, so the sweep is skipped when
 	// every one of them forces tag creation, whatever
-	// "draft-until-assets-attach" is set to.
+	// "github-release-draft-until-assets-attach" is set to.
 	if needsSweep {
 		own, err := remoteBranches(ctx, dir, "release-me/*")
 		if err != nil {
@@ -526,10 +526,7 @@ func reportSupersededPRs(
 // unless "release-pull-request-guide: false", naming the configured labels.
 func bodyGuide(cfg config.Config) releasepr.Guide {
 	return releasepr.Guide{
-		Show: cfg.ReleasePullRequestGuide,
-		Labels: releasepr.GuideLabels{
-			Tagged: cfg.Labels.Tagged, Alpha: cfg.Labels.Alpha, Beta: cfg.Labels.Beta, Rc: cfg.Labels.Rc,
-			Others: otherPreReleaseLabelNames(cfg.Labels),
-		},
+		Show:   cfg.ReleasePullRequestGuide,
+		Labels: releasepr.GuideLabels{Tagged: cfg.Labels.Tagged, PreRelease: cfg.Labels.PreReleaseLabels()},
 	}
 }

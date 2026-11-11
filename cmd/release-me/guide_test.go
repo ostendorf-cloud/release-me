@@ -48,7 +48,7 @@ func TestEveryReleasePullRequestBodyCarriesTheGuideOnlyWhileTheKeyIsOn(t *testin
 			t.Run(name, func(t *testing.T) {
 				dir, _, cfg := family.repo(t)
 				cfg.ReleasePullRequestGuide = guide
-				cfg.Labels.PreReleaseTypes = []config.PreReleaseType{{Type: "next", Label: "release: next"}}
+				cfg.Labels.PreRelease = append(cfg.Labels.PreRelease, config.PreReleaseType{Type: "next", Label: "release: next"})
 				f := newPRFake(gitOut(t, dir, "remote", "get-url", "--push", "origin"))
 				f.RepoLabels = append(f.RepoLabels, "release: next")
 				var stdout bytes.Buffer

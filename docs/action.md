@@ -1,8 +1,8 @@
 # GitHub Action reference
 
 Full reference for the composite action: every input and output, the
-`draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and bootstrapping the
-first release. See the [README](../README.md#install) for the short version.
+`github-release-draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
+bootstrapping the first release. See the [README](../README.md#install) for the short version.
 
 ## Inputs
 
@@ -42,9 +42,9 @@ phase fails still lists in `prs` the pull request its `pr` phase opened.
   a GitHub release. With `force-tag-creation: false`, a draft's tag name is included before
   its git ref exists; publish the release before using that name as a git ref.
 - `released`: `true` when this run tagged a release for any component, `false` otherwise and
-  always in dry-run. With `draft: true` or `draft-until-assets-attach: true`, this and
-  `components.<name>.released` become true while the GitHub release is still an unpublished
-  draft; `tags` includes its tag too.
+  always in dry-run. With `github-release-draft: true` or
+  `github-release-draft-until-assets-attach: true`, this and `components.<name>.released` become
+  true while the GitHub release is still an unpublished draft; `tags` includes its tag too.
 - `components`: a JSON object keyed by every component this run handled, every configured
   one unless `component` limits it, the implicit one as `main`. Each entry is
   `{"released", "version", "tag", "major", "minor", "patch", "sha", "body", "html_url",
@@ -88,23 +88,23 @@ A component name with a `-` in it needs the index form,
 
 ## Draft for human review
 
-`draft: true` in `release-me.yaml`, or on a component, creates its GitHub release as a
-draft for a human to review and publish. The run that creates it reports the tag the same
+`github-release-draft: true` in `release-me.yaml`, or on a component, creates its GitHub release as
+a draft for a human to review and publish. The run that creates it reports the tag the same
 way a published release's is reported, in the outputs above and in `released-tag`; only a
 later run's resume is skipped, so that marker is not printed again while the draft waits.
 That first run's tag still reaches the publish step below: `publish-release-assets.sh` acts
 on every tag `tags` carries, with no filter for one drafted on purpose, so it attaches
 assets and publishes this component's release exactly as it would any other draft. Setting
-`draft` adds no human gate to that workflow. Keep automatic publish steps off for that
+`github-release-draft` adds no human gate to that workflow. Keep automatic publish steps off for that
 component, or filter its tag out of the ones handed to the publish step, where publishing
-needs human approval. See [configuration](configuration.md#draft).
+needs human approval. See [configuration](configuration.md#github-release-draft).
 
 ## Draft until assets attach
 
-`draft-until-assets-attach` in `release-me.yaml` decides whether each tagged release
+`github-release-draft-until-assets-attach` in `release-me.yaml` decides whether each tagged release
 publishes immediately or starts as a draft, default `false`, no behavior change from before
-this key existed. See [configuration](configuration.md#draft-until-assets-attach) for what
-each setting needs from the calling workflow:
+this key existed. See [configuration](configuration.md#github-release-draft-until-assets-attach)
+for what each setting needs from the calling workflow:
 
 - `false`, the default: the release publishes the moment it is tagged, same as every
   release-me release before this key existed. A caller that attaches binary assets waits on
@@ -145,7 +145,7 @@ tag to build and upload its binaries, archives and checksums file (`task build:r
 the same build as a `--snapshot`, without a tag or an upload, to check the build itself
 locally). Every later release carries the same build automatically, through whichever of the
 two workflow shapes above the repository uses: `publish.yaml`'s `release: published`-triggered
-job with `draft-until-assets-attach` left off, or `release.yaml`'s own build-attach-publish
+job with `github-release-draft-until-assets-attach` left off, or `release.yaml`'s own build-attach-publish
 step with it turned on, the shape this repository's own `release-me.yaml` configures.
 
 Until that first release exists, this repository's own `release.yaml` runs the action with

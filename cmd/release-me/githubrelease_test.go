@@ -47,7 +47,7 @@ func TestDoReleaseReportsTheReleaseFieldsInTheComponentsOutput(t *testing.T) {
 			commitEntry(t, dir, "chore: initial commit")
 			f := mergedReleaseFake()
 			cfg := config.Default()
-			cfg.DraftUntilAssetsAttach = draft
+			cfg.GitHubReleaseDraftUntilAssetsAttach = draft
 			var stdout bytes.Buffer
 
 			out := &runOutputs{}
@@ -82,7 +82,7 @@ func TestDoReleaseWithoutForceTagCreationLeavesTheTagToThePublish(t *testing.T) 
 	f := mergedReleaseFake()
 	cfg := config.Default()
 	cfg.ForceTagCreation = false
-	cfg.DraftUntilAssetsAttach = true
+	cfg.GitHubReleaseDraftUntilAssetsAttach = true
 	var stdout bytes.Buffer
 
 	if err := doRelease(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {
@@ -106,7 +106,7 @@ func TestDoReleaseWithDraftLeavesTheReleaseADraftAndNeverResumesIt(t *testing.T)
 	commitEntry(t, dir, "chore: initial commit")
 	f := mergedReleaseFake()
 	cfg := config.Default()
-	cfg.Draft = true
+	cfg.GitHubReleaseDraft = true
 	var stdout bytes.Buffer
 
 	if err := doRelease(t.Context(), dir, cfg, "", f, discardLogger(), false, &stdout); err != nil {

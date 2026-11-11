@@ -13,23 +13,25 @@ import (
 
 // The names release-me.yaml accepts for a "files" entry's updater key.
 const (
-	Marker = "marker"
-	Helm   = "helm"
-	Go     = "go"
-	JSON   = "json"
-	YAML   = "yaml"
-	TOML   = "toml"
-
+	// Generic text updaters, by marker or by every version-shaped match.
+	Marker  = "marker"
 	Generic = "generic"
+	Plain   = "plain"
 
+	// Structured formats, addressed by a dotted key: JSON, YAML, TOML and XML.
+	JSON = "json"
+	YAML = "yaml"
+	TOML = "toml"
+	XML  = "xml"
+
+	// Lockfiles, each recording a resolved version of its own: npm, Cargo and Bundler.
 	NpmLock     = "npm-lock"
 	CargoLock   = "cargo-lock"
 	GemfileLock = "gemfile-lock"
 
-	XML = "xml"
-
-	Plain = "plain"
-
+	// Language and ecosystem manifests, one updater per release-please release type.
+	Go              = "go"
+	Helm            = "helm"
 	Python          = "python"
 	Ruby            = "ruby"
 	Elixir          = "elixir"
@@ -58,23 +60,25 @@ type Entry struct {
 
 // Updaters maps a configured updater name to its implementation.
 var Updaters = map[string]Entry{
-	Marker: {Update: ignoreKey(UpdateMarker)},
-	Helm:   {Update: ignoreKey(UpdateHelm)},
-	Go:     {Update: UpdateGo, NeedsKey: true},
-	JSON:   {Update: UpdateJSON, NeedsKey: true},
-	YAML:   {Update: UpdateYAML, NeedsKey: true},
-	TOML:   {Update: UpdateTOML, NeedsKey: true},
-
+	// Generic text updaters, by marker or by every version-shaped match.
+	Marker:  {Update: ignoreKey(UpdateMarker)},
 	Generic: {Update: ignoreKey(UpdateGeneric)},
+	Plain:   {Update: ignoreKey(UpdatePlain)},
 
+	// Structured formats, addressed by a dotted key: JSON, YAML, TOML and XML.
+	JSON: {Update: UpdateJSON, NeedsKey: true},
+	YAML: {Update: UpdateYAML, NeedsKey: true},
+	TOML: {Update: UpdateTOML, NeedsKey: true},
+	XML:  {Update: UpdateXML, NeedsKey: true},
+
+	// Lockfiles, each recording a resolved version of its own: npm, Cargo and Bundler.
 	NpmLock:     {Update: ignoreKey(UpdateNpmLock)},
 	CargoLock:   {Update: UpdateCargoLock, NeedsKey: true},
 	GemfileLock: {Update: UpdateGemfileLock, NeedsKey: true},
 
-	XML: {Update: UpdateXML, NeedsKey: true},
-
-	Plain: {Update: ignoreKey(UpdatePlain)},
-
+	// Language and ecosystem manifests, one updater per release-please release type.
+	Go:              {Update: UpdateGo, NeedsKey: true},
+	Helm:            {Update: ignoreKey(UpdateHelm)},
 	Python:          {Update: ignoreKey(UpdatePython)},
 	Ruby:            {Update: ignoreKey(UpdateRuby)},
 	Elixir:          {Update: ignoreKey(UpdateElixir)},

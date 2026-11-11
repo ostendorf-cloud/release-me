@@ -46,7 +46,9 @@ func TestDefaultSetsTheChangelogPathAndLabels(t *testing.T) {
 	}
 	want := config.Labels{
 		Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
-		Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
+		PreRelease: []config.PreReleaseType{
+			{Type: "alpha", Label: "release: alpha"}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: "release: rc"},
+		},
 	}
 	if !reflect.DeepEqual(got.Labels, want) {
 		t.Fatalf("Labels = %+v, want %+v", got.Labels, want)
@@ -102,7 +104,11 @@ func TestLoadReadsConfiguredKeys(t *testing.T) {
 				ChangelogSource: config.DefaultChangelogSource,
 				Labels: config.Labels{
 					Pending: []string{config.DefaultPendingLabel}, Tagged: []string{config.DefaultTaggedLabel},
-					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
+					PreRelease: []config.PreReleaseType{
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "rc", Label: config.DefaultRcLabel},
+					},
 				},
 				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
 				Versioning:               config.DefaultVersioning,
@@ -126,14 +132,15 @@ versioning-strategy: always-bump-patch
 hidden-types: [chore, docs]
 fallback-type: misc
 token-env: RELEASE_TOKEN
-changelog: HISTORY.md
+changelog-path: HISTORY.md
 changelog-source: all
 labels:
   pending: needs-release
   tagged: released
-  alpha: needs-alpha
-  beta: needs-beta
-  rc: needs-rc
+  prerelease:
+    alpha: needs-alpha
+    beta: needs-beta
+    rc: needs-rc
 author:
   name: renovate
   email: renovate@example.com
@@ -141,7 +148,7 @@ major-tag: true
 release-pull-request: shared
 release-pull-request-layout: details
 release-pull-request-guide: false
-draft-until-assets-attach: true
+github-release-draft-until-assets-attach: true
 delete-release-branch: false
 files:
   - path: cmd/cli/version.go
@@ -164,19 +171,21 @@ files:
 				ChangelogSource:           "all",
 				Labels: config.Labels{
 					Pending: []string{"needs-release"}, Tagged: []string{"released"},
-					Alpha: "needs-alpha", Beta: "needs-beta", Rc: "needs-rc",
+					PreRelease: []config.PreReleaseType{
+						{Type: "alpha", Label: "needs-alpha"}, {Type: "beta", Label: "needs-beta"}, {Type: "rc", Label: "needs-rc"},
+					},
 				},
-				Author:                   config.Author{Name: "renovate", Email: "renovate@example.com", Set: []string{"author.name", "author.email"}},
-				MajorTag:                 true,
-				Versioning:               config.DefaultVersioning,
-				ReleasePullRequest:       config.ReleasePullRequestShared,
-				ReleasePullRequestLayout: config.LayoutDetails,
-				DraftUntilAssetsAttach:   true,
-				CommentMention:           config.DefaultCommentMention,
-				ForceTagCreation:         true,
-				IncludeVInReleaseName:    true,
-				DeleteReleaseBranch:      false,
-				AlwaysLinkLocal:          true,
+				Author:                              config.Author{Name: "renovate", Email: "renovate@example.com", Set: []string{"author.name", "author.email"}},
+				MajorTag:                            true,
+				Versioning:                          config.DefaultVersioning,
+				ReleasePullRequest:                  config.ReleasePullRequestShared,
+				ReleasePullRequestLayout:            config.LayoutDetails,
+				GitHubReleaseDraftUntilAssetsAttach: true,
+				CommentMention:                      config.DefaultCommentMention,
+				ForceTagCreation:                    true,
+				IncludeVInReleaseName:               true,
+				DeleteReleaseBranch:                 false,
+				AlwaysLinkLocal:                     true,
 				Files: []config.File{
 					{Path: "cmd/cli/version.go", Updater: "marker"},
 					{Path: "deploy/values.yaml", Updater: "marker"},
@@ -196,7 +205,11 @@ files:
 				ChangelogSource: config.DefaultChangelogSource,
 				Labels: config.Labels{
 					Pending: []string{config.DefaultPendingLabel}, Tagged: []string{config.DefaultTaggedLabel},
-					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
+					PreRelease: []config.PreReleaseType{
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "rc", Label: config.DefaultRcLabel},
+					},
 				},
 				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
 				Versioning:               config.DefaultVersioning,
@@ -222,7 +235,11 @@ files:
 				ChangelogSource: config.DefaultChangelogSource,
 				Labels: config.Labels{
 					Pending: []string{"needs-release"}, Tagged: []string{config.DefaultTaggedLabel},
-					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
+					PreRelease: []config.PreReleaseType{
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "rc", Label: config.DefaultRcLabel},
+					},
 				},
 				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
 				Versioning:               config.DefaultVersioning,
@@ -248,7 +265,11 @@ files:
 				ChangelogSource: config.DefaultChangelogSource,
 				Labels: config.Labels{
 					Pending: []string{config.DefaultPendingLabel}, Tagged: []string{config.DefaultTaggedLabel},
-					Alpha: config.DefaultAlphaLabel, Beta: config.DefaultBetaLabel, Rc: config.DefaultRcLabel,
+					PreRelease: []config.PreReleaseType{
+						{Type: "alpha", Label: config.DefaultAlphaLabel},
+						{Type: "beta", Label: config.DefaultBetaLabel},
+						{Type: "rc", Label: config.DefaultRcLabel},
+					},
 				},
 				Author:                   config.Author{Name: "renovate", Email: config.DefaultAuthorEmail, Set: []string{"author.name"}},
 				Versioning:               config.DefaultVersioning,
@@ -299,6 +320,22 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		content string
 	}{
 		{name: "rejects an unknown key", content: "release-tag: v1\n"},
+		{name: "rejects the renamed top-level changelog key", content: "changelog: HISTORY.md\n"},
+		{
+			name:    "rejects the renamed changelog key on a component",
+			content: "components:\n  web:\n    path: web\n    changelog: CHANGELOG.md\n",
+		},
+		{name: "rejects the renamed top-level draft key", content: "draft: true\n"},
+		{name: "rejects the renamed draft-until-assets-attach key", content: "draft-until-assets-attach: true\n"},
+		{
+			name:    "rejects the renamed draft key on a component",
+			content: "components:\n  web:\n    path: web\n    draft: true\n",
+		},
+		{
+			name:    "rejects the renamed top-level prerelease-types key",
+			content: "prerelease-types:\n  next: \"release: next\"\n",
+		},
+		{name: "rejects the renamed labels.alpha key", content: "labels:\n  alpha: \"release: a\"\n"},
 		{name: "rejects malformed YAML", content: "initial-version: [0.1.0\n"},
 		{name: "rejects a fallback type that bumps the version", content: "fallback-type: feat\n"},
 		{name: "rejects an unknown changelog source", content: "changelog-source: rebase\n"},
@@ -345,9 +382,15 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{name: "rejects an empty comment-mention", content: "comment-mention: \"\"\n"},
 		{name: "rejects an empty pending label", content: "labels:\n  pending: \"\"\n"},
 		{name: "rejects an empty tagged label", content: "labels:\n  tagged: \"\"\n"},
-		{name: "rejects one label for two pre-release types", content: "labels:\n  alpha: \"release: pre\"\n  rc: \"release: pre\"\n"},
-		{name: "rejects a pre-release label equal to a default one", content: "labels:\n  alpha: \"release: rc\"\n"},
-		{name: "rejects a pre-release label set to true", content: "labels:\n  beta: true\n"},
+		{
+			name:    "rejects one label for two pre-release types",
+			content: "labels:\n  prerelease:\n    alpha: \"release: pre\"\n    rc: \"release: pre\"\n",
+		},
+		{
+			name:    "rejects a pre-release label equal to a default one",
+			content: "labels:\n  prerelease:\n    alpha: \"release: rc\"\n",
+		},
+		{name: "rejects a pre-release label set to true", content: "labels:\n  prerelease:\n    beta: true\n"},
 		{name: "rejects a component without a path", content: "components:\n  frontend:\n    initial-version: 0.1.0\n"},
 		{name: "rejects an unknown key inside a component", content: "components:\n  frontend:\n    path: frontend\n    release-tag: v1\n"},
 		{
@@ -360,7 +403,7 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		},
 		{
 			name:    "rejects two root components",
-			content: "components:\n  main:\n    path: .\n  site:\n    path: ./\n    tag-prefix: site@v\n    changelog: SITE.md\n",
+			content: "components:\n  main:\n    path: .\n  site:\n    path: ./\n    tag-prefix: site@v\n    changelog-path: SITE.md\n",
 		},
 		{name: "rejects an empty tag prefix", content: "components:\n  web:\n    path: web\n    tag-prefix: \"\"\n"},
 		{name: "rejects a tag prefix with a glob character", content: "components:\n  web:\n    path: web\n    tag-prefix: web*v\n"},
@@ -379,22 +422,22 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 			name:    "rejects a tag prefix equal to another component's derived one",
 			content: "components:\n  web:\n    path: web\n    tag-prefix: api/v\n  api:\n    path: api\n",
 		},
-		{name: "rejects an empty changelog path", content: "components:\n  web:\n    path: web\n    changelog: \"\"\n"},
-		{name: "rejects an absolute changelog path", content: "components:\n  web:\n    path: web\n    changelog: /tmp/CHANGELOG.md\n"},
+		{name: "rejects an empty changelog path", content: "components:\n  web:\n    path: web\n    changelog-path: \"\"\n"},
+		{name: "rejects an absolute changelog path", content: "components:\n  web:\n    path: web\n    changelog-path: /tmp/CHANGELOG.md\n"},
 		{
 			name:    "rejects a changelog path outside the repository",
-			content: "components:\n  web:\n    path: web\n    changelog: web/../../CHANGELOG.md\n",
+			content: "components:\n  web:\n    path: web\n    changelog-path: web/../../CHANGELOG.md\n",
 		},
-		{name: "rejects the repository root as a changelog path", content: "components:\n  web:\n    path: web\n    changelog: ./\n"},
+		{name: "rejects the repository root as a changelog path", content: "components:\n  web:\n    path: web\n    changelog-path: ./\n"},
 		{
 			name:    "rejects two components configured with the same changelog",
-			content: "components:\n  web:\n    path: web\n    changelog: CHANGELOG.md\n  api:\n    path: api\n    changelog: ./CHANGELOG.md\n",
+			content: "components:\n  web:\n    path: web\n    changelog-path: CHANGELOG.md\n  api:\n    path: api\n    changelog-path: ./CHANGELOG.md\n",
 		},
 		{
 			name:    "rejects a changelog equal to another component's derived one",
-			content: "components:\n  web:\n    path: web\n    changelog: api/CHANGELOG.md\n  api:\n    path: api\n",
+			content: "components:\n  web:\n    path: web\n    changelog-path: api/CHANGELOG.md\n  api:\n    path: api\n",
 		},
-		{name: "rejects a changelog path with a backslash", content: "components:\n  web:\n    path: web\n    changelog: 'web\\CHANGELOG.md'\n"},
+		{name: "rejects a changelog path with a backslash", content: "components:\n  web:\n    path: web\n    changelog-path: 'web\\CHANGELOG.md'\n"},
 		{
 			name:    "rejects an unknown workspace package manager",
 			content: "release-pull-request: shared\nworkspaces: [gradle]\ncomponents:\n  web:\n    path: web\n",
@@ -806,7 +849,7 @@ func TestResolveAppliesTheGitHubReleaseKeysFromTheTopLevelAndPerComponentOverrid
 	t.Parallel()
 	forceTag := func(c config.ResolvedComponent) bool { return c.ForceTagCreation }
 	skip := func(c config.ResolvedComponent) bool { return c.SkipGitHubRelease }
-	draft := func(c config.ResolvedComponent) bool { return c.Draft }
+	draft := func(c config.ResolvedComponent) bool { return c.GitHubReleaseDraft }
 	cases := []struct {
 		name    string
 		content string
@@ -838,21 +881,24 @@ func TestResolveAppliesTheGitHubReleaseKeysFromTheTopLevelAndPerComponentOverrid
 			content: releaseKeysConfig + "    skip-github-release: true\n",
 			get:     skip, want: []bool{false, true},
 		},
-		{name: "draft is off by default", get: draft, want: []bool{false}},
-		{name: "draft applies to the implicit main component", content: "draft: true\n", get: draft, want: []bool{true}},
+		{name: "github-release-draft is off by default", get: draft, want: []bool{false}},
 		{
-			name:    "a component overrides the top-level draft",
-			content: "draft: true\n" + releaseKeysConfig + "    draft: false\n",
+			name: "github-release-draft applies to the implicit main component", content: "github-release-draft: true\n",
+			get: draft, want: []bool{true},
+		},
+		{
+			name:    "a component overrides the top-level github-release-draft",
+			content: "github-release-draft: true\n" + releaseKeysConfig + "    github-release-draft: false\n",
 			get:     draft, want: []bool{true, false},
 		},
 		{
-			name:    "a component turns draft on for itself alone",
-			content: releaseKeysConfig + "    draft: true\n",
+			name:    "a component turns github-release-draft on for itself alone",
+			content: releaseKeysConfig + "    github-release-draft: true\n",
 			get:     draft, want: []bool{false, true},
 		},
 		{
-			name:    "draft-until-assets-attach leaves draft off",
-			content: "draft-until-assets-attach: true\n",
+			name:    "github-release-draft-until-assets-attach leaves github-release-draft off",
+			content: "github-release-draft-until-assets-attach: true\n",
 			get:     draft, want: []bool{false},
 		},
 	}
@@ -1014,14 +1060,14 @@ func TestLoadReadsDeleteReleaseBranch(t *testing.T) {
 	}
 }
 
-func TestDefaultSetsDraftUntilAssetsAttachToFalse(t *testing.T) {
+func TestDefaultSetsGitHubReleaseDraftUntilAssetsAttachToFalse(t *testing.T) {
 	t.Parallel()
-	if got := config.Default().DraftUntilAssetsAttach; got {
-		t.Fatalf("DraftUntilAssetsAttach = %v, want false", got)
+	if got := config.Default().GitHubReleaseDraftUntilAssetsAttach; got {
+		t.Fatalf("GitHubReleaseDraftUntilAssetsAttach = %v, want false", got)
 	}
 }
 
-func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
+func TestLoadReadsGitHubReleaseDraftUntilAssetsAttach(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name    string
@@ -1029,8 +1075,8 @@ func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
 		want    bool
 	}{
 		{name: "left out defaults to false", content: "", want: false},
-		{name: "explicit false stays off", content: "draft-until-assets-attach: false\n", want: false},
-		{name: "explicit true turns it on", content: "draft-until-assets-attach: true\n", want: true},
+		{name: "explicit false stays off", content: "github-release-draft-until-assets-attach: false\n", want: false},
+		{name: "explicit true turns it on", content: "github-release-draft-until-assets-attach: true\n", want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1041,8 +1087,8 @@ func TestLoadReadsDraftUntilAssetsAttach(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
-			if got.DraftUntilAssetsAttach != tc.want {
-				t.Fatalf("DraftUntilAssetsAttach = %v, want %v", got.DraftUntilAssetsAttach, tc.want)
+			if got.GitHubReleaseDraftUntilAssetsAttach != tc.want {
+				t.Fatalf("GitHubReleaseDraftUntilAssetsAttach = %v, want %v", got.GitHubReleaseDraftUntilAssetsAttach, tc.want)
 			}
 		})
 	}
@@ -1454,12 +1500,12 @@ func TestLoadAcceptsAComponentNameOfLettersDigitsDashUnderscoreAndDot(t *testing
 	}
 }
 
-func TestResolveUsesAConfiguredChangelogAndDerivesTheRest(t *testing.T) {
+func TestResolveUsesAConfiguredChangelogPathAndDerivesTheRest(t *testing.T) {
 	t.Parallel()
 	path := writeFile(t, `components:
   duxt:
     path: packages/duxt
-    changelog: ./CHANGELOG.md
+    changelog-path: ./CHANGELOG.md
   duxt-typesense:
     path: packages/duxt-typesense
 `)
@@ -1481,9 +1527,9 @@ func TestLoadTurnsAPreReleaseTypeOff(t *testing.T) {
 		name    string
 		content string
 	}{
-		{name: "with an empty label", content: "labels:\n  alpha: \"\"\n  beta: \"\"\n"},
-		{name: "with false", content: "labels:\n  alpha: false\n  beta: false\n"},
-		{name: "with false and an empty label mixed", content: "labels:\n  alpha: false\n  beta: \"\"\n"},
+		{name: "with an empty label", content: "labels:\n  prerelease:\n    alpha: \"\"\n    beta: \"\"\n"},
+		{name: "with false", content: "labels:\n  prerelease:\n    alpha: false\n    beta: false\n"},
+		{name: "with false and an empty label mixed", content: "labels:\n  prerelease:\n    alpha: false\n    beta: \"\"\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1492,8 +1538,11 @@ func TestLoadTurnsAPreReleaseTypeOff(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Load() error = %v", err)
 			}
-			if got.Labels.Alpha != "" || got.Labels.Beta != "" || got.Labels.Rc != config.DefaultRcLabel {
-				t.Fatalf("Labels = %+v, want alpha and beta off and rc at its default", got.Labels)
+			want := []config.PreReleaseType{
+				{Type: "alpha", Label: ""}, {Type: "beta", Label: ""}, {Type: "rc", Label: config.DefaultRcLabel},
+			}
+			if !reflect.DeepEqual(got.Labels.PreRelease, want) {
+				t.Fatalf("PreRelease = %+v, want alpha and beta off and rc at its default", got.Labels.PreRelease)
 			}
 		})
 	}
@@ -1501,21 +1550,22 @@ func TestLoadTurnsAPreReleaseTypeOff(t *testing.T) {
 
 func TestLoadKeepsAQuotedFalseAsALabelName(t *testing.T) {
 	t.Parallel()
-	path := writeFile(t, "labels:\n  rc: \"false\"\n")
+	path := writeFile(t, "labels:\n  prerelease:\n    rc: \"false\"\n")
 
 	got, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if got.Labels.Rc != "false" {
-		t.Fatalf("Labels.Rc = %q, want %q", got.Labels.Rc, "false")
+	i := slices.IndexFunc(got.Labels.PreRelease, func(p config.PreReleaseType) bool { return p.Type == "rc" })
+	if i < 0 || got.Labels.PreRelease[i].Label != "false" {
+		t.Fatalf("PreRelease = %+v, want rc labeled %q", got.Labels.PreRelease, "false")
 	}
 }
 
 func TestLoadAcceptsSeveralPreReleaseTypesTurnedOff(t *testing.T) {
 	t.Parallel()
 	// Two empty labels are two types turned off, not one name used twice.
-	path := writeFile(t, "labels:\n  alpha: false\n  beta: \"\"\n  rc: false\n")
+	path := writeFile(t, "labels:\n  prerelease:\n    alpha: false\n    beta: \"\"\n    rc: false\n")
 
 	if _, err := config.Load(path); err != nil {
 		t.Fatalf("Load() error = %v, want nil", err)
@@ -1525,11 +1575,11 @@ func TestLoadAcceptsSeveralPreReleaseTypesTurnedOff(t *testing.T) {
 func TestLoadReadsPreReleaseTypesInConfigOrderAfterAlphaBetaAndRc(t *testing.T) {
 	t.Parallel()
 	path := writeFile(t, `labels:
-  beta: false
-prerelease-types:
-  next: "release: next"
-  preview: "release: preview"
-  nightly-build: "release: nightly"
+  prerelease:
+    beta: false
+    next: "release: next"
+    preview: "release: preview"
+    nightly-build: "release: nightly"
 `)
 
 	cfg, err := config.Load(path)
@@ -1538,13 +1588,32 @@ prerelease-types:
 	}
 	want := []config.PreReleaseType{
 		{Type: "alpha", Label: config.DefaultAlphaLabel},
+		{Type: "beta", Label: ""},
 		{Type: "rc", Label: config.DefaultRcLabel},
 		{Type: "next", Label: "release: next"},
 		{Type: "preview", Label: "release: preview"},
 		{Type: "nightly-build", Label: "release: nightly"},
 	}
-	if got := cfg.Labels.PreReleaseKinds(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("PreReleaseKinds() = %+v, want %+v", got, want)
+	if got := cfg.Labels.PreRelease; !reflect.DeepEqual(got, want) {
+		t.Fatalf("PreRelease = %+v, want %+v", got, want)
+	}
+}
+
+func TestLoadRenamesABuiltInPreReleaseTypeKeepingItsPosition(t *testing.T) {
+	t.Parallel()
+	path := writeFile(t, "labels:\n  prerelease:\n    rc: \"release: candidate\"\n")
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	want := []config.PreReleaseType{
+		{Type: "alpha", Label: config.DefaultAlphaLabel},
+		{Type: "beta", Label: config.DefaultBetaLabel},
+		{Type: "rc", Label: "release: candidate"},
+	}
+	if got := cfg.Labels.PreRelease; !reflect.DeepEqual(got, want) {
+		t.Fatalf("PreRelease = %+v, want %+v", got, want)
 	}
 }
 
@@ -1555,26 +1624,41 @@ func TestLoadRejectsAnInvalidPreReleaseType(t *testing.T) {
 		content string
 		want    string
 	}{
-		{name: "rejects a type configured under labels", content: "prerelease-types:\n  rc: \"release: candidate\"\n", want: `type "rc" is reserved`},
-		{name: "rejects a type with a dot", content: "prerelease-types:\n  pre.view: \"release: preview\"\n", want: "is not one pre-release identifier"},
-		{name: "rejects a type of digits only", content: "prerelease-types:\n  \"2024\": \"release: 2024\"\n", want: "is not one pre-release identifier"},
-		{name: "rejects an empty label", content: "prerelease-types:\n  next: \"\"\n", want: "must be a non-empty string"},
-		{name: "rejects a label set to false", content: "prerelease-types:\n  next: false\n", want: "must be a non-empty string"},
-		{name: "rejects a list", content: "prerelease-types:\n  - next\n", want: "must be a mapping of type to label"},
+		{
+			name:    "rejects a type with a dot",
+			content: "labels:\n  prerelease:\n    pre.view: \"release: preview\"\n",
+			want:    "is not one pre-release identifier",
+		},
+		{
+			name:    "rejects a type of digits only",
+			content: "labels:\n  prerelease:\n    \"2024\": \"release: 2024\"\n",
+			want:    "is not one pre-release identifier",
+		},
+		{
+			name:    "rejects an empty label for a new type",
+			content: "labels:\n  prerelease:\n    next: \"\"\n",
+			want:    "pointless",
+		},
+		{
+			name:    "rejects a label set to false for a new type",
+			content: "labels:\n  prerelease:\n    next: false\n",
+			want:    "pointless",
+		},
+		{name: "rejects a list", content: "labels:\n  prerelease:\n    - next\n", want: "must be a mapping of type to label"},
 		{
 			name:    "rejects a label another type already uses",
-			content: "prerelease-types:\n  next: \"release: rc\"\n",
-			want:    `labels.rc and prerelease-types.next are both "release: rc"`,
+			content: "labels:\n  prerelease:\n    next: \"release: rc\"\n",
+			want:    `labels.prerelease.rc and labels.prerelease.next are both "release: rc"`,
 		},
 		{
 			name:    "rejects one label for two prerelease types",
-			content: "prerelease-types:\n  next: \"release: pre\"\n  preview: \"release: pre\"\n",
-			want:    `prerelease-types.next and prerelease-types.preview are both "release: pre"`,
+			content: "labels:\n  prerelease:\n    next: \"release: pre\"\n    preview: \"release: pre\"\n",
+			want:    `labels.prerelease.next and labels.prerelease.preview are both "release: pre"`,
 		},
 		{
 			name:    "rejects a label equal to the pending label",
-			content: "prerelease-types:\n  next: \"release: pending\"\n",
-			want:    `labels.pending and prerelease-types.next are both "release: pending"`,
+			content: "labels:\n  prerelease:\n    next: \"release: pending\"\n",
+			want:    `labels.pending and labels.prerelease.next are both "release: pending"`,
 		},
 	}
 	for _, tc := range cases {

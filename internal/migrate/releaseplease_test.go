@@ -92,15 +92,16 @@ release-pull-request: shared
 labels:
   pending: 'autorelease: pending'
   tagged: 'autorelease: tagged'
-  alpha: false
-  beta: false
-  rc: false
+  prerelease:
+    alpha: false
+    beta: false
+    rc: false
 bump-minor-pre-major: true
 components:
   duxt:
     path: packages/duxt
     tag-prefix: duxt@v
-    changelog: CHANGELOG.md
+    changelog-path: CHANGELOG.md
     files:
       - path: packages/duxt/package.json
         updater: json
@@ -352,9 +353,14 @@ func TestFromReleasePleaseCarriesOverThePreReleaseTypeAsALabel(t *testing.T) {
 	}
 
 	cfg := load(t, got.YAML)
-	want := []config.PreReleaseType{{Type: "beta", Label: "release: beta"}, {Type: "next", Label: "release: next"}}
-	if kinds := cfg.Labels.PreReleaseKinds(); !reflect.DeepEqual(kinds, want) {
-		t.Fatalf("PreReleaseKinds() = %+v, want %+v\n%s", kinds, want, got.YAML)
+	want := []config.PreReleaseType{
+		{Type: "alpha", Label: ""},
+		{Type: "beta", Label: "release: beta"},
+		{Type: "rc", Label: ""},
+		{Type: "next", Label: "release: next"},
+	}
+	if kinds := cfg.Labels.PreRelease; !reflect.DeepEqual(kinds, want) {
+		t.Fatalf("PreRelease = %+v, want %+v\n%s", kinds, want, got.YAML)
 	}
 	for _, w := range []string{
 		`package web: prerelease-type beta: release-me cuts it only while the release pull request carries the label "release: beta"`,
@@ -400,8 +406,8 @@ func TestFromReleasePleaseWarnsAboutAPreReleaseItCannotCarryOver(t *testing.T) {
 		t.Fatalf("FromReleasePlease() error = %v", err)
 	}
 
-	if kinds := load(t, got.YAML).Labels.PreReleaseKinds(); len(kinds) != 0 {
-		t.Fatalf("PreReleaseKinds() = %+v, want none\n%s", kinds, got.YAML)
+	if labels := load(t, got.YAML).Labels.PreReleaseLabels(); len(labels) != 0 {
+		t.Fatalf("PreReleaseLabels() = %+v, want none\n%s", labels, got.YAML)
 	}
 	for _, w := range []string{
 		"package web: prerelease: release-me cuts a pre-release only while the release pull request " +
@@ -839,7 +845,7 @@ func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
 	t.Parallel()
 	forceTag := func(c config.ResolvedComponent) bool { return c.ForceTagCreation }
 	skip := func(c config.ResolvedComponent) bool { return c.SkipGitHubRelease }
-	draft := func(c config.ResolvedComponent) bool { return c.Draft }
+	draft := func(c config.ResolvedComponent) bool { return c.GitHubReleaseDraft }
 	cases := []struct {
 		name       string
 		configJSON string
@@ -893,28 +899,28 @@ func TestFromReleasePleaseCarriesTheGitHubReleaseSettingsOver(t *testing.T) {
 			get:        skip, want: []bool{false},
 		},
 		{
-			name:       "writes draft once for a root package",
+			name:       "writes github-release-draft once for a root package",
 			configJSON: `{"draft": true, "packages": {".": {"release-type": "go"}}}`,
-			wantYAML:   "\ndraft: true\n",
+			wantYAML:   "\ngithub-release-draft: true\n",
 			get:        draft, want: []bool{true},
 		},
 		{
-			name: "writes draft on the one package that carries it",
+			name: "writes github-release-draft on the one package that carries it",
 			configJSON: `{"packages": {
 			  "api": {"component": "api", "release-type": "go"},
 			  "web": {"component": "web", "release-type": "go", "draft": true}}}`,
-			wantYAML: "    path: web\n    tag-prefix: web-v\n    draft: true\n",
+			wantYAML: "    path: web\n    tag-prefix: web-v\n    github-release-draft: true\n",
 			get:      draft, want: []bool{false, true},
 		},
 		{
-			name: "writes draft once at the top level when every package carries it",
+			name: "writes github-release-draft once at the top level when every package carries it",
 			configJSON: `{"draft": true, "packages": {
 			  "api": {"component": "api", "release-type": "go"}, "web": {"component": "web", "release-type": "go"}}}`,
-			wantYAML: "\ndraft: true\ncomponents:\n",
+			wantYAML: "\ngithub-release-draft: true\ncomponents:\n",
 			get:      draft, want: []bool{true, true},
 		},
 		{
-			name:       "leaves out draft at release-me's default",
+			name:       "leaves out github-release-draft at release-me's default",
 			configJSON: `{"draft": false, "packages": {".": {"release-type": "go"}}}`,
 			get:        draft, want: []bool{false},
 		},

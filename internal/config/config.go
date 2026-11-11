@@ -1,18 +1,20 @@
 // Copyright 2026 Simon Ostendorf
 // SPDX-License-Identifier: Apache-2.0
 
-// Package config loads release-me.yaml: initial-version,
-// bump-minor-pre-major, bump-patch-for-minor-pre-major, versioning-strategy,
-// release-as, hidden-types, fallback-type, token-env, files, changelog,
-// changelog-source, changelog-type, skip-changelog, the changelog style keys
-// ChangelogStyle lists, labels, prerelease-types, author, major-tag,
-// versioning, signoff, release-pull-request-title,
-// release-pull-request-shared-title, release-pull-request-draft,
-// release-pull-request-header, release-pull-request-footer,
-// draft-until-assets-attach, draft, force-tag-creation,
-// include-v-in-release-name, skip-github-release, comment-mention,
-// delete-release-branch, workspaces, always-link-local, exclude-paths and
-// components.
+// Package config loads release-me.yaml: initial-version, release-as,
+// versioning-strategy, bump-minor-pre-major, bump-patch-for-minor-pre-major,
+// changelog-path, changelog-source, changelog-type, skip-changelog,
+// hidden-types, fallback-type, changelog-sections, changelog-sentence-case,
+// changelog-authors, changelog-commit-links, changelog-issue-references,
+// changelog-host, changelog-date-format, files, release-pull-request,
+// release-pull-request-layout, release-pull-request-guide,
+// release-pull-request-title, release-pull-request-shared-title,
+// release-pull-request-draft, release-pull-request-header,
+// release-pull-request-footer, author, signoff, major-tag,
+// include-v-in-release-name, skip-github-release, github-release-draft,
+// github-release-draft-until-assets-attach, force-tag-creation,
+// delete-release-branch, labels, comment-mention, versioning, components,
+// exclude-paths, workspaces, always-link-local and token-env.
 package config
 
 import (
@@ -46,7 +48,7 @@ const (
 	// just to read the default.
 	DefaultFallbackType = conventional.FallbackType
 	// DefaultChangelogPath is the changelog file path applied when the
-	// "changelog" key is left out of release-me.yaml.
+	// "changelog-path" key is left out of release-me.yaml.
 	DefaultChangelogPath = "CHANGELOG.md"
 	// DefaultChangelogSource is the changelog source mode applied when
 	// the "changelog-source" key is left out of release-me.yaml.
@@ -222,6 +224,12 @@ type ChangelogStyle struct {
 	// Authors is "changelog-authors", default false: credit each entry's
 	// author after its description.
 	Authors bool
+	// CommitLinks is "changelog-commit-links", default false: link each
+	// entry's commit.
+	CommitLinks bool
+	// IssueReferences is "changelog-issue-references", default false:
+	// link the issues each entry closes.
+	IssueReferences bool
 	// Host is "changelog-host", "" by default: the web address every
 	// changelog link points at instead of the forge's own, such as a
 	// GitHub Enterprise Server's "https://github.example.com". No
@@ -231,12 +239,6 @@ type ChangelogStyle struct {
 	// "%Y-%m-%d": the strftime expression a version heading's date
 	// renders in.
 	DateFormat string
-	// CommitLinks is "changelog-commit-links", default false: link each
-	// entry's commit.
-	CommitLinks bool
-	// IssueReferences is "changelog-issue-references", default false:
-	// link the issues each entry closes.
-	IssueReferences bool
 }
 
 // ChangelogSection is one entry of the "changelog-sections" key: the entry
@@ -250,57 +252,45 @@ type ChangelogSection struct {
 }
 
 // Labels is the "labels" key: the label names release-me expects on the
-// repository. Alpha, Beta and Rc select a pre-release type on the release
-// pull request; Pending and Tagged apply to every release, stable or not.
-// Pending and Tagged are each one name or a list of them, never empty: a
-// release pull request is pending while it carries every pending label, and
-// releasing it swaps all of them for every tagged label. Extra is the labels
-// pr adds to a release pull request it opens beside the pending ones, read
-// by nothing. An empty Alpha, Beta or Rc, configured as "" or false, turns
-// that pre-release type off: release-me neither expects the label on the
-// repository nor reads it from a pull request.
+// repository. PreRelease selects a pre-release type on the release pull
+// request, each entry's label naming it; Pending and Tagged apply to every
+// release, stable or not. Pending and Tagged are each one name or a list of
+// them, never empty: a release pull request is pending while it carries
+// every pending label, and releasing it swaps all of them for every tagged
+// label. Extra is the labels pr adds to a release pull request it opens
+// beside the pending ones, read by nothing. A PreRelease entry with an
+// empty Label turns that pre-release type off: release-me neither expects
+// the label on the repository nor reads it from a pull request.
 type Labels struct {
 	Pending []string
 	Tagged  []string
 	Extra   []string
-	Alpha   string
-	Beta    string
-	Rc      string
-	// PreReleaseTypes is the top-level "prerelease-types" key: further
-	// pre-release types, each selected by its own label, in
-	// release-me.yaml's order, nil when the key is left out.
-	PreReleaseTypes []PreReleaseType
+	// PreRelease is the "labels.prerelease" key: every pre-release type
+	// release-me selects through a label on the release pull request, in
+	// order, alpha, beta and rc by default, each further type
+	// release-me.yaml adds appended after them, in the order it declares
+	// them.
+	PreRelease []PreReleaseType
 }
 
 // PreReleaseType is one pre-release type and the label that selects it on
-// the release pull request: an entry of "prerelease-types", or one of
-// alpha, beta and rc.
+// the release pull request: alpha, beta and rc by default, or a further
+// type "labels.prerelease" adds. An empty Label turns the type off.
 type PreReleaseType struct {
 	Type  string
 	Label string
 }
 
-// PreReleaseKinds returns every enabled pre-release type with its label:
-// alpha, beta and rc, in that order, each left out when its label is
-// turned off, then PreReleaseTypes. It is the order a pull request
-// carrying more than one of the labels is reported in.
-func (l Labels) PreReleaseKinds() []PreReleaseType {
-	kinds := make([]PreReleaseType, 0, 3+len(l.PreReleaseTypes))
-	for _, k := range []PreReleaseType{{"alpha", l.Alpha}, {"beta", l.Beta}, {"rc", l.Rc}} {
-		if k.Label != "" {
-			kinds = append(kinds, k)
-		}
-	}
-	return append(kinds, l.PreReleaseTypes...)
-}
-
 // PreReleaseLabels returns the label of every enabled pre-release type, in
-// PreReleaseKinds's order.
+// Labels.PreRelease's order, a type turned off, with an empty label,
+// carrying none. It is the order a pull request carrying more than one of
+// the labels is reported in.
 func (l Labels) PreReleaseLabels() []string {
-	kinds := l.PreReleaseKinds()
-	names := make([]string, len(kinds))
-	for i, k := range kinds {
-		names[i] = k.Label
+	names := make([]string, 0, len(l.PreRelease))
+	for _, p := range l.PreRelease {
+		if p.Label != "" {
+			names = append(names, p.Label)
+		}
 	}
 	return names
 }
@@ -327,9 +317,7 @@ type Author struct {
 
 // Config is the release-me.yaml configuration.
 type Config struct {
-	InitialVersion            string
-	BumpMinorPreMajor         bool
-	BumpPatchForMinorPreMajor bool
+	InitialVersion string
 	// ReleaseAs is the top-level "release-as" key, "" when it is left out:
 	// the version every component's next release is forced to while it is
 	// greater than that component's last version. A component overrides
@@ -339,31 +327,16 @@ type Config struct {
 	// a release bumps the version, "" when the key is left out, which
 	// version.Next reads as version.StrategyDefault. A component overrides
 	// it through its own "versioning-strategy" key.
-	VersioningStrategy version.Strategy
-	HiddenTypes        []string
-	FallbackType       string
-	TokenEnv           string
-	Files              []File
-	ChangelogPath      string
+	VersioningStrategy        version.Strategy
+	BumpMinorPreMajor         bool
+	BumpPatchForMinorPreMajor bool
+
+	ChangelogPath string
 	// ChangelogSource is the top-level "changelog-source" key: which
 	// commits become changelog entries. See the ChangelogSource*
 	// constants. A component overrides it through its own
 	// "changelog-source" key.
 	ChangelogSource string
-	// ChangelogStyle is the top-level keys that shape every changelog
-	// line. There is no per-component override: every component a shared
-	// release pull request carries renders alike.
-	ChangelogStyle ChangelogStyle
-	// ChangelogSections is the top-level "changelog-sections" key, nil
-	// when it was left out and the default sections apply. A component
-	// overrides it through its own "changelog-sections" key.
-	ChangelogSections []ChangelogSection
-	Labels            Labels
-	Author            Author
-	// MajorTag is the top-level "major-tag" key: when true, a stable
-	// release moves the major tag "vX" to the release commit. A component
-	// overrides it through its own "major-tag" key.
-	MajorTag bool
 	// ChangelogType is the top-level "changelog-type" key, one of the
 	// ChangelogType* constants, "" when left out, which is
 	// ChangelogTypeDefault. A component overrides it through its own
@@ -374,11 +347,19 @@ type Config struct {
 	// request and the release still carry the changelog. A component
 	// overrides it through its own "skip-changelog" key.
 	SkipChangelog bool
-	// Versioning is the top-level "versioning" key: how the configured
-	// components' versions relate to each other, default
-	// VersioningIndependent. It applies to the whole family; there is no
-	// per-component override.
-	Versioning Versioning
+	HiddenTypes   []string
+	FallbackType  string
+	// ChangelogSections is the top-level "changelog-sections" key, nil
+	// when it was left out and the default sections apply. A component
+	// overrides it through its own "changelog-sections" key.
+	ChangelogSections []ChangelogSection
+	// ChangelogStyle is the top-level keys that shape every changelog
+	// line. There is no per-component override: every component a shared
+	// release pull request carries renders alike.
+	ChangelogStyle ChangelogStyle
+
+	Files []File
+
 	// ReleasePullRequest is the top-level "release-pull-request" key: one
 	// release pull request per component or one shared by every component.
 	// Left out, it is ReleasePullRequestShared in VersioningLocked and
@@ -425,24 +406,16 @@ type Config struct {
 	// key: free text below the changelog of every release pull request
 	// body, "" for none. Nothing reads it back.
 	ReleasePullRequestFooter string
+
+	Author Author
 	// Signoff is the top-level "signoff" key: "Name <email>" the release
 	// commit's message carries a "Signed-off-by:" trailer for, "" for none.
 	Signoff string
-	// DraftUntilAssetsAttach is the top-level "draft-until-assets-attach"
-	// key, default false: when true, release creates every release as a
-	// draft instead of publishing it immediately, and resumes publishing
-	// one left a draft by an earlier, interrupted run. Only a repository
-	// with GitHub's immutable releases setting turned on needs this; it
-	// applies to the whole repository, there is no per-component
-	// override. See docs/adr/0001-draft-releases-until-assets-attach.md.
-	DraftUntilAssetsAttach bool
-	// ForceTagCreation is the top-level "force-tag-creation" key, default
-	// true: release creates the tag itself, before the release, even for
-	// a draft. False leaves the tag to GitHub, which creates it from the
-	// release's target commit once the release is published, immediately
-	// for a published release, on publish for a draft. A component
-	// overrides it through its own "force-tag-creation" key.
-	ForceTagCreation bool
+
+	// MajorTag is the top-level "major-tag" key: when true, a stable
+	// release moves the major tag "vX" to the release commit. A component
+	// overrides it through its own "major-tag" key.
+	MajorTag bool
 	// IncludeVInReleaseName is the top-level "include-v-in-release-name"
 	// key, default true: the GitHub release is named "vX.Y.Z", or
 	// "<name> vX.Y.Z" for a configured component. False drops the "v",
@@ -456,24 +429,29 @@ type Config struct {
 	// whose own workflow creates the release from the tag. A component
 	// overrides it through its own "skip-github-release" key.
 	SkipGitHubRelease bool
-	// Draft is the top-level "draft" key, default false: when true,
-	// release creates the GitHub release as a draft and leaves it one, for
-	// a human to publish. Unlike DraftUntilAssetsAttach it never resumes
-	// a draft on a later run. A component overrides it through its own
-	// "draft" key.
-	Draft bool
-	// CommentMention is the top-level "comment-mention" key: the mention
-	// prefix a write-access commenter's "release-as" or "release-notes"
-	// command on the release pull request must start with, default
-	// DefaultCommentMention. There is no per-component override.
-	CommentMention string
-	// Workspaces is the top-level "workspaces" key: the package managers,
-	// workspace.Managers, whose manifests link components to each other. A
-	// component released this run moves every other component's dependency
-	// on it to its new version and releases that dependent too. Empty
-	// unless configured, which needs "components" and a shared release pull
-	// request.
-	Workspaces []string
+	// GitHubReleaseDraft is the top-level "github-release-draft" key,
+	// default false: when true, release creates the GitHub release as a
+	// draft and leaves it one, for a human to publish. Unlike
+	// GitHubReleaseDraftUntilAssetsAttach it never resumes a draft on a
+	// later run. A component overrides it through its own
+	// "github-release-draft" key.
+	GitHubReleaseDraft bool
+	// GitHubReleaseDraftUntilAssetsAttach is the top-level
+	// "github-release-draft-until-assets-attach" key, default false: when
+	// true, release creates every release as a draft instead of publishing
+	// it immediately, and resumes publishing one left a draft by an
+	// earlier, interrupted run. Only a repository with GitHub's immutable
+	// releases setting turned on needs this; it applies to the whole
+	// repository, there is no per-component override. See
+	// docs/adr/0001-draft-releases-until-assets-attach.md.
+	GitHubReleaseDraftUntilAssetsAttach bool
+	// ForceTagCreation is the top-level "force-tag-creation" key, default
+	// true: release creates the tag itself, before the release, even for
+	// a draft. False leaves the tag to GitHub, which creates it from the
+	// release's target commit once the release is published, immediately
+	// for a published release, on publish for a draft. A component
+	// overrides it through its own "force-tag-creation" key.
+	ForceTagCreation bool
 	// DeleteReleaseBranch is the top-level "delete-release-branch" key,
 	// default true: release deletes a release branch once every pull
 	// request it released from it this run is tagged and released, the
@@ -482,60 +460,88 @@ type Config struct {
 	// nothing is lost; false keeps it, as release-me did before the key
 	// existed. There is no per-component override.
 	DeleteReleaseBranch bool
+
+	Labels Labels
+	// CommentMention is the top-level "comment-mention" key: the mention
+	// prefix a write-access commenter's "release-as" or "release-notes"
+	// command on the release pull request must start with, default
+	// DefaultCommentMention. There is no per-component override.
+	CommentMention string
+
+	// Versioning is the top-level "versioning" key: how the configured
+	// components' versions relate to each other, default
+	// VersioningIndependent. It applies to the whole family; there is no
+	// per-component override.
+	Versioning Versioning
+	// Components is the "components" key, in the order release-me.yaml
+	// declares them, or nil when the key is absent: a repository without
+	// it is one component at the repository root, as Resolve reports.
+	Components []Component
+	// ExcludePaths is the top-level "exclude-paths" key: paths, relative to
+	// the repository root and cleaned, whose changes never count for the
+	// implicit main component. Only a repository without "components"
+	// carries it; a configured component has its own "exclude-paths".
+	ExcludePaths []string
+	// Workspaces is the top-level "workspaces" key: the package managers,
+	// workspace.Managers, whose manifests link components to each other. A
+	// component released this run moves every other component's dependency
+	// on it to its new version and releases that dependent too. Empty
+	// unless configured, which needs "components" and a shared release pull
+	// request.
+	Workspaces []string
 	// AlwaysLinkLocal is the top-level "always-link-local" key, default
 	// true: every node dependency on a local package name links the two
 	// components. false links one only where it resolves to the local
 	// package anyway, through a local protocol or a range the local
 	// version satisfies, see workspace.Options.
 	AlwaysLinkLocal bool
-	// ExcludePaths is the top-level "exclude-paths" key: paths, relative to
-	// the repository root and cleaned, whose changes never count for the
-	// implicit main component. Only a repository without "components"
-	// carries it; a configured component has its own "exclude-paths".
-	ExcludePaths []string
-	// Components is the "components" key, in the order release-me.yaml
-	// declares them, or nil when the key is absent: a repository without
-	// it is one component at the repository root, as Resolve reports.
-	Components []Component
+
+	TokenEnv string
 }
 
 // Component is one entry of the "components" key: a name mapped to a path
-// and optional overrides of the top-level initial-version,
-// bump-minor-pre-major, bump-patch-for-minor-pre-major, release-as,
-// versioning-strategy, hidden-types, files, major-tag, changelog-source,
-// changelog-type, skip-changelog, force-tag-creation,
-// include-v-in-release-name, skip-github-release and draft, plus its own
-// tag-prefix, changelog path and exclude-paths. A nil
-// field was left out of release-me.yaml and falls back to the top-level
-// value, the same left-out-versus-zero-value distinction Load applies to
-// the top level itself.
+// and optional overrides of the top-level initial-version, release-as,
+// versioning-strategy, bump-minor-pre-major, bump-patch-for-minor-pre-major,
+// changelog-source, changelog-type, skip-changelog, hidden-types,
+// changelog-sections, files, major-tag, include-v-in-release-name,
+// skip-github-release, github-release-draft and force-tag-creation, plus
+// its own tag-prefix, changelog path and exclude-paths. A nil field was
+// left out of release-me.yaml and falls back to the top-level value, the
+// same left-out-versus-zero-value distinction Load applies to the top
+// level itself.
 type Component struct {
-	Name                      string
-	Path                      string
+	Name string
+	Path string
+	// TagPrefix is the component's "tag-prefix" key, nil when it was left
+	// out and the component keeps the derived "<name>/v".
+	TagPrefix *string
+
 	InitialVersion            *string
-	BumpMinorPreMajor         *bool
-	BumpPatchForMinorPreMajor *bool
 	ReleaseAs                 *string
 	VersioningStrategy        *version.Strategy
-	HiddenTypes               *[]string
-	Files                     *[]File
-	MajorTag                  *bool
-	ChangelogType             *string
-	SkipChangelog             *bool
-	ChangelogSource           *string
-	ForceTagCreation          *bool
+	BumpMinorPreMajor         *bool
+	BumpPatchForMinorPreMajor *bool
+
+	// ChangelogPath is the component's "changelog-path" key, nil when it was
+	// left out and the component keeps the derived "<path>/CHANGELOG.md".
+	ChangelogPath     *string
+	ChangelogSource   *string
+	ChangelogType     *string
+	SkipChangelog     *bool
+	HiddenTypes       *[]string
+	ChangelogSections *[]ChangelogSection
+
+	Files *[]File
+
+	MajorTag *bool
 	// IncludeVInReleaseName is the component's
 	// "include-v-in-release-name" key.
 	IncludeVInReleaseName *bool
 	SkipGitHubRelease     *bool
-	Draft                 *bool
-	ChangelogSections     *[]ChangelogSection
-	// TagPrefix is the component's "tag-prefix" key, nil when it was left
-	// out and the component keeps the derived "<name>/v".
-	TagPrefix *string
-	// Changelog is the component's "changelog" key, nil when it was left
-	// out and the component keeps the derived "<path>/CHANGELOG.md".
-	Changelog *string
+	// GitHubReleaseDraft is the component's "github-release-draft" key.
+	GitHubReleaseDraft *bool
+	ForceTagCreation   *bool
+
 	// ExcludePaths is the component's "exclude-paths" key: paths inside
 	// Path, relative to the repository root and cleaned, whose changes never
 	// count for the component. There is no top-level fallback, a path names
@@ -549,60 +555,65 @@ type Component struct {
 // from the path, and its settings with the top-level ones applied where it
 // carries no override of its own.
 type ResolvedComponent struct {
-	Name          string
-	Path          string
-	TagPrefix     string
-	Branch        string
-	ChangelogPath string
+	Name      string
+	Path      string
+	TagPrefix string
+	Branch    string
 	// Multi is true when release-me.yaml declares a "components" key. It
 	// is false for the single implicit "main" component, which keeps
 	// today's tag prefix "v" and release name instead of the generic
 	// "<name>/v" prefix and "<name> vX.Y.Z" release name a configured
 	// component carries, with the "v" dropped when
 	// include-v-in-release-name is false.
-	Multi                     bool
+	Multi bool
+
 	InitialVersion            string
-	BumpMinorPreMajor         bool
-	BumpPatchForMinorPreMajor bool
 	ReleaseAs                 string
 	VersioningStrategy        version.Strategy
-	HiddenTypes               []string
-	Files                     []File
-	MajorTag                  bool
+	BumpMinorPreMajor         bool
+	BumpPatchForMinorPreMajor bool
+
+	ChangelogPath string
+	// ChangelogSource is one of the ChangelogSource* constants: which
+	// commits become this component's changelog entries.
+	ChangelogSource string
 	// ChangelogType is one of the ChangelogType* constants, or "" for
 	// ChangelogTypeDefault: where this component's changelog comes from.
 	ChangelogType string
 	// SkipChangelog is true when pr leaves this component's changelog
 	// file alone.
 	SkipChangelog bool
-	// ChangelogSource is one of the ChangelogSource* constants: which
-	// commits become this component's changelog entries.
-	ChangelogSource string
-	// OtherPaths are, for a root component beside others, every other
-	// component's path, in release-me.yaml's order: the root component owns
-	// every file outside them, so a change inside them does not count for
-	// it, see history.Counts. Empty for every other component.
-	OtherPaths []string
+	HiddenTypes   []string
+	// ChangelogSections is the "changelog-sections" this component's
+	// changelog renders with, nil for the default sections.
+	ChangelogSections []ChangelogSection
 	// ChangelogStyle is the top level's, the same for every component.
 	ChangelogStyle ChangelogStyle
-	// ForceTagCreation is true when release creates this component's tag
-	// itself, false when it leaves the tag to GitHub's release publish.
-	ForceTagCreation bool
+
+	Files []File
+
+	MajorTag bool
 	// IncludeVInReleaseName is true when this component's release name
 	// carries the "v" before the version.
 	IncludeVInReleaseName bool
 	// SkipGitHubRelease is true when release tags this component without
 	// creating a GitHub release for the tag.
 	SkipGitHubRelease bool
-	// Draft is true when release creates this component's GitHub release
-	// as a draft and leaves it one.
-	Draft bool
+	// GitHubReleaseDraft is true when release creates this component's
+	// GitHub release as a draft and leaves it one.
+	GitHubReleaseDraft bool
+	// ForceTagCreation is true when release creates this component's tag
+	// itself, false when it leaves the tag to GitHub's release publish.
+	ForceTagCreation bool
+
 	// ExcludePaths are the paths inside Path whose changes never count for
 	// the component, see history.Counts.
 	ExcludePaths []string
-	// ChangelogSections is the "changelog-sections" this component's
-	// changelog renders with, nil for the default sections.
-	ChangelogSections []ChangelogSection
+	// OtherPaths are, for a root component beside others, every other
+	// component's path, in release-me.yaml's order: the root component owns
+	// every file outside them, so a change inside them does not count for
+	// it, see history.Counts. Empty for every other component.
+	OtherPaths []string
 }
 
 // Resolve returns the components a command should loop over, in
@@ -617,25 +628,25 @@ func (cfg Config) Resolve() []ResolvedComponent {
 			Path:                      ".",
 			TagPrefix:                 "v",
 			Branch:                    "release-me/main",
-			ChangelogPath:             cfg.ChangelogPath,
 			InitialVersion:            cfg.InitialVersion,
-			BumpMinorPreMajor:         cfg.BumpMinorPreMajor,
-			BumpPatchForMinorPreMajor: cfg.BumpPatchForMinorPreMajor,
 			ReleaseAs:                 cfg.ReleaseAs,
 			VersioningStrategy:        cfg.VersioningStrategy,
-			HiddenTypes:               cfg.HiddenTypes,
-			Files:                     cfg.Files,
-			MajorTag:                  cfg.MajorTag,
+			BumpMinorPreMajor:         cfg.BumpMinorPreMajor,
+			BumpPatchForMinorPreMajor: cfg.BumpPatchForMinorPreMajor,
+			ChangelogPath:             cfg.ChangelogPath,
+			ChangelogSource:           cfg.ChangelogSource,
 			ChangelogType:             cfg.ChangelogType,
 			SkipChangelog:             cfg.SkipChangelog,
-			ChangelogSource:           cfg.ChangelogSource,
+			HiddenTypes:               cfg.HiddenTypes,
+			ChangelogSections:         cfg.ChangelogSections,
 			ChangelogStyle:            cfg.ChangelogStyle,
-			ForceTagCreation:          cfg.ForceTagCreation,
+			Files:                     cfg.Files,
+			MajorTag:                  cfg.MajorTag,
 			IncludeVInReleaseName:     cfg.IncludeVInReleaseName,
 			SkipGitHubRelease:         cfg.SkipGitHubRelease,
-			Draft:                     cfg.Draft,
+			GitHubReleaseDraft:        cfg.GitHubReleaseDraft,
+			ForceTagCreation:          cfg.ForceTagCreation,
 			ExcludePaths:              cfg.ExcludePaths,
-			ChangelogSections:         cfg.ChangelogSections,
 		}}
 	}
 
@@ -656,35 +667,29 @@ func (cfg Config) Resolve() []ResolvedComponent {
 			Path:                      c.Path,
 			TagPrefix:                 c.tagPrefix(),
 			Branch:                    branch(c.Name),
-			ChangelogPath:             c.changelogPath(),
 			Multi:                     true,
 			InitialVersion:            cfg.InitialVersion,
-			BumpMinorPreMajor:         cfg.BumpMinorPreMajor,
-			BumpPatchForMinorPreMajor: cfg.BumpPatchForMinorPreMajor,
 			ReleaseAs:                 cfg.ReleaseAs,
 			VersioningStrategy:        cfg.VersioningStrategy,
-			HiddenTypes:               cfg.HiddenTypes,
-			Files:                     cfg.Files,
-			MajorTag:                  cfg.MajorTag,
+			BumpMinorPreMajor:         cfg.BumpMinorPreMajor,
+			BumpPatchForMinorPreMajor: cfg.BumpPatchForMinorPreMajor,
+			ChangelogPath:             c.changelogPath(),
+			ChangelogSource:           cfg.ChangelogSource,
 			ChangelogType:             cfg.ChangelogType,
 			SkipChangelog:             cfg.SkipChangelog,
-			ChangelogSource:           cfg.ChangelogSource,
+			HiddenTypes:               cfg.HiddenTypes,
+			ChangelogSections:         cfg.ChangelogSections,
 			ChangelogStyle:            cfg.ChangelogStyle,
-			ForceTagCreation:          cfg.ForceTagCreation,
+			Files:                     cfg.Files,
+			MajorTag:                  cfg.MajorTag,
 			IncludeVInReleaseName:     cfg.IncludeVInReleaseName,
 			SkipGitHubRelease:         cfg.SkipGitHubRelease,
-			Draft:                     cfg.Draft,
+			GitHubReleaseDraft:        cfg.GitHubReleaseDraft,
+			ForceTagCreation:          cfg.ForceTagCreation,
 			ExcludePaths:              c.ExcludePaths,
-			ChangelogSections:         cfg.ChangelogSections,
 		}
 		if c.InitialVersion != nil {
 			rc.InitialVersion = *c.InitialVersion
-		}
-		if c.BumpMinorPreMajor != nil {
-			rc.BumpMinorPreMajor = *c.BumpMinorPreMajor
-		}
-		if c.BumpPatchForMinorPreMajor != nil {
-			rc.BumpPatchForMinorPreMajor = *c.BumpPatchForMinorPreMajor
 		}
 		if c.ReleaseAs != nil {
 			rc.ReleaseAs = *c.ReleaseAs
@@ -692,14 +697,14 @@ func (cfg Config) Resolve() []ResolvedComponent {
 		if c.VersioningStrategy != nil {
 			rc.VersioningStrategy = *c.VersioningStrategy
 		}
-		if c.HiddenTypes != nil {
-			rc.HiddenTypes = *c.HiddenTypes
+		if c.BumpMinorPreMajor != nil {
+			rc.BumpMinorPreMajor = *c.BumpMinorPreMajor
 		}
-		if c.Files != nil {
-			rc.Files = *c.Files
+		if c.BumpPatchForMinorPreMajor != nil {
+			rc.BumpPatchForMinorPreMajor = *c.BumpPatchForMinorPreMajor
 		}
-		if c.MajorTag != nil {
-			rc.MajorTag = *c.MajorTag
+		if c.ChangelogSource != nil {
+			rc.ChangelogSource = *c.ChangelogSource
 		}
 		if c.ChangelogType != nil {
 			rc.ChangelogType = *c.ChangelogType
@@ -707,21 +712,17 @@ func (cfg Config) Resolve() []ResolvedComponent {
 		if c.SkipChangelog != nil {
 			rc.SkipChangelog = *c.SkipChangelog
 		}
-		if c.ChangelogSource != nil {
-			rc.ChangelogSource = *c.ChangelogSource
+		if c.HiddenTypes != nil {
+			rc.HiddenTypes = *c.HiddenTypes
 		}
 		if c.ChangelogSections != nil {
 			rc.ChangelogSections = *c.ChangelogSections
 		}
-		if c.Path == "." {
-			for _, other := range cfg.Components {
-				if other.Path != "." {
-					rc.OtherPaths = append(rc.OtherPaths, other.Path)
-				}
-			}
+		if c.Files != nil {
+			rc.Files = *c.Files
 		}
-		if c.ForceTagCreation != nil {
-			rc.ForceTagCreation = *c.ForceTagCreation
+		if c.MajorTag != nil {
+			rc.MajorTag = *c.MajorTag
 		}
 		if c.IncludeVInReleaseName != nil {
 			rc.IncludeVInReleaseName = *c.IncludeVInReleaseName
@@ -729,8 +730,18 @@ func (cfg Config) Resolve() []ResolvedComponent {
 		if c.SkipGitHubRelease != nil {
 			rc.SkipGitHubRelease = *c.SkipGitHubRelease
 		}
-		if c.Draft != nil {
-			rc.Draft = *c.Draft
+		if c.GitHubReleaseDraft != nil {
+			rc.GitHubReleaseDraft = *c.GitHubReleaseDraft
+		}
+		if c.ForceTagCreation != nil {
+			rc.ForceTagCreation = *c.ForceTagCreation
+		}
+		if c.Path == "." {
+			for _, other := range cfg.Components {
+				if other.Path != "." {
+					rc.OtherPaths = append(rc.OtherPaths, other.Path)
+				}
+			}
 		}
 		out = append(out, rc)
 	}
@@ -778,12 +789,14 @@ type rawChangelogSection struct {
 // rawLabels mirrors Labels with pointer fields, so Load can tell a key left
 // out of the "labels" block apart from one set to its zero value.
 type rawLabels struct {
-	Pending *labelList       `yaml:"pending"`
-	Tagged  *labelList       `yaml:"tagged"`
-	Extra   *labelList       `yaml:"extra"`
-	Alpha   *preReleaseLabel `yaml:"alpha"`
-	Beta    *preReleaseLabel `yaml:"beta"`
-	Rc      *preReleaseLabel `yaml:"rc"`
+	Pending *labelList `yaml:"pending"`
+	Tagged  *labelList `yaml:"tagged"`
+	Extra   *labelList `yaml:"extra"`
+	// PreRelease is decoded as a node, like Components, so
+	// applyPreReleaseTypes can read its entries back in release-me.yaml's
+	// order: a Go map gives no such guarantee. A zero Kind means the
+	// "labels.prerelease" key was left out.
+	PreRelease yaml.Node `yaml:"prerelease"`
 }
 
 // labelList is "labels.pending", "labels.tagged" or "labels.extra": one
@@ -815,33 +828,6 @@ func (l *labelList) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// preReleaseLabel is one of "labels.alpha", "labels.beta" and "labels.rc":
-// a label name, or false for that pre-release type turned off, the same as
-// "". Without it yaml decodes an unquoted false into the label name "false".
-type preReleaseLabel string
-
-// UnmarshalYAML accepts a string, or the boolean false as the empty name.
-// true is rejected: it names no label and turns nothing off.
-func (l *preReleaseLabel) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode && node.Tag == "!!bool" {
-		var on bool
-		if err := node.Decode(&on); err != nil {
-			return err
-		}
-		if on {
-			return fmt.Errorf("line %d: a pre-release label is a name, or false to turn it off, not true", node.Line)
-		}
-		*l = ""
-		return nil
-	}
-	var name string
-	if err := node.Decode(&name); err != nil {
-		return err
-	}
-	*l = preReleaseLabel(name)
-	return nil
-}
-
 // rawAuthor mirrors Author with pointer fields, so Load can tell a key left
 // out of the "author" block apart from one set to its zero value.
 type rawAuthor struct {
@@ -852,108 +838,129 @@ type rawAuthor struct {
 // raw mirrors Config with pointer fields, so Load can tell a key left out of
 // the file apart from one set to its zero value.
 type raw struct {
-	InitialVersion                *string                `yaml:"initial-version"`
-	BumpMinorPreMajor             *bool                  `yaml:"bump-minor-pre-major"`
-	BumpPatchForMinorPreMajor     *bool                  `yaml:"bump-patch-for-minor-pre-major"`
-	ReleaseAs                     *string                `yaml:"release-as"`
-	VersioningStrategy            *string                `yaml:"versioning-strategy"`
-	HiddenTypes                   *[]string              `yaml:"hidden-types"`
-	FallbackType                  *string                `yaml:"fallback-type"`
-	TokenEnv                      *string                `yaml:"token-env"`
-	Files                         *[]rawFile             `yaml:"files"`
-	Changelog                     *string                `yaml:"changelog"`
-	ChangelogSource               *string                `yaml:"changelog-source"`
-	ChangelogType                 *string                `yaml:"changelog-type"`
-	ChangelogSentenceCase         *bool                  `yaml:"changelog-sentence-case"`
-	ChangelogAuthors              *bool                  `yaml:"changelog-authors"`
-	ChangelogHost                 *string                `yaml:"changelog-host"`
-	ChangelogDateFormat           *string                `yaml:"changelog-date-format"`
-	ChangelogCommitLinks          *bool                  `yaml:"changelog-commit-links"`
-	ChangelogIssueRefs            *bool                  `yaml:"changelog-issue-references"`
-	ChangelogSections             *[]rawChangelogSection `yaml:"changelog-sections"`
-	Labels                        *rawLabels             `yaml:"labels"`
-	Author                        *rawAuthor             `yaml:"author"`
-	MajorTag                      *bool                  `yaml:"major-tag"`
-	SkipChangelog                 *bool                  `yaml:"skip-changelog"`
-	Versioning                    *string                `yaml:"versioning"`
-	ReleasePullRequest            *string                `yaml:"release-pull-request"`
-	ReleasePullRequestLayout      *string                `yaml:"release-pull-request-layout"`
-	ReleasePullRequestGuide       *bool                  `yaml:"release-pull-request-guide"`
-	ReleasePullRequestDraft       *bool                  `yaml:"release-pull-request-draft"`
-	ReleasePullRequestHeader      *string                `yaml:"release-pull-request-header"`
-	ReleasePullRequestFooter      *string                `yaml:"release-pull-request-footer"`
-	Signoff                       *string                `yaml:"signoff"`
-	DraftUntilAssetsAttach        *bool                  `yaml:"draft-until-assets-attach"`
-	ForceTagCreation              *bool                  `yaml:"force-tag-creation"`
-	IncludeVInReleaseName         *bool                  `yaml:"include-v-in-release-name"`
-	SkipGitHubRelease             *bool                  `yaml:"skip-github-release"`
-	Draft                         *bool                  `yaml:"draft"`
-	CommentMention                *string                `yaml:"comment-mention"`
-	ReleasePullRequestTitle       *string                `yaml:"release-pull-request-title"`
-	ReleasePullRequestSharedTitle *string                `yaml:"release-pull-request-shared-title"`
-	Workspaces                    *[]string              `yaml:"workspaces"`
-	DeleteReleaseBranch           *bool                  `yaml:"delete-release-branch"`
-	AlwaysLinkLocal               *bool                  `yaml:"always-link-local"`
-	ExcludePaths                  *[]string              `yaml:"exclude-paths"`
-	// PreReleaseTypes is decoded as a node, like Components, so its
-	// entries keep release-me.yaml's order.
-	PreReleaseTypes yaml.Node `yaml:"prerelease-types"`
+	InitialVersion            *string `yaml:"initial-version"`
+	ReleaseAs                 *string `yaml:"release-as"`
+	VersioningStrategy        *string `yaml:"versioning-strategy"`
+	BumpMinorPreMajor         *bool   `yaml:"bump-minor-pre-major"`
+	BumpPatchForMinorPreMajor *bool   `yaml:"bump-patch-for-minor-pre-major"`
+
+	ChangelogPath         *string                `yaml:"changelog-path"`
+	ChangelogSource       *string                `yaml:"changelog-source"`
+	ChangelogType         *string                `yaml:"changelog-type"`
+	SkipChangelog         *bool                  `yaml:"skip-changelog"`
+	HiddenTypes           *[]string              `yaml:"hidden-types"`
+	FallbackType          *string                `yaml:"fallback-type"`
+	ChangelogSections     *[]rawChangelogSection `yaml:"changelog-sections"`
+	ChangelogSentenceCase *bool                  `yaml:"changelog-sentence-case"`
+	ChangelogAuthors      *bool                  `yaml:"changelog-authors"`
+	ChangelogCommitLinks  *bool                  `yaml:"changelog-commit-links"`
+	ChangelogIssueRefs    *bool                  `yaml:"changelog-issue-references"`
+	ChangelogHost         *string                `yaml:"changelog-host"`
+	ChangelogDateFormat   *string                `yaml:"changelog-date-format"`
+
+	Files *[]rawFile `yaml:"files"`
+
+	ReleasePullRequest            *string `yaml:"release-pull-request"`
+	ReleasePullRequestLayout      *string `yaml:"release-pull-request-layout"`
+	ReleasePullRequestGuide       *bool   `yaml:"release-pull-request-guide"`
+	ReleasePullRequestTitle       *string `yaml:"release-pull-request-title"`
+	ReleasePullRequestSharedTitle *string `yaml:"release-pull-request-shared-title"`
+	ReleasePullRequestDraft       *bool   `yaml:"release-pull-request-draft"`
+	ReleasePullRequestHeader      *string `yaml:"release-pull-request-header"`
+	ReleasePullRequestFooter      *string `yaml:"release-pull-request-footer"`
+
+	Author  *rawAuthor `yaml:"author"`
+	Signoff *string    `yaml:"signoff"`
+
+	MajorTag                            *bool `yaml:"major-tag"`
+	IncludeVInReleaseName               *bool `yaml:"include-v-in-release-name"`
+	SkipGitHubRelease                   *bool `yaml:"skip-github-release"`
+	GitHubReleaseDraft                  *bool `yaml:"github-release-draft"`
+	GitHubReleaseDraftUntilAssetsAttach *bool `yaml:"github-release-draft-until-assets-attach"`
+	ForceTagCreation                    *bool `yaml:"force-tag-creation"`
+	DeleteReleaseBranch                 *bool `yaml:"delete-release-branch"`
+
+	Labels         *rawLabels `yaml:"labels"`
+	CommentMention *string    `yaml:"comment-mention"`
+
+	Versioning *string `yaml:"versioning"`
 	// Components is decoded as a node, not a Go map, so decodeComponents
 	// can read its entries back in release-me.yaml's order: a Go map
 	// gives no such guarantee. A zero Kind means the "components" key was
 	// left out: yaml.v3 only special cases decoding into a Node field by
 	// value, never through a pointer.
-	Components yaml.Node `yaml:"components"`
+	Components      yaml.Node `yaml:"components"`
+	ExcludePaths    *[]string `yaml:"exclude-paths"`
+	Workspaces      *[]string `yaml:"workspaces"`
+	AlwaysLinkLocal *bool     `yaml:"always-link-local"`
+
+	TokenEnv *string `yaml:"token-env"`
 }
 
 // rawComponent mirrors Component with pointer fields, the yaml shape of one
 // "components" entry.
 type rawComponent struct {
-	Path                      *string                `yaml:"path"`
-	InitialVersion            *string                `yaml:"initial-version"`
-	BumpMinorPreMajor         *bool                  `yaml:"bump-minor-pre-major"`
-	BumpPatchForMinorPreMajor *bool                  `yaml:"bump-patch-for-minor-pre-major"`
-	ReleaseAs                 *string                `yaml:"release-as"`
-	VersioningStrategy        *string                `yaml:"versioning-strategy"`
-	HiddenTypes               *[]string              `yaml:"hidden-types"`
-	Files                     *[]rawFile             `yaml:"files"`
-	MajorTag                  *bool                  `yaml:"major-tag"`
-	ChangelogType             *string                `yaml:"changelog-type"`
-	SkipChangelog             *bool                  `yaml:"skip-changelog"`
-	ChangelogSource           *string                `yaml:"changelog-source"`
-	ForceTagCreation          *bool                  `yaml:"force-tag-creation"`
-	IncludeVInReleaseName     *bool                  `yaml:"include-v-in-release-name"`
-	SkipGitHubRelease         *bool                  `yaml:"skip-github-release"`
-	Draft                     *bool                  `yaml:"draft"`
-	ChangelogSections         *[]rawChangelogSection `yaml:"changelog-sections"`
-	TagPrefix                 *string                `yaml:"tag-prefix"`
-	Changelog                 *string                `yaml:"changelog"`
-	ExcludePaths              *[]string              `yaml:"exclude-paths"`
+	Path      *string `yaml:"path"`
+	TagPrefix *string `yaml:"tag-prefix"`
+
+	InitialVersion            *string `yaml:"initial-version"`
+	ReleaseAs                 *string `yaml:"release-as"`
+	VersioningStrategy        *string `yaml:"versioning-strategy"`
+	BumpMinorPreMajor         *bool   `yaml:"bump-minor-pre-major"`
+	BumpPatchForMinorPreMajor *bool   `yaml:"bump-patch-for-minor-pre-major"`
+
+	ChangelogPath     *string                `yaml:"changelog-path"`
+	ChangelogSource   *string                `yaml:"changelog-source"`
+	ChangelogType     *string                `yaml:"changelog-type"`
+	SkipChangelog     *bool                  `yaml:"skip-changelog"`
+	HiddenTypes       *[]string              `yaml:"hidden-types"`
+	ChangelogSections *[]rawChangelogSection `yaml:"changelog-sections"`
+
+	Files *[]rawFile `yaml:"files"`
+
+	MajorTag              *bool `yaml:"major-tag"`
+	IncludeVInReleaseName *bool `yaml:"include-v-in-release-name"`
+	SkipGitHubRelease     *bool `yaml:"skip-github-release"`
+	GitHubReleaseDraft    *bool `yaml:"github-release-draft"`
+	ForceTagCreation      *bool `yaml:"force-tag-creation"`
+
+	ExcludePaths *[]string `yaml:"exclude-paths"`
 }
 
 // Default is the configuration applied when release-me.yaml is absent.
 func Default() Config {
 	return Config{
-		InitialVersion:  DefaultInitialVersion,
-		HiddenTypes:     DefaultHiddenTypes,
-		FallbackType:    DefaultFallbackType,
-		TokenEnv:        DefaultTokenEnv,
+		InitialVersion: DefaultInitialVersion,
+
 		ChangelogPath:   DefaultChangelogPath,
 		ChangelogSource: DefaultChangelogSource,
-		Labels: Labels{
-			Pending: []string{DefaultPendingLabel}, Tagged: []string{DefaultTaggedLabel},
-			Alpha: DefaultAlphaLabel, Beta: DefaultBetaLabel, Rc: DefaultRcLabel,
-		},
-		Author:                   Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
-		Versioning:               DefaultVersioning,
+		HiddenTypes:     DefaultHiddenTypes,
+		FallbackType:    DefaultFallbackType,
+
 		ReleasePullRequest:       ReleasePullRequestPerComponent,
 		ReleasePullRequestLayout: DefaultReleasePullRequestLayout,
 		ReleasePullRequestGuide:  true,
-		CommentMention:           DefaultCommentMention,
-		ForceTagCreation:         true,
-		IncludeVInReleaseName:    true,
-		DeleteReleaseBranch:      true,
-		AlwaysLinkLocal:          true,
+
+		Author: Author{Name: DefaultAuthorName, Email: DefaultAuthorEmail},
+
+		IncludeVInReleaseName: true,
+		ForceTagCreation:      true,
+		DeleteReleaseBranch:   true,
+
+		Labels: Labels{
+			Pending: []string{DefaultPendingLabel}, Tagged: []string{DefaultTaggedLabel},
+			PreRelease: []PreReleaseType{
+				{Type: "alpha", Label: DefaultAlphaLabel},
+				{Type: "beta", Label: DefaultBetaLabel},
+				{Type: "rc", Label: DefaultRcLabel},
+			},
+		},
+		CommentMention: DefaultCommentMention,
+
+		Versioning:      DefaultVersioning,
+		AlwaysLinkLocal: true,
+
+		TokenEnv: DefaultTokenEnv,
 	}
 }
 
@@ -1064,12 +1071,6 @@ func Load(path string) (cfg Config, err error) {
 	if r.InitialVersion != nil {
 		cfg.InitialVersion = *r.InitialVersion
 	}
-	if r.BumpMinorPreMajor != nil {
-		cfg.BumpMinorPreMajor = *r.BumpMinorPreMajor
-	}
-	if r.BumpPatchForMinorPreMajor != nil {
-		cfg.BumpPatchForMinorPreMajor = *r.BumpPatchForMinorPreMajor
-	}
 	if r.ReleaseAs != nil {
 		if err := validateReleaseAs(*r.ReleaseAs); err != nil {
 			return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
@@ -1083,6 +1084,34 @@ func Load(path string) (cfg Config, err error) {
 		}
 		cfg.VersioningStrategy = strategy
 	}
+	if r.BumpMinorPreMajor != nil {
+		cfg.BumpMinorPreMajor = *r.BumpMinorPreMajor
+	}
+	if r.BumpPatchForMinorPreMajor != nil {
+		cfg.BumpPatchForMinorPreMajor = *r.BumpPatchForMinorPreMajor
+	}
+
+	if r.ChangelogPath != nil {
+		cfg.ChangelogPath = *r.ChangelogPath
+	}
+	if r.ChangelogSource != nil {
+		if !slices.Contains(changelogSources, *r.ChangelogSource) {
+			return Config{}, fmt.Errorf(
+				"config: parse %s: changelog-source %q is none of %s",
+				path, *r.ChangelogSource, strings.Join(changelogSources, ", "),
+			)
+		}
+		cfg.ChangelogSource = *r.ChangelogSource
+	}
+	if r.ChangelogType != nil {
+		if err := validateChangelogType(*r.ChangelogType); err != nil {
+			return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
+		}
+		cfg.ChangelogType = *r.ChangelogType
+	}
+	if r.SkipChangelog != nil {
+		cfg.SkipChangelog = *r.SkipChangelog
+	}
 	if r.HiddenTypes != nil {
 		cfg.HiddenTypes = *r.HiddenTypes
 	}
@@ -1095,26 +1124,24 @@ func Load(path string) (cfg Config, err error) {
 			path, cfg.FallbackType,
 		)
 	}
-	if r.TokenEnv != nil {
-		cfg.TokenEnv = *r.TokenEnv
-	}
-	if r.Changelog != nil {
-		cfg.ChangelogPath = *r.Changelog
-	}
-	if r.ChangelogSource != nil {
-		if !slices.Contains(changelogSources, *r.ChangelogSource) {
-			return Config{}, fmt.Errorf(
-				"config: parse %s: changelog-source %q is none of %s",
-				path, *r.ChangelogSource, strings.Join(changelogSources, ", "),
-			)
+	if r.ChangelogSections != nil {
+		sections, err := decodeChangelogSections(*r.ChangelogSections)
+		if err != nil {
+			return Config{}, fmt.Errorf("config: parse %s: changelog-sections: %w", path, err)
 		}
-		cfg.ChangelogSource = *r.ChangelogSource
+		cfg.ChangelogSections = sections
 	}
 	if r.ChangelogSentenceCase != nil {
 		cfg.ChangelogStyle.SentenceCase = *r.ChangelogSentenceCase
 	}
 	if r.ChangelogAuthors != nil {
 		cfg.ChangelogStyle.Authors = *r.ChangelogAuthors
+	}
+	if r.ChangelogCommitLinks != nil {
+		cfg.ChangelogStyle.CommitLinks = *r.ChangelogCommitLinks
+	}
+	if r.ChangelogIssueRefs != nil {
+		cfg.ChangelogStyle.IssueReferences = *r.ChangelogIssueRefs
 	}
 	if r.ChangelogHost != nil {
 		host, err := ValidateChangelogHost(*r.ChangelogHost)
@@ -1130,19 +1157,56 @@ func Load(path string) (cfg Config, err error) {
 		}
 		cfg.ChangelogStyle.DateFormat = *r.ChangelogDateFormat
 	}
-	if r.ChangelogCommitLinks != nil {
-		cfg.ChangelogStyle.CommitLinks = *r.ChangelogCommitLinks
-	}
-	if r.ChangelogIssueRefs != nil {
-		cfg.ChangelogStyle.IssueReferences = *r.ChangelogIssueRefs
-	}
-	if r.ChangelogSections != nil {
-		sections, err := decodeChangelogSections(*r.ChangelogSections)
+
+	if r.Files != nil {
+		files, err := decodeFiles(path, *r.Files)
 		if err != nil {
-			return Config{}, fmt.Errorf("config: parse %s: changelog-sections: %w", path, err)
+			return Config{}, err
 		}
-		cfg.ChangelogSections = sections
+		cfg.Files = files
 	}
+
+	if r.Author != nil {
+		if r.Author.Name != nil {
+			cfg.Author.Name = *r.Author.Name
+			cfg.Author.Set = append(cfg.Author.Set, "author.name")
+		}
+		if r.Author.Email != nil {
+			cfg.Author.Email = *r.Author.Email
+			cfg.Author.Set = append(cfg.Author.Set, "author.email")
+		}
+	}
+	if r.Signoff != nil {
+		if *r.Signoff != "" {
+			if err := releasepr.CheckSignoff(*r.Signoff); err != nil {
+				return Config{}, fmt.Errorf("config: parse %s: signoff %q %w", path, *r.Signoff, err)
+			}
+		}
+		cfg.Signoff = *r.Signoff
+	}
+
+	if r.MajorTag != nil {
+		cfg.MajorTag = *r.MajorTag
+	}
+	if r.IncludeVInReleaseName != nil {
+		cfg.IncludeVInReleaseName = *r.IncludeVInReleaseName
+	}
+	if r.SkipGitHubRelease != nil {
+		cfg.SkipGitHubRelease = *r.SkipGitHubRelease
+	}
+	if r.GitHubReleaseDraft != nil {
+		cfg.GitHubReleaseDraft = *r.GitHubReleaseDraft
+	}
+	if r.GitHubReleaseDraftUntilAssetsAttach != nil {
+		cfg.GitHubReleaseDraftUntilAssetsAttach = *r.GitHubReleaseDraftUntilAssetsAttach
+	}
+	if r.ForceTagCreation != nil {
+		cfg.ForceTagCreation = *r.ForceTagCreation
+	}
+	if r.DeleteReleaseBranch != nil {
+		cfg.DeleteReleaseBranch = *r.DeleteReleaseBranch
+	}
+
 	if r.Labels != nil {
 		if r.Labels.Pending != nil {
 			if len(*r.Labels.Pending) == 0 {
@@ -1159,55 +1223,29 @@ func Load(path string) (cfg Config, err error) {
 		if r.Labels.Extra != nil {
 			cfg.Labels.Extra = *r.Labels.Extra
 		}
-		if r.Labels.Alpha != nil {
-			cfg.Labels.Alpha = string(*r.Labels.Alpha)
+		if r.Labels.PreRelease.Kind != 0 {
+			types, err := applyPreReleaseTypes(path, &r.Labels.PreRelease, cfg.Labels.PreRelease)
+			if err != nil {
+				return Config{}, err
+			}
+			cfg.Labels.PreRelease = types
 		}
-		if r.Labels.Beta != nil {
-			cfg.Labels.Beta = string(*r.Labels.Beta)
-		}
-		if r.Labels.Rc != nil {
-			cfg.Labels.Rc = string(*r.Labels.Rc)
-		}
-	}
-	if r.PreReleaseTypes.Kind != 0 {
-		types, err := decodePreReleaseTypes(path, &r.PreReleaseTypes)
-		if err != nil {
-			return Config{}, err
-		}
-		cfg.Labels.PreReleaseTypes = types
 	}
 	if err := validateLabels(path, cfg.Labels); err != nil {
 		return Config{}, err
 	}
-	if r.Author != nil {
-		if r.Author.Name != nil {
-			cfg.Author.Name = *r.Author.Name
-			cfg.Author.Set = append(cfg.Author.Set, "author.name")
+	if r.CommentMention != nil {
+		if *r.CommentMention == "" {
+			return Config{}, fmt.Errorf("config: parse %s: comment-mention is empty", path)
 		}
-		if r.Author.Email != nil {
-			cfg.Author.Email = *r.Author.Email
-			cfg.Author.Set = append(cfg.Author.Set, "author.email")
-		}
+		cfg.CommentMention = *r.CommentMention
 	}
-	if r.Files != nil {
-		files, err := decodeFiles(path, *r.Files)
-		if err != nil {
-			return Config{}, err
-		}
-		cfg.Files = files
-	}
-	if r.MajorTag != nil {
-		cfg.MajorTag = *r.MajorTag
-	}
-	if r.ChangelogType != nil {
-		if err := validateChangelogType(*r.ChangelogType); err != nil {
-			return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
-		}
-		cfg.ChangelogType = *r.ChangelogType
-	}
-	if r.SkipChangelog != nil {
-		cfg.SkipChangelog = *r.SkipChangelog
-	}
+
+	// The versioning mode is read before release-pull-request is validated
+	// against it, and before the top-level versioning-strategy service-pack
+	// check below: both depend on it, so this cluster stays together and in
+	// this order even though "versioning" and "components" otherwise group
+	// with the components-related keys further down.
 	if r.Versioning != nil {
 		cfg.Versioning = Versioning(*r.Versioning)
 		if !validVersioning[cfg.Versioning] {
@@ -1281,38 +1319,7 @@ func Load(path string) (cfg Config, err error) {
 		}
 		*text.dst = *text.value
 	}
-	if r.Signoff != nil {
-		if *r.Signoff != "" {
-			if err := releasepr.CheckSignoff(*r.Signoff); err != nil {
-				return Config{}, fmt.Errorf("config: parse %s: signoff %q %w", path, *r.Signoff, err)
-			}
-		}
-		cfg.Signoff = *r.Signoff
-	}
-	if r.DraftUntilAssetsAttach != nil {
-		cfg.DraftUntilAssetsAttach = *r.DraftUntilAssetsAttach
-	}
-	if r.ForceTagCreation != nil {
-		cfg.ForceTagCreation = *r.ForceTagCreation
-	}
-	if r.IncludeVInReleaseName != nil {
-		cfg.IncludeVInReleaseName = *r.IncludeVInReleaseName
-	}
-	if r.SkipGitHubRelease != nil {
-		cfg.SkipGitHubRelease = *r.SkipGitHubRelease
-	}
-	if r.Draft != nil {
-		cfg.Draft = *r.Draft
-	}
-	if r.CommentMention != nil {
-		if *r.CommentMention == "" {
-			return Config{}, fmt.Errorf("config: parse %s: comment-mention is empty", path)
-		}
-		cfg.CommentMention = *r.CommentMention
-	}
-	if r.DeleteReleaseBranch != nil {
-		cfg.DeleteReleaseBranch = *r.DeleteReleaseBranch
-	}
+
 	if r.ExcludePaths != nil {
 		if r.Components.Kind != 0 {
 			return Config{}, fmt.Errorf("config: parse %s: exclude-paths: a configured component carries its own "+
@@ -1377,6 +1384,10 @@ func Load(path string) (cfg Config, err error) {
 	}
 	if err := validateTagCreation(path, cfg); err != nil {
 		return Config{}, err
+	}
+
+	if r.TokenEnv != nil {
+		cfg.TokenEnv = *r.TokenEnv
 	}
 	return cfg, nil
 }
@@ -1564,9 +1575,9 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 				return nil, fmt.Errorf("config: parse %s: component %s: tag-prefix %q %w", path, name, *rc.TagPrefix, err)
 			}
 		}
-		if rc.Changelog != nil {
-			if err := validateChangelogPath(*rc.Changelog); err != nil {
-				return nil, fmt.Errorf("config: parse %s: component %s: changelog %q %w", path, name, *rc.Changelog, err)
+		if rc.ChangelogPath != nil {
+			if err := validateChangelogPath(*rc.ChangelogPath); err != nil {
+				return nil, fmt.Errorf("config: parse %s: component %s: changelog-path %q %w", path, name, *rc.ChangelogPath, err)
 			}
 		}
 		if rc.ChangelogType != nil {
@@ -1617,11 +1628,11 @@ func decodeComponents(path string, node *yaml.Node) ([]Component, error) {
 			VersioningStrategy: strategy,
 			HiddenTypes:        rc.HiddenTypes, MajorTag: rc.MajorTag, ChangelogType: rc.ChangelogType,
 			SkipChangelog:   rc.SkipChangelog,
-			ChangelogSource: rc.ChangelogSource, TagPrefix: rc.TagPrefix, Changelog: rc.Changelog,
+			ChangelogSource: rc.ChangelogSource, TagPrefix: rc.TagPrefix, ChangelogPath: rc.ChangelogPath,
 			ForceTagCreation:      rc.ForceTagCreation,
 			IncludeVInReleaseName: rc.IncludeVInReleaseName,
 			SkipGitHubRelease:     rc.SkipGitHubRelease,
-			Draft:                 rc.Draft,
+			GitHubReleaseDraft:    rc.GitHubReleaseDraft,
 		}
 		if rc.Files != nil {
 			files, err := decodeFiles(path, *rc.Files)
@@ -1805,18 +1816,18 @@ func validateTagPrefixes(path string, components []Component) error {
 	return nil
 }
 
-// changelogPath returns the component's configured "changelog", cleaned,
-// or the derived "<path>/CHANGELOG.md" when it carries none.
+// changelogPath returns the component's configured "changelog-path",
+// cleaned, or the derived "<path>/CHANGELOG.md" when it carries none.
 func (c Component) changelogPath() string {
-	if c.Changelog != nil {
-		return stdpath.Clean(*c.Changelog)
+	if c.ChangelogPath != nil {
+		return stdpath.Clean(*c.ChangelogPath)
 	}
 	return stdpath.Join(c.Path, "CHANGELOG.md")
 }
 
-// validateChangelogPath rejects a "changelog" that is not a file inside the
-// repository: pr writes it relative to the checkout, so an absolute path or
-// one that climbs out through ".." would write outside it.
+// validateChangelogPath rejects a "changelog-path" that is not a file inside
+// the repository: pr writes it relative to the checkout, so an absolute path
+// or one that climbs out through ".." would write outside it.
 func validateChangelogPath(p string) error {
 	clean := stdpath.Clean(p)
 	switch {
@@ -1896,17 +1907,16 @@ func validateLabels(path string, l Labels) error {
 	}{
 		{"labels.pending", l.Pending},
 		{"labels.tagged", l.Tagged},
-		{"labels.alpha", []string{l.Alpha}},
-		{"labels.beta", []string{l.Beta}},
-		{"labels.rc", []string{l.Rc}},
-		{"labels.extra", l.Extra},
 	} {
 		for _, name := range group.names {
 			roles = append(roles, struct{ key, name string }{group.key, name})
 		}
 	}
-	for _, t := range l.PreReleaseTypes {
-		roles = append(roles, struct{ key, name string }{"prerelease-types." + t.Type, t.Label})
+	for _, t := range l.PreRelease {
+		roles = append(roles, struct{ key, name string }{"labels.prerelease." + t.Type, t.Label})
+	}
+	for _, name := range l.Extra {
+		roles = append(roles, struct{ key, name string }{"labels.extra", name})
 	}
 	for i := 0; i < len(roles); i++ {
 		for j := i + 1; j < len(roles); j++ {
@@ -1922,36 +1932,61 @@ func validateLabels(path string, l Labels) error {
 	return nil
 }
 
-// reservedPreReleaseTypes are the type names "prerelease-types" refuses:
-// alpha, beta and rc are configured under "labels".
-var reservedPreReleaseTypes = []string{"alpha", "beta", "rc"}
-
-// decodePreReleaseTypes converts the "prerelease-types" mapping node, type
-// name to label, into []PreReleaseType in release-me.yaml's order. A type
-// name is one semver pre-release identifier that is not only digits, the
-// "<type>" of "X.Y.Z-<type>.N", and none of reservedPreReleaseTypes; a
-// label is a non-empty string.
-func decodePreReleaseTypes(path string, node *yaml.Node) ([]PreReleaseType, error) {
+// applyPreReleaseTypes merges the "labels.prerelease" mapping node, type
+// name to label, onto base, cfg.Labels.PreRelease already holding alpha,
+// beta and rc at their defaults: a key naming one of the three, or an
+// earlier line of this same block, renames or turns it off in place,
+// keeping its position in the order; any other key appends a further
+// pre-release type after them, in release-me.yaml's order. A type name is
+// one semver pre-release identifier that is not only digits, the "<type>"
+// of "X.Y.Z-<type>.N".
+func applyPreReleaseTypes(path string, node *yaml.Node, base []PreReleaseType) ([]PreReleaseType, error) {
 	if node.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("config: parse %s: prerelease-types: must be a mapping of type to label", path)
+		return nil, fmt.Errorf("config: parse %s: labels.prerelease: must be a mapping of type to label", path)
 	}
-	types := make([]PreReleaseType, 0, len(node.Content)/2)
+	types := slices.Clone(base)
 	for i := 0; i+1 < len(node.Content); i += 2 {
-		name, value := node.Content[i].Value, node.Content[i+1]
+		name, valueNode := node.Content[i].Value, node.Content[i+1]
 		if !preReleaseTypeName.MatchString(name) || strings.Trim(name, "0123456789") == "" {
-			return nil, fmt.Errorf("config: parse %s: prerelease-types: type %q is not one pre-release identifier "+
+			return nil, fmt.Errorf("config: parse %s: labels.prerelease: type %q is not one pre-release identifier "+
 				"of ASCII letters, digits and \"-\" with at least one letter or \"-\"", path, name)
 		}
-		if slices.Contains(reservedPreReleaseTypes, name) {
-			return nil, fmt.Errorf("config: parse %s: prerelease-types: type %q is reserved, "+
-				"alpha, beta and rc are configured under labels", path, name)
+		label, off, err := decodePreReleaseLabelValue(valueNode)
+		if err != nil {
+			return nil, fmt.Errorf("config: parse %s: labels.prerelease.%s: %w", path, name, err)
 		}
-		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || value.Value == "" {
-			return nil, fmt.Errorf("config: parse %s: prerelease-types.%s: the label must be a non-empty string", path, name)
+		if idx := slices.IndexFunc(types, func(t PreReleaseType) bool { return t.Type == name }); idx >= 0 {
+			types[idx].Label = label
+			continue
 		}
-		types = append(types, PreReleaseType{Type: name, Label: value.Value})
+		if off {
+			return nil, fmt.Errorf("config: parse %s: labels.prerelease.%s: turning off a type that is not alpha, "+
+				"beta, rc or configured earlier in this block is pointless", path, name)
+		}
+		types = append(types, PreReleaseType{Type: name, Label: label})
 	}
 	return types, nil
+}
+
+// decodePreReleaseLabelValue reads one "labels.prerelease" entry's value: a
+// label name, or false, or an empty string, for off. true is rejected: it
+// names no label and turns nothing off.
+func decodePreReleaseLabelValue(node *yaml.Node) (label string, off bool, err error) {
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!bool" {
+		var on bool
+		if err := node.Decode(&on); err != nil {
+			return "", false, err
+		}
+		if on {
+			return "", false, errors.New("a pre-release label is a name, or false to turn it off, not true")
+		}
+		return "", true, nil
+	}
+	var name string
+	if err := node.Decode(&name); err != nil {
+		return "", false, err
+	}
+	return name, name == "", nil
 }
 
 // preReleaseTypeName matches one semver pre-release identifier.

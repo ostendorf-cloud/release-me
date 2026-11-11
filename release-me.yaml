@@ -4,4 +4,4 @@ hidden-types: [chore, docs, ci, style, refactor, test, build]
 major-tag: true
 files:
   - path: VERSION
-draft-until-assets-attach: true
+github-release-draft-until-assets-attach: true

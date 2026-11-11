@@ -50,7 +50,7 @@ steps:
 A GitHub App token also gets the release commit signed by GitHub, see
 [signed release commits](docs/commands.md#signed-release-commits). See
 [the Action reference](docs/action.md) for every input and
-output, the `draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
+output, the `github-release-draft-until-assets-attach` workflow shapes, the labeled-trigger guard, and
 [Bootstrap](docs/action.md#bootstrap) for the first release before any binary exists.
 
 As a container image, for runners with an image cache:
@@ -92,8 +92,9 @@ print nothing for a component with nothing to release.
 
 `pr` creates or updates the release pull requests, one per component or one shared by every
 component. `release` tags and releases merged release pull requests still carrying the pending
-label, and resumes publishing a release left a draft under `draft-until-assets-attach`. `run`
-is `pr` then `release` for every component, the CI entry point. `check` validates the
+label, and resumes publishing a release left a draft under
+`github-release-draft-until-assets-attach`. `run` is `pr` then `release` for every component, the
+CI entry point. `check` validates the
 configuration, the release labels and the token. `comment` applies a release-as or
 release-notes comment command posted on the release pull request. `migrate release-please`
 translates a release-please setup to `release-me.yaml`, writing nothing itself. A pre-release
@@ -124,13 +125,14 @@ request for every component instead of one each, is available as an option in an
 initial-version: 0.1.0
 bump-minor-pre-major: true
 hidden-types: [chore, docs, ci, style, refactor, test, build]
-changelog: CHANGELOG.md
+changelog-path: CHANGELOG.md
 labels:
   pending: "release: pending"
   tagged: "release: tagged"
-  alpha: "release: alpha"
-  beta: "release: beta"
-  rc: "release: rc"
+  prerelease:
+    alpha: "release: alpha"
+    beta: "release: beta"
+    rc: "release: rc"
 files:
   - path: cmd/cli/version.go
     updater: marker
@@ -151,7 +153,7 @@ files:
 | `changelog-issue-references` | Links the issues each changelog entry closes. | `false` | No |
 | `fallback-type` | Type assigned to text that does not parse as a conventional commit. | `other` | No |
 | `token-env` | Environment variable holding the GitHub token. | `GITHUB_TOKEN` | No |
-| `changelog` | Changelog file path. | `CHANGELOG.md` | No |
+| `changelog-path` | Changelog file path. | `CHANGELOG.md` | No |
 | `skip-changelog` | Leaves the changelog file alone; the release pull request still carries the section. | `false` | No |
 | `changelog-source` | Which commits become changelog entries. | `first-parent` | No |
 | `changelog-type` | Changelog from the entries (`default`) or GitHub's generated release notes (`github`). | `default` | No |
@@ -159,8 +161,7 @@ files:
 | `changelog-date-format` | Format of the date in each version heading. | `%Y-%m-%d` | No |
 | `labels.pending` / `labels.tagged` | Label names `pr`, `release` and `check` use, one or a list. | `release: pending` / `release: tagged` | No |
 | `labels.extra` | Labels `pr` adds to every release pull request it opens. | none | No |
-| `labels.alpha` / `labels.beta` / `labels.rc` | Pre-release type labels. | `release: alpha` / `release: beta` / `release: rc` | No |
-| `prerelease-types` | Further pre-release types, each mapped to the label that selects it. | none | No |
+| `labels.prerelease` | Pre-release type labels: built-in `alpha` / `beta` / `rc`, plus any further type. | `release: alpha` / `release: beta` / `release: rc` | No |
 | `author.name` / `author.email` | Ignored, still accepted; `check` and `pr` warn when set. | `release-me` / `release-me[bot]@users.noreply.github.com` | No |
 | `files` | Files `pr` bumps to the next version. | none | No |
 | `major-tag` | Moves the major tag on every stable release. | `false` | No |
@@ -174,11 +175,11 @@ files:
 | `release-pull-request-header` | Free text above every release pull request body. | none | No |
 | `release-pull-request-footer` | Free text below every release pull request body. | none | No |
 | `signoff` | `Name <email>` the release commit carries a `Signed-off-by:` trailer for. | none | No |
-| `draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
+| `github-release-draft-until-assets-attach` | Drafts every release instead of publishing it immediately. | `false` | No |
 | `force-tag-creation` | Creates the tag before the release; `false` leaves it to the release's publish. | `true` | No |
 | `include-v-in-release-name` | Keeps the `v` before the version in the release name. | `true` | No |
 | `skip-github-release` | Tags a merged release pull request without creating a GitHub release. | `false` | No |
-| `draft` | Creates each GitHub release as a draft and leaves it for a human to publish. | `false` | No |
+| `github-release-draft` | Creates each GitHub release as a draft and leaves it for a human to publish. | `false` | No |
 | `comment-mention` | Mention prefix for `release-as`/`release-notes` comment commands. | `@release-me` | No |
 | `workspaces` | Package managers whose local dependencies release a dependent with its dependency. | none | No |
 | `delete-release-branch` | Deletes a release branch once `release` has tagged and released it. | `true` | No |

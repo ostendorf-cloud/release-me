@@ -143,7 +143,7 @@ type planned struct {
 // version and merge commit: the release per component as Run already
 // renders it, drawing each one's own slice of the combined changelog from
 // the single pull request body. draftUntilAssetsAttach is release-me.yaml's
-// "draft-until-assets-attach" key: false, the default, releases
+// "github-release-draft-until-assets-attach" key: false, the default, releases
 // immediately, published, exactly as release-me did before that key
 // existed; true drafts instead, and also resumes a release a prior,
 // interrupted run already tagged and drafted but never got to publish.
@@ -295,9 +295,10 @@ func resumeShared(
 	var results []Result
 	sha := ""
 	for _, p := range plan {
-		// A component with its own "draft" key drafts on purpose: that
-		// draft waits for a human, so it is no interrupted run and never
-		// resumes, whatever draft-until-assets-attach is set to.
+		// A component with its own "github-release-draft" key drafts on
+		// purpose: that draft waits for a human, so it is no interrupted
+		// run and never resumes, whatever
+		// github-release-draft-until-assets-attach is set to.
 		if p.comp.SkipGitHubRelease || p.comp.Draft {
 			continue
 		}
@@ -365,7 +366,7 @@ func releaseShared(
 	for _, p := range plan {
 		comp, versionStr, ver := p.comp, p.versionStr, p.ver
 		if preType, _, ok := ver.PreReleaseType(); ok {
-			if typeLabel := labels.typeLabel(preType); typeLabel != "" && !slices.Contains(remove, typeLabel) {
+			if typeLabel := labels.PreRelease[preType]; typeLabel != "" && !slices.Contains(remove, typeLabel) {
 				remove = append(remove, typeLabel)
 			}
 		}
@@ -445,15 +446,15 @@ type Component struct {
 	// key turned off: the release is named "X.Y.Z", or "<name> X.Y.Z",
 	// without the "v". False, the zero value, keeps the "v".
 	OmitVInReleaseName bool
-	// Draft is comp's resolved "draft" key: when true, the GitHub release
-	// is created as a draft, for a human to publish. Unlike
-	// draft-until-assets-attach it never resumes one: a draft left on
-	// purpose is no interrupted run.
+	// Draft is comp's resolved "github-release-draft" key: when true, the
+	// GitHub release is created as a draft, for a human to publish. Unlike
+	// github-release-draft-until-assets-attach it never resumes one: a
+	// draft left on purpose is no interrupted run.
 	Draft bool
 }
 
 // draft reports whether comp's release is created as a draft: comp's own
-// "draft" key, or draftUntilAssetsAttach for the whole repository.
+// "github-release-draft" key, or draftUntilAssetsAttach for the whole repository.
 func (comp Component) draft(draftUntilAssetsAttach bool) bool {
 	return comp.Draft || draftUntilAssetsAttach
 }
@@ -477,7 +478,7 @@ func (comp Component) releaseName(versionStr string) string {
 }
 
 // Labels names the labels Run reads and writes: Pending and Tagged on
-// every release, plus the three pre-release type labels, so a pre-release
+// every release, plus every pre-release type's label, so a pre-release
 // pull request's type label swaps to Tagged alongside Pending, the same as
 // Pending does.
 type Labels struct {
@@ -488,27 +489,9 @@ type Labels struct {
 	// Tagged is every label releasing a pull request adds in place of the
 	// pending ones; it is tagged only while it carries all of them.
 	Tagged []string
-	Alpha  string
-	Beta   string
-	Rc     string
-	// Others maps every further pre-release type "prerelease-types"
-	// configures to its label.
-	Others map[string]string
-}
-
-// typeLabel returns the label naming preType, "" when preType is "" or
-// names no configured pre-release type.
-func (l Labels) typeLabel(preType string) string {
-	switch preType {
-	case "alpha":
-		return l.Alpha
-	case "beta":
-		return l.Beta
-	case "rc":
-		return l.Rc
-	default:
-		return l.Others[preType]
-	}
+	// PreRelease maps every configured pre-release type, alpha, beta, rc
+	// and any further one, to its label; a type turned off carries none.
+	PreRelease map[string]string
 }
 
 // Result is the outcome for one merged release pull request.
@@ -625,7 +608,7 @@ func applyMajorTag(
 // pull request on comp's branch, for the component comp names. dryRun
 // reports what would happen and calls neither CreateTag, CreateRelease nor
 // SetLabels. draftUntilAssetsAttach is release-me.yaml's
-// "draft-until-assets-attach" key: false, the default, releases
+// "github-release-draft-until-assets-attach" key: false, the default, releases
 // immediately, published, exactly as release-me did before that key
 // existed; true drafts instead, and also resumes a release a prior,
 // interrupted run already tagged and drafted but never got to publish.
@@ -670,9 +653,10 @@ func Run(
 		if dryRun || !draftUntilAssetsAttach || !HasAll(pr.Labels, labels.Tagged) {
 			continue
 		}
-		// A component with its own "draft" key drafts on purpose: that
-		// draft waits for a human, so it is no interrupted run and never
-		// resumes, whatever draft-until-assets-attach is set to.
+		// A component with its own "github-release-draft" key drafts on
+		// purpose: that draft waits for a human, so it is no interrupted
+		// run and never resumes, whatever
+		// github-release-draft-until-assets-attach is set to.
 		if comp.SkipGitHubRelease || comp.Draft {
 			continue
 		}
@@ -781,7 +765,7 @@ func releaseOne(
 	}
 	remove := slices.Clone(labels.Pending)
 	if preType, _, ok := ver.PreReleaseType(); ok {
-		if typeLabel := labels.typeLabel(preType); typeLabel != "" {
+		if typeLabel := labels.PreRelease[preType]; typeLabel != "" {
 			remove = append(remove, typeLabel)
 		}
 	}
@@ -808,8 +792,8 @@ func releaseOne(
 // without a GitHub release, drafted with the tag left to its publish,
 // tagged with a release left a draft on purpose for a human, or tagged
 // and released. Only comp's own TagOnPublish and Draft change the
-// message; a temporary draft from draft-until-assets-attach alone keeps
-// the plain tagged and released wording.
+// message; a temporary draft from github-release-draft-until-assets-attach
+// alone keeps the plain tagged and released wording.
 func releasedMessage(comp Component, tag string, alreadyTagged, draft bool) string {
 	switch {
 	case alreadyTagged:

@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"reflect"
 	"strings"
 	"testing"
@@ -61,7 +62,7 @@ var mainComponent = release.Component{Name: "main", Branch: "release-me/main", T
 // does not exercise a pre-release.
 var testLabels = release.Labels{
 	Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
-	Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
+	PreRelease: map[string]string{"alpha": "release: alpha", "beta": "release: beta", "rc": "release: rc"},
 }
 
 func TestRunTagsReleasesAndSwapsTheLabel(t *testing.T) {
@@ -819,7 +820,8 @@ func TestRunSwapsTheLabelOfAConfiguredPreReleaseType(t *testing.T) {
 		PRLabels:     map[int][]string{9: {"release: pending", "release: next"}},
 	}
 	labels := testLabels
-	labels.Others = map[string]string{"next": "release: next"}
+	labels.PreRelease = maps.Clone(testLabels.PreRelease)
+	labels.PreRelease["next"] = "release: next"
 
 	results, err := release.Run(context.Background(), f, "owner", "repo", mainComponent, labels, false, false, discardLogger())
 	if err != nil {

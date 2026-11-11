@@ -286,7 +286,7 @@ func (f *Forge) CommitSignature(ctx context.Context, owner, repo, sha string) (f
 }
 
 // CreateRelease implements forge.Forge. draft is the caller's own choice,
-// release-me.yaml's "draft-until-assets-attach" key: GitHub's immutable
+// release-me.yaml's "github-release-draft-until-assets-attach" key: GitHub's immutable
 // releases feature rejects any later change to a published release,
 // assets included, and the REST API exposes no field to tell whether a
 // repository has it on, so a repository that does needs the release held

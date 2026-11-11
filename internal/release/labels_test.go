@@ -16,9 +16,9 @@ import (
 // listLabels names two labels per role, the way release-please's
 // comma separated label and release-label do.
 var listLabels = release.Labels{
-	Pending: []string{"autorelease: pending", "release"},
-	Tagged:  []string{"autorelease: tagged", "shipped"},
-	Rc:      "release: rc",
+	Pending:    []string{"autorelease: pending", "release"},
+	Tagged:     []string{"autorelease: tagged", "shipped"},
+	PreRelease: map[string]string{"rc": "release: rc"},
 }
 
 func TestRunReleasesOnlyAPullRequestCarryingEveryPendingLabel(t *testing.T) {

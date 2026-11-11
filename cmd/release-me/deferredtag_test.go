@@ -39,7 +39,7 @@ func TestRunRetriesAnUnpublishedDeferredTagWithoutAnotherReleasePR(t *testing.T)
 			}
 			writeFiles(t, dir, "feat: export reports", map[string]string{"api/export.go": "package api\n"})
 			cfg.ForceTagCreation = false
-			cfg.DraftUntilAssetsAttach = true
+			cfg.GitHubReleaseDraftUntilAssetsAttach = true
 			f := newPRFake(remote)
 			var out bytes.Buffer
 			if err := doRun(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
@@ -132,7 +132,7 @@ func TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppeared(t *testing.T) 
 	runGit(t, dir, "tag", "v1.0.0")
 	writeFiles(t, dir, "feat: export reports", map[string]string{"api/export.go": "package api\n"})
 	cfg.ForceTagCreation = false
-	cfg.DraftUntilAssetsAttach = true
+	cfg.GitHubReleaseDraftUntilAssetsAttach = true
 	f := newPRFake(remote)
 	var out bytes.Buffer
 	if err := doRun(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
@@ -178,7 +178,7 @@ func TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppeared(t *testing.T) 
 // TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppearedWithoutDrafts
 // covers the same missing tag as
 // TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppeared with
-// "draft-until-assets-attach" off, the configuration that creates the
+// "github-release-draft-until-assets-attach" off, the configuration that creates the
 // release published right away: nothing holds the release back as a draft,
 // so if GitHub creates no tag the release is published and untagged from
 // the first run on.
@@ -190,7 +190,7 @@ func TestRunReportsAPublishedDeferredReleaseWhoseTagNeverAppearedWithoutDrafts(t
 	runGit(t, dir, "tag", "v1.0.0")
 	writeFiles(t, dir, "feat: export reports", map[string]string{"api/export.go": "package api\n"})
 	cfg.ForceTagCreation = false
-	cfg.DraftUntilAssetsAttach = false
+	cfg.GitHubReleaseDraftUntilAssetsAttach = false
 	f := newPRFake(remote)
 	var out bytes.Buffer
 	if err := doRun(t.Context(), dir, cfg, "", f, discardLogger(), false, &out); err != nil {
@@ -269,7 +269,7 @@ func TestReleaseDeferralOnlyChecksTheNewestMergedTaggedPullRequest(t *testing.T)
 				ExistingTags:  map[string]bool{"v1.1.0": true},
 			}}
 			cfg := config.Default()
-			cfg.ForceTagCreation, cfg.DraftUntilAssetsAttach = false, true
+			cfg.ForceTagCreation, cfg.GitHubReleaseDraftUntilAssetsAttach = false, true
 			deferral, err := mergedReleaseDeferral(t.Context(), f, "owner", "repo", mainBranch, cfg, discardLogger())
 			if err != nil || deferral != "" {
 				t.Fatalf("deferral = %q, %v; want empty, nil", deferral, err)

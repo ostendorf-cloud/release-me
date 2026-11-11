@@ -81,7 +81,7 @@ func TestLoadRejectsALabelListThatCannotWork(t *testing.T) {
 		{
 			name:    "an extra label that selects a pre-release",
 			content: "labels:\n  extra: [\"release: rc\"]\n",
-			want:    `labels.rc and labels.extra are both "release: rc"`,
+			want:    `labels.prerelease.rc and labels.extra are both "release: rc"`,
 		},
 		{name: "a name listed twice", content: "labels:\n  tagged: [shipped, shipped]\n", want: `labels.tagged lists "shipped" twice`},
 		{name: "a mapping", content: "labels:\n  pending:\n    name: release\n", want: "cannot unmarshal"},

@@ -71,8 +71,7 @@ func doRelease(ctx context.Context, dir string, cfg config.Config, component str
 	}
 	labels := tagrelease.Labels{
 		Pending: cfg.Labels.Pending, Tagged: cfg.Labels.Tagged,
-		Alpha: cfg.Labels.Alpha, Beta: cfg.Labels.Beta, Rc: cfg.Labels.Rc,
-		Others: otherPreReleaseLabels(cfg.Labels),
+		PreRelease: preReleaseLabelsByType(cfg.Labels),
 	}
 
 	released := releasedBranches{}
@@ -102,7 +101,7 @@ func doReleasePerComponent(
 		rc := releaseComponent(comp)
 		rc.Titles = cfg.TitlePatterns()
 		results, err := tagrelease.Run(
-			ctx, f, owner, repoName, rc, labels, cfg.DraftUntilAssetsAttach, dryRun, logger,
+			ctx, f, owner, repoName, rc, labels, cfg.GitHubReleaseDraftUntilAssetsAttach, dryRun, logger,
 		)
 		if err != nil {
 			return fmt.Errorf("release-me: %w", err)
@@ -136,7 +135,7 @@ func releaseComponent(comp config.ResolvedComponent) tagrelease.Component {
 		TagOnPublish:       !comp.ForceTagCreation,
 		SkipGitHubRelease:  comp.SkipGitHubRelease,
 		OmitVInReleaseName: !comp.IncludeVInReleaseName,
-		Draft:              comp.Draft,
+		Draft:              comp.GitHubReleaseDraft,
 	}
 }
 
@@ -155,7 +154,7 @@ func doReleaseLocked(
 	}
 	branch := resolved[0].Branch
 
-	results, err := tagrelease.RunLocked(ctx, f, owner, repoName, branch, comps, cfg.SharedTitlePatterns(), labels, cfg.DraftUntilAssetsAttach, dryRun, logger)
+	results, err := tagrelease.RunLocked(ctx, f, owner, repoName, branch, comps, cfg.SharedTitlePatterns(), labels, cfg.GitHubReleaseDraftUntilAssetsAttach, dryRun, logger)
 	if err != nil {
 		return fmt.Errorf("release-me: %w", err)
 	}
@@ -192,7 +191,7 @@ func doReleaseLocked(
 //
 // With "delete-release-branch" on, a swept branch is deleted once its
 // leftover pull request is released, so the sweep has nothing left to
-// find there, unless "draft-until-assets-attach" is on: the sweep is the
+// find there, unless "github-release-draft-until-assets-attach" is on: the sweep is the
 // only thing that resumes a leftover's unpublished draft after a failed
 // publish, and it only looks while the branch exists, so the branch stays.
 // The per-component and locked paths need no such guard: they look the
@@ -210,7 +209,7 @@ func doReleaseShared(
 		comps = append(comps, releaseComponent(comp))
 	}
 
-	results, err := tagrelease.RunShared(ctx, f, owner, repoName, branch, comps, cfg.SharedTitlePatterns(), labels, cfg.DraftUntilAssetsAttach, dryRun, logger)
+	results, err := tagrelease.RunShared(ctx, f, owner, repoName, branch, comps, cfg.SharedTitlePatterns(), labels, cfg.GitHubReleaseDraftUntilAssetsAttach, dryRun, logger)
 	if err != nil {
 		return fmt.Errorf("release-me: %w", err)
 	}
@@ -231,11 +230,11 @@ func doReleaseShared(
 		}
 		comp.Branch = own
 		comp.Titles = cfg.TitlePatterns()
-		leftover, err := tagrelease.Run(ctx, f, owner, repoName, comp, labels, cfg.DraftUntilAssetsAttach, dryRun, logger)
+		leftover, err := tagrelease.Run(ctx, f, owner, repoName, comp, labels, cfg.GitHubReleaseDraftUntilAssetsAttach, dryRun, logger)
 		if err != nil {
 			return fmt.Errorf("release-me: %w", err)
 		}
-		if cfg.DraftUntilAssetsAttach {
+		if cfg.GitHubReleaseDraftUntilAssetsAttach {
 			if len(leftover) > 0 {
 				logger.Debug("keeping the per-component release branch, the sweep resumes an unpublished draft only while it exists",
 					"component", comp.Name, "head", own)

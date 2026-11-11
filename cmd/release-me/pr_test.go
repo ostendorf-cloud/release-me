@@ -738,9 +738,9 @@ func TestDoPRRendersTheGuideWithTheRealTagAndConfiguredLabelNames(t *testing.T) 
 
 	cfg := config.Default()
 	cfg.Labels.Tagged = []string{"status: released"}
-	cfg.Labels.Alpha = "pre: alpha"
-	cfg.Labels.Beta = "pre: beta"
-	cfg.Labels.Rc = "pre: rc"
+	cfg.Labels.PreRelease = []config.PreReleaseType{
+		{Type: "alpha", Label: "pre: alpha"}, {Type: "beta", Label: "pre: beta"}, {Type: "rc", Label: "pre: rc"},
+	}
 
 	f := &forgetest.Fake{
 		GitDir:            gitOut(t, dir, "remote", "get-url", "--push", "origin"),

@@ -80,7 +80,7 @@ func TestReleaseSkipsTheGitHubReleaseButStillTagsAndSwapsTheLabel(t *testing.T) 
 			wantMessages: []string{"already tagged v0.2.0"}, wantLabelSwap: true,
 		},
 		{
-			name: "drafts nothing with draft-until-assets-attach on", run: runOwn,
+			name: "drafts nothing with github-release-draft-until-assets-attach on", run: runOwn,
 			fake:  mergedFake("chore(main): release v0.2.0", "release: pending"),
 			comps: []release.Component{skipMain}, draftUntilAssetsAttach: true, wantTags: []string{"v0.2.0"},
 			wantMessages: []string{"tagged v0.2.0, GitHub release skipped"}, wantLabelSwap: true,
@@ -464,10 +464,11 @@ func TestReleaseDraftsTheReleaseUnderDraftAndLeavesItForAHuman(t *testing.T) {
 			comps: []release.Component{draftMain},
 		},
 		{
-			// "draft" never resumes, whatever draft-until-assets-attach is
-			// set to: the draft waits for a human, so resuming it would
-			// hand the publish step a release nobody approved.
-			name: "resumes no draft left on purpose with draft-until-assets-attach on too", run: runOwn,
+			// "github-release-draft" never resumes, whatever
+			// github-release-draft-until-assets-attach is set to: the draft
+			// waits for a human, so resuming it would hand the publish step
+			// a release nobody approved.
+			name: "resumes no draft left on purpose with github-release-draft-until-assets-attach on too", run: runOwn,
 			fake:  withDraft(mergedFake("chore(main): release v0.2.0", "release: tagged"), "v0.2.0"),
 			comps: []release.Component{draftMain}, draftUntilAssetsAttach: true,
 		},
@@ -582,7 +583,7 @@ func TestReleaseMovesTheMajorTagOntoADraftedRelease(t *testing.T) {
 			wantCreated: []string{"v1.4.0"}, wantMoved: []string{"v1"}, wantMajorTagMessage: "moved major tag v1",
 		},
 		{
-			name: "moves the existing major tag onto a draft from draft-until-assets-attach",
+			name: "moves the existing major tag onto a draft from github-release-draft-until-assets-attach",
 			comp: component(false, false), draftUntilAssetsAttach: true, existingMajorTag: true,
 			wantCreated: []string{"v1.4.0"}, wantMoved: []string{"v1"}, wantMajorTagMessage: "moved major tag v1",
 		},

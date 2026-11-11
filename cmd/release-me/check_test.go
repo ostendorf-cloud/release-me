@@ -24,7 +24,9 @@ import (
 // zero value.
 var testLabels = config.Labels{
 	Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
-	Alpha: "release: alpha", Beta: "release: beta", Rc: "release: rc",
+	PreRelease: []config.PreReleaseType{
+		{Type: "alpha", Label: "release: alpha"}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: "release: rc"},
+	},
 }
 
 // allLabels is every label name testLabels carries, the repository labels
@@ -83,7 +85,10 @@ func TestDoCheckReportsEveryMissingItem(t *testing.T) {
 		{
 			name: "does not expect a pre-release label configured empty",
 			cfg: config.Config{Labels: config.Labels{
-				Pending: []string{"autorelease: pending"}, Tagged: []string{"autorelease: tagged"}, Alpha: "", Beta: "", Rc: "release: rc",
+				Pending: []string{"autorelease: pending"}, Tagged: []string{"autorelease: tagged"},
+				PreRelease: []config.PreReleaseType{
+					{Type: "alpha", Label: ""}, {Type: "beta", Label: ""}, {Type: "rc", Label: "release: rc"},
+				},
 			}},
 			token:      "a-token",
 			repoLabels: []string{"autorelease: pending", "autorelease: tagged"},
@@ -93,7 +98,7 @@ func TestDoCheckReportsEveryMissingItem(t *testing.T) {
 			name: "reports a missing label of a configured prerelease type",
 			cfg: config.Config{Labels: config.Labels{
 				Pending: []string{"release: pending"}, Tagged: []string{"release: tagged"},
-				PreReleaseTypes: []config.PreReleaseType{{Type: "next", Label: "release: next"}},
+				PreRelease: []config.PreReleaseType{{Type: "next", Label: "release: next"}},
 			}},
 			token:      "a-token",
 			repoLabels: []string{"release: pending", "release: tagged"},

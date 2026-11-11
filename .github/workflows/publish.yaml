@@ -1,6 +1,6 @@
 name: publish
 
-# release-me.yaml sets draft-until-assets-attach: true, so release.yaml
+# release-me.yaml sets github-release-draft-until-assets-attach: true, so release.yaml
 # already attaches and publishes the binary assets itself, right after
 # release-me drafts a release: a draft fires no "release" webhook, so a
 # second workflow waiting on one would never run here. This job has no

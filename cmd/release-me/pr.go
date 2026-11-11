@@ -600,7 +600,7 @@ func lockedPreReleaseEntries(
 // request is probed for a missing deferred tag, keeping remote lookups
 // bounded as the release history grows.
 //
-// That probe runs whatever "draft-until-assets-attach" is set to, because a
+// That probe runs whatever "github-release-draft-until-assets-attach" is set to, because a
 // deferred tag can go missing without a draft ever existing: with drafts
 // off the release is published right away, and if GitHub then creates no
 // tag, nothing local would notice. It costs nothing where no component
@@ -665,7 +665,7 @@ func mergedReleaseDeferral(ctx context.Context, f forge.Forge, owner, repoName, 
 // while the tag a component deferred to the release publish is still
 // absent. The first is a release still waiting as a draft: publishing it
 // creates the tag, so the next run moves on. A draft is reachable even
-// with "draft-until-assets-attach" off now, because it can have been
+// with "github-release-draft-until-assets-attach" off now, because it can have been
 // created while that key was still on. The second is a release that
 // is already published while its tag is still missing, which is the state
 // GitHub is not supposed to leave behind at all: creating a release with a

@@ -72,27 +72,29 @@ var packageKeys = append([]string{
 	"prerelease", "changelog-sections", "versioning",
 }, releaseFlagKeys()...)
 
-// releaseFlag is a boolean release-please package setting release-me reads
-// under the same key, top level and per component, and release-me's own
-// default for it: a value equal to the default is left out of
-// release-me.yaml. An absent source key also adopts this target default.
-// For force-tag-creation that deliberately differs from release-please:
-// release-please's draft bears on when it creates the tag, release-me's
-// own draft never does, so both defaults still create the tag during
-// immediate publication regardless of draft. A setting with different
-// absence semantics needs a separate source default.
+// releaseFlag is a boolean release-please package setting release-me reads,
+// top level and per component, under key on the release-please side and
+// target on the release-me side, and release-me's own default for it: a
+// value equal to the default is left out of release-me.yaml. An absent
+// source key also adopts this target default. For force-tag-creation that
+// deliberately differs from release-please: release-please's draft bears
+// on when it creates the tag, release-me's own github-release-draft never
+// does, so both defaults still create the tag during immediate publication
+// regardless of draft. A setting with different absence semantics needs a
+// separate source default.
 type releaseFlag struct {
-	key string
-	def bool
+	key    string
+	target string
+	def    bool
 }
 
 // releaseFlags are the release-flag settings this translation carries
 // over, in the order release-me.yaml lists them.
 var releaseFlags = []releaseFlag{
-	{key: "force-tag-creation", def: true},
-	{key: "skip-github-release", def: false},
-	{key: "include-v-in-release-name", def: true},
-	{key: "draft", def: false},
+	{key: "force-tag-creation", target: "force-tag-creation", def: true},
+	{key: "skip-github-release", target: "skip-github-release", def: false},
+	{key: "include-v-in-release-name", target: "include-v-in-release-name", def: true},
+	{key: "draft", target: "github-release-draft", def: false},
 }
 
 // releaseFlagKeys returns the key of every entry in releaseFlags.
@@ -842,13 +844,13 @@ func translateChangelogHost(components []component, warn func(string, ...any)) s
 }
 
 // preReleaseTypeName matches a type name release-me.yaml's
-// prerelease-types accepts: one semver pre-release identifier.
+// "labels.prerelease" accepts: one semver pre-release identifier.
 var preReleaseTypeName = regexp.MustCompile(`^[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*$`)
 
 // translatePreReleaseType carries release-please's prerelease-type over as
 // a pre-release type release-me selects through its label: alpha, beta and
-// rc stay on, any other valid name becomes a prerelease-types entry.
-// release-please cuts it on every release with prerelease true;
+// rc stay on, any other valid name becomes a further "labels.prerelease"
+// entry. release-please cuts it on every release with prerelease true;
 // release-me cuts it while the label is on the release pull request, so
 // either way the difference is warned about. A name release-me cannot
 // carry is left out.
@@ -1490,21 +1492,29 @@ func render(components []component, top topLevel) ([]byte, error) {
 		add(labels, "extra", labelNode(top.extra))
 	}
 	// alpha, beta and rc stay off unless a package's prerelease-type
-	// names one; any other type becomes a prerelease-types entry, in the
-	// order the packages first name it.
+	// names one; any other type is appended after them, in the order the
+	// packages first name it.
 	var others []string
 	for _, c := range components {
 		if c.preReleaseType != "" && !slices.Contains(others, c.preReleaseType) {
 			others = append(others, c.preReleaseType)
 		}
 	}
+	preRelease := &yaml.Node{Kind: yaml.MappingNode}
 	for _, t := range []string{"alpha", "beta", "rc"} {
 		if slices.Contains(others, t) {
-			add(labels, t, scalar(preReleaseLabel(t)))
+			add(preRelease, t, scalar(preReleaseLabel(t)))
 		} else {
-			add(labels, t, boolean(false))
+			add(preRelease, t, boolean(false))
 		}
 	}
+	for _, t := range others {
+		if t == "alpha" || t == "beta" || t == "rc" {
+			continue
+		}
+		add(preRelease, t, scalar(preReleaseLabel(t)))
+	}
+	add(labels, "prerelease", preRelease)
 	add(doc, "labels", labels)
 	if top.style.sentenceCase {
 		add(doc, "changelog-sentence-case", boolean(true))
@@ -1514,14 +1524,6 @@ func render(components []component, top topLevel) ([]byte, error) {
 	}
 	if top.style.host != "" {
 		add(doc, "changelog-host", scalar(top.style.host))
-	}
-	others = slices.DeleteFunc(others, func(t string) bool { return t == "alpha" || t == "beta" || t == "rc" })
-	if len(others) > 0 {
-		types := &yaml.Node{Kind: yaml.MappingNode}
-		for _, t := range others {
-			add(types, t, scalar(preReleaseLabel(t)))
-		}
-		add(doc, "prerelease-types", types)
 	}
 
 	// bump-minor-pre-major and bump-patch-for-minor-pre-major carried by
@@ -1577,7 +1579,7 @@ func render(components []component, top topLevel) ([]byte, error) {
 		value := components[0].flags[flag.key]
 		same := slices.IndexFunc(components, func(c component) bool { return c.flags[flag.key] != value }) == -1
 		if same && value != flag.def {
-			add(doc, flag.key, boolean(value))
+			add(doc, flag.target, boolean(value))
 			topFlags[flag.key] = true
 		}
 	}
@@ -1585,7 +1587,7 @@ func render(components []component, top topLevel) ([]byte, error) {
 	if len(components) == 1 && components[0].path == "." && components[0].tagPrefix == "v" {
 		c := components[0]
 		if c.changelog != "CHANGELOG.md" {
-			add(doc, "changelog", scalar(c.changelog))
+			add(doc, "changelog-path", scalar(c.changelog))
 		}
 		addSettings(doc, c, shared, topFlags, add)
 		addExcludePaths(doc, c, add)
@@ -1598,7 +1600,7 @@ func render(components []component, top topLevel) ([]byte, error) {
 				add(m, "tag-prefix", scalar(c.tagPrefix))
 			}
 			if c.changelog != stdpath.Join(c.path, "CHANGELOG.md") {
-				add(m, "changelog", scalar(c.changelog))
+				add(m, "changelog-path", scalar(c.changelog))
 			}
 			addSettings(m, c, shared, topFlags, add)
 			addExcludePaths(m, c, add)
@@ -1689,7 +1691,7 @@ func addSettings(
 	}
 	for _, flag := range releaseFlags {
 		if value := c.flags[flag.key]; !topFlags[flag.key] && value != flag.def {
-			add(m, flag.key, boolean(value))
+			add(m, flag.target, boolean(value))
 		}
 	}
 	if len(c.files) > 0 {
