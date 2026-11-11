@@ -3,6 +3,11 @@
 The top-level `versioning` key chooses how a repository's configured components' versions
 relate to each other: `independent` (default), `locked` or `linked`.
 
+A repository's **family** is every component `release-me.yaml` lists, the implicit `main`
+component alone where it lists none. The word appears throughout the reference for the set a
+shared version line, a shared pre-release counter and a top-level forced version apply across,
+whichever mode is configured.
+
 `independent` versions every component on its own: its own tag line, its own bump, its own
 release pull request, the default shape a configured component has, unless
 `release-pull-request: shared` puts every component in one.

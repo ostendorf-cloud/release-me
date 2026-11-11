@@ -41,8 +41,8 @@ At the top level, the key forces every component, each one checked against its o
 That is how release-please applies a top-level `release-as` to every package. In `linked` it
 releases every component at the forced version, changed or not, the same as `locked` always
 does. In `independent`, a component's own `release-as` key replaces the top-level one for that
-component only. `linked` and `locked` refuse a component's own key, since the family shares one
-version.
+component only. `linked` and `locked` refuse a component's own key, since the
+[family](versioning-modes.md), every component `release-me.yaml` lists, shares one version.
 
 ### `versioning-strategy`
 
