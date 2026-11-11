@@ -113,10 +113,13 @@ tasks:
       - task: lint:dockerfile
       - task: lint:shell
       - task: lint:secrets
-      - task: lint:vuln
       - task: test:go
       - task: test:action
       - task: build
+      # Last: lint:vuln is the only target that needs the network, so an
+      # unreachable vulnerability database aborts the aggregate without
+      # taking a test result with it. CI runs the targets on their own.
+      - task: lint:vuln
 
   fmt:
     desc: Format Go code
