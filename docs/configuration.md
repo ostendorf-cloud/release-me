@@ -314,183 +314,169 @@ date until release content changes. Older bodies fall back to the current format
 
 Files `pr` bumps to the next version, each a `path`, an optional `updater`, default `marker`,
 and a `key` where the updater needs one. Every updater keeps the rest of the file byte for
-byte: order, comments, indentation. A file that does not exist, or a `key` not found in it,
-fails `pr`, naming the path and the key.
+byte: order, comments, indentation. A file that does not exist, a file whose shape the updater
+does not match, or a `key` not found in it, fails `pr`, naming the path and the key. Every
+entry is validated when release-me.yaml loads too: an unknown `updater`, a `key` missing where
+the updater requires one, and a `key` given to an updater that takes none are all errors.
 
-- `marker` replaces the version on every line ending in `# release-me: version` or
-  `// release-me: version`, not only the first, keeping the rest of each line, including the
-  comment, as it is. No `key`:
+Pick an updater by the file in front of you:
 
-  ```go
-  const Version = "0.1.0" // release-me: version
-  ```
+| Updater | `key` | What it bumps |
+| --- | --- | --- |
+| `marker` | none | Every line ending in `# release-me: version` or `// release-me: version`, the rest of the line kept. The default updater. |
+| `generic` | none | Every line and block release-please's `x-release-please-*` markers name, so a file release-please bumped needs no change. |
+| `plain` | none | The whole content of a file holding nothing but the version, a `VERSION` or `version.txt`, where a line has no room for a marker comment. The surrounding whitespace, a trailing newline or none, is kept; an empty file, or one holding anything besides the version, is an error. |
+| `json` | dotted path of object keys | The first string value at that path, `version` or `a.b.version`. A `composer.json`, which release-please's `php` release type bumps, takes `version`. |
+| `yaml` | dotted path of mapping keys | The first scalar at that path. |
+| `toml` | table and key | The first scalar at that path, `package.version` meaning `version` under `[package]`, `tool.poetry.version` under `[tool.poetry]`. |
+| `xml` | dotted path of element names | The text of every element at that path, `project.version` for a `pom.xml`, `Project.PropertyGroup.Version` for a `.csproj`. |
+| `npm-lock` | none | A `package-lock.json`'s or `npm-shrinkwrap.json`'s own version: its top-level `version` and, in lockfile version 2 or 3, the root package's entry `packages[""].version`. Dependencies and workspace packages are left alone. |
+| `cargo-lock` | crate name | That crate's `[[package]]` entry in a `Cargo.lock`. |
+| `gemfile-lock` | gem name | That gem's specs entry, `name (version)`, in a `Gemfile.lock`. |
+| `go` | constant or variable name | The string literal that `const` or `var` declaration assigns. |
+| `helm` | none | A `Chart.yaml`'s top-level `version` field, `version: 0.1.0`. |
+| `python` | none | The first `__version__ = "..."` or `version = 1.2.3` line, the shape of an `__init__.py`, a `version.py`, `setup.py`'s `version="..."` keyword and `setup.cfg`'s bare value alike. A bare value must start with a digit, so `version=get_version()` is never taken for one. A `pyproject.toml` takes `toml`. |
+| `ruby` | none | A `version.rb`'s `VERSION = "..."` constant, a trailing `.freeze` kept. |
+| `elixir` | none | A `mix.exs`'s `@version "..."` attribute, else its `version: "..."` keyword. |
+| `ocaml` | none | An `.opam` or `.opam.locked` file's top-level `version: "..."`, or a `dune-project`'s `(version ...)` stanza. |
+| `r` | none | A `DESCRIPTION` file's `Version:` field, a development suffix such as `.9000` included. |
+| `bazel` | none | The `version` attribute of a `MODULE.bazel`'s `module()` call, never a `bazel_dep()`'s. |
+| `dart` | none | A `pubspec.yaml`'s top-level `version`, its numeric build number counted up by one: `1.4.0+12` becomes `1.5.0+13`, as release-please bumps it. |
+| `sfdx` | none | The `versionNumber` of an `sfdx-project.json`'s default package directory, written as the version followed by `.NEXT`. Other package directories and dependencies are left alone. |
+| `terraform-module` | none | Every `v`-prefixed version of a Terraform module's `versions.tf` or `versions.tf.tmpl`. |
+| `expo` | Expo SDK version | A React Native Expo project's `app.json`: `expo.version`, plus `expo.ios.buildNumber` and `expo.android.versionCode` where the file carries them. |
+| `krm-blueprint` | none | Every `cnrm/<blueprint>/v1.4.0` value of a Kubernetes Resource Model manifest. |
 
-- `generic` reads release-please's version markers, so a file release-please bumped needs no
-  change. A line carrying `x-release-please-version` gets its first full version replaced; one
-  carrying `x-release-please-major`, `-minor` or `-patch` gets its first number replaced by
-  that part of the version. A block opened by `x-release-please-start-version` (or `-major`,
-  `-minor`, `-patch`) bumps every line up to and including the one carrying
-  `x-release-please-end`. The markers sit in any comment, which is how a Markdown file is
-  bumped. No `key`:
+The updaters below carry constraints a row cannot hold; the rest behave exactly as their row
+says.
 
-  ```markdown
-  <!-- x-release-please-start-version -->
-  curl -fsSL https://example.com/notes/1.4.0/install.sh | sh
-  <!-- x-release-please-end -->
-  ```
+### `marker` and `generic`
 
-  The `date` and `version-date` scopes are an error, since an updater is given the version
-  only, not the release date. So are a file with no marker and a block that is never closed.
-  As in release-please, an inline marker inside a block takes precedence for that line;
-  put the end marker on its own line so it closes the block. An end marker outside a block
-  has no effect. The major scope also matches a number prefixed with `v`,
-  whereas minor and patch require a word boundary before the number.
+`marker` needs nothing but the comment at the end of the line, in a file of any language:
 
-- `helm` replaces a `Chart.yaml`'s top-level `version` field. No `key`:
+```go
+const Version = "0.1.0" // release-me: version
+```
 
-  ```yaml
-  version: 0.1.0
-  ```
+`generic` reads release-please's own markers instead. A line carrying
+`x-release-please-version` gets its first full version replaced; one carrying
+`x-release-please-major`, `-minor` or `-patch` gets its first number replaced by that part of
+the version. A block opened by `x-release-please-start-version` (or `-major`, `-minor`,
+`-patch`) bumps every line up to and including the one carrying `x-release-please-end`. The
+markers sit in any comment, which is how a Markdown file is bumped:
 
-- `go` replaces the string literal assigned to the constant or variable `key` names. The
-  `const` or `var` keyword has to sit on the same line as the identifier, with an optional type
-  between the name and the `=`: `const Version = "0.1.0"`, `var Version = "0.1.0"` and
-  `const Version string = "0.1.0"` match, an identifier inside a grouped `const (` block does
-  not, and the entry fails `pr` naming the identifier as not found:
+```markdown
+<!-- x-release-please-start-version -->
+curl -fsSL https://example.com/notes/1.4.0/install.sh | sh
+<!-- x-release-please-end -->
+```
 
-  ```yaml
-  files:
-    - path: internal/version/version.go
-      updater: go
-      key: Version
-  ```
+The `date` and `version-date` scopes are an error, since an updater is given the version only,
+not the release date. So are a file with no marker and a block that is never closed. As in
+release-please, an inline marker inside a block takes precedence for that line; put the end
+marker on its own line so it closes the block. An end marker outside a block has no effect.
+The major scope also matches a number prefixed with `v`, whereas minor and patch require a
+word boundary before the number.
 
-- `json`, `yaml` and `toml` replace the value at `key`, a dotted path of object keys, mapping
-  keys or table-and-key, such as `tool.poetry.version`. A `composer.json`, which release-please's
-  `php` release type bumps, takes `json` with key `version`. Each one reads the file as lines
-  rather than parsing it, which is what keeps every other byte in place, so the layout is part
-  of the contract:
-  - `json`: every object a path segment but the last names has to open on a line of its own,
-    `"segment": {`, and the leaf has to be a string on a line of its own,
-    `"version": "1.2.3"`. A single-segment key names the top level only, and nesting is
-    tracked through unquoted braces, so a same-named leaf at another depth is never taken for
-    the match.
-  - `yaml`: every mapping a path segment but the last names has to be a bare `segment:` line,
-    its block found through indentation, any consistent width. A single-segment key matches at
-    indentation zero only, never a deeper leaf of the same name. The leaf's value may be bare,
-    single or double quoted, and a trailing comment is kept.
-  - `toml`: the leading segments name the enclosing table, `a.b.version` meaning key `version`
-    under `[a.b]`, and a key before any table header is addressed by its name alone. The
-    leaf's value may be bare, single or double quoted.
+### `json`, `yaml` and `toml`
 
-- `npm-lock` bumps a `package-lock.json` or `npm-shrinkwrap.json`: its top-level `version` and,
-  in lockfile version 2 or 3, the root package's entry `packages[""].version`. Dependencies and
-  workspace packages are left alone. No `key`.
+Each one reads the file as lines rather than parsing it, which is what keeps every other byte
+in place, so the layout is part of the contract:
 
-- `cargo-lock` bumps the `[[package]]` entry of the crate `key` names in a `Cargo.lock`. Only an
-  entry without a `source` matches, which is how Cargo records a crate of the workspace itself,
-  so a same-named crate from a registry is never touched. A workspace releasing several crates
-  lists the file once per crate:
+- `json`: every object a path segment but the last names has to open on a line of its own,
+  `"segment": {`, and the leaf has to be a string on a line of its own, `"version": "1.2.3"`.
+  A single-segment key names the top level only, and nesting is tracked through unquoted
+  braces, so a same-named leaf at another depth is never taken for the match.
+- `yaml`: every mapping a path segment but the last names has to be a bare `segment:` line,
+  its block found through indentation, any consistent width. A single-segment key matches at
+  indentation zero only, never a deeper leaf of the same name. The leaf's value may be bare,
+  single or double quoted, and a trailing comment is kept.
+- `toml`: the leading segments name the enclosing table, `a.b.version` meaning key `version`
+  under `[a.b]`, and a key before any table header is addressed by its name alone. The leaf's
+  value may be bare, single or double quoted.
 
-  ```yaml
-  files:
-    - path: Cargo.toml
-      updater: toml
-      key: package.version
-    - path: Cargo.lock
-      updater: cargo-lock
-      key: release-core
-  ```
+### `go`
 
-- `gemfile-lock` bumps the specs entry `name (version)` of the gem `key` names in a
-  `Gemfile.lock`, indented by four spaces as Bundler lists a resolved gem; a dependency's
-  constraint, indented deeper, is left alone. A pre-release is written the way Bundler records
-  it, `1.2.0-rc.1` as `1.2.0.pre.rc.1`.
+The `const` or `var` keyword has to sit on the same line as the identifier, with an optional
+type between the name and the `=`: `const Version = "0.1.0"`, `var Version = "0.1.0"` and
+`const Version string = "0.1.0"` match. An identifier inside a grouped `const (` block does
+not, and the entry fails `pr` naming the identifier as not found.
 
-- `xml` replaces the text of every element at `key`, a dotted path of element names from the
-  root element down. Names match without their namespace prefix, and the whitespace around the
+```yaml
+files:
+  - path: internal/version/version.go
+    updater: go
+    key: Version
+```
+
+### `cargo-lock`, `gemfile-lock` and `xml`
+
+- `cargo-lock`: only a `[[package]]` entry without a `source` matches, which is how Cargo
+  records a crate of the workspace itself, so a same-named crate from a registry is never
+  touched. A workspace releasing several crates lists the file once per crate.
+- `gemfile-lock`: the specs entry is indented by four spaces, as Bundler lists a resolved gem;
+  a dependency's constraint, indented deeper, is left alone. A pre-release is written the way
+  Bundler records it, `1.2.0-rc.1` as `1.2.0.pre.rc.1`.
+- `xml`: element names match without their namespace prefix, and the whitespace around the
   text is kept. An element that is empty-tagged, `<version/>`, or holds a child element or a
-  comment is an error. A `pom.xml` and a `.csproj`:
+  comment is an error.
 
-  ```yaml
-  files:
-    - path: pom.xml
-      updater: xml
-      key: project.version
-    - path: src/Acme.Notes/Acme.Notes.csproj
-      updater: xml
-      key: Project.PropertyGroup.Version
-  ```
+```yaml
+files:
+  - path: Cargo.toml
+    updater: toml
+    key: package.version
+  - path: Cargo.lock
+    updater: cargo-lock
+    key: release-core
+  - path: pom.xml
+    updater: xml
+    key: project.version
+```
 
-- `plain` replaces the whole content of a file holding nothing but the version, such as a
-  `version.txt` or a `VERSION` file, where a line has no room for a marker comment. The
-  whitespace around the version, a trailing newline or none, is kept. An empty file, or one
-  holding anything besides the version, is an error. No `key`.
+### `expo`
 
-- `expo` bumps a React Native Expo project's `app.json`: `expo.version`, which must be there,
-  `expo.ios.buildNumber` and `expo.android.versionCode`, the last two only where the file
-  carries them. The version code is an integer Android requires to grow with every upload, so
-  it is computed rather than copied, the way release-please computes it:
+`expo.version` must be there; `expo.ios.buildNumber` and `expo.android.versionCode` are bumped
+only where the file carries them. The version code is an integer Android requires to grow with
+every upload, so it is computed rather than copied, the way release-please computes it:
 
-  ```text
-  sdk-major * 10000000 + major * 10000 + minor * 100 + patch
-  ```
+```text
+sdk-major * 10000000 + major * 10000 + minor * 100 + patch
+```
 
-  A pre-release suffix does not reach it, so `1.5.0-rc.1` and `1.5.0` give the same code. The
-  `key` is the Expo SDK version, which only the version code needs: release-please reads it
-  from the `expo` dependency of the project's `package.json`, which an updater given one file
-  cannot do. The dependency's own value is accepted, so `54`, `54.0.0` and `~54.0.0` all mean
-  SDK 54. The project's `package.json` version takes a `json` entry of its own:
+A pre-release suffix does not reach it, so `1.5.0-rc.1` and `1.5.0` give the same code. The
+`key` is the Expo SDK version, which only the version code needs: release-please reads it from
+the `expo` dependency of the project's `package.json`, which an updater given one file cannot
+do. The dependency's own value is accepted, so `54`, `54.0.0` and `~54.0.0` all mean SDK 54.
+The project's `package.json` version takes a `json` entry of its own:
 
-  ```yaml
-  files:
-    - path: package.json
-      updater: json
-      key: version
-    - path: app.json
-      updater: expo
-      key: "54"
-  ```
+```yaml
+files:
+  - path: package.json
+    updater: json
+    key: version
+  - path: app.json
+    updater: expo
+    key: "54"
+```
 
-  Under SDK 54, version `1.5.0` gives the version code `540010500`.
+Under SDK 54, version `1.5.0` gives the version code `540010500`.
 
-- One updater per release-please release type whose version file none of the above fits, each
-  named after it and taking no `key`. Each bumps the first match only, except the last two,
-  whose version is part of a longer string the file may carry more than once. A file without a
-  match is an error:
-  - `python`: the first `__version__ = "..."` or `version = ...` line, the shape of an
-    `__init__.py`, a `version.py`, `setup.py`'s `version="..."` keyword and `setup.cfg`'s bare
-    `version = 1.2.3` alike. A bare value must start with a digit, so `version=get_version()`
-    or `version = attr: pkg.__version__` is never taken for one. A `pyproject.toml` takes
-    `toml`.
-  - `ruby`: a `version.rb`'s `VERSION = "..."` constant, a trailing `.freeze` kept.
-  - `elixir`: a `mix.exs`'s `@version "..."` attribute, else its `version: "..."` keyword.
-  - `ocaml`: an `.opam` or `.opam.locked` file's top-level `version: "..."`, or a
-    `dune-project`'s `(version ...)` stanza.
-  - `r`: a `DESCRIPTION` file's `Version:` field, a development suffix such as `.9000`
-    included.
-  - `bazel`: the `version` attribute of a `MODULE.bazel`'s `module()` call, never a
-    `bazel_dep()`'s.
-  - `dart`: a `pubspec.yaml`'s top-level `version`. A numeric build number counts up by one,
-    `1.4.0+12` becoming `1.5.0+13`, as release-please bumps it.
-  - `sfdx`: the `versionNumber` of an `sfdx-project.json`'s default package directory, written
-    as the version followed by `.NEXT`. Other package directories and dependencies are left
-    alone.
-  - `terraform-module`: every `v`-prefixed version of a Terraform module's `versions.tf` or
-    `versions.tf.tmpl`, such as the `blueprints/terraform/terraform-google-notes/v1.4.0` its
-    `provider_meta` block reports as the module name. A constraint carries no `v`, so
-    `required_version = ">= 1.3"` and `version = "~> 5.0"` in the same file are left alone. A
-    module's `metadata.yaml` takes `yaml` with key `version`; the `version = "~> 1.4"` usage
-    example of its README is not rewritten.
-  - `krm-blueprint`: every `cnrm/<blueprint>/v1.4.0` value of a Kubernetes Resource Model
-    manifest, the form of its `cnrm.cloud.google.com/blueprint` annotation. The `cnrm/` anchor
-    is what keeps a pinned kpt function image such as
-    `gcr.io/kpt-fn/set-annotations:v0.1.4` out of it. A manifest carrying no such value is an
-    error, which is how a YAML that is no blueprint is rejected.
+### `terraform-module` and `krm-blueprint`
 
-Every file entry is validated when release-me.yaml loads: an unknown `updater`, a `key`
-missing where the updater requires one, and a `key` given to an updater that takes none are
-all errors.
+Both bump a version that is part of a longer string rather than a field of its own, which is
+why they replace every match in the file.
+
+- `terraform-module`: the module's own version is the last segment of the module name its
+  `provider_meta` block reports, such as
+  `blueprints/terraform/terraform-google-notes/v1.4.0`. A constraint carries no `v`, so
+  `required_version = ">= 1.3"` and `version = "~> 5.0"` in the same file are left alone. A
+  module's `metadata.yaml` takes `yaml` with key `version`; the `version = "~> 1.4"` usage
+  example of its README is not rewritten.
+- `krm-blueprint`: the version is the last segment of the `cnrm.cloud.google.com/blueprint`
+  annotation's value. That `cnrm/` anchor is what keeps a pinned kpt function image such as
+  `gcr.io/kpt-fn/set-annotations:v0.1.4` out of it. A manifest carrying no such value is an
+  error, which is how a YAML that is no blueprint is rejected.
 
 ## `release-pull-request`
 
