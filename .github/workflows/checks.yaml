@@ -40,13 +40,21 @@ jobs:
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
       - run: task lint:golangci
 
+  # The one job that does not call its matching task target. The license
+  # header check is centrally maintained in ostendorf-cloud/workflows, so CI
+  # calls that reusable workflow and "task lint:license" stays for local
+  # development, running the same tool with the same flags. AGENTS.md records
+  # the exception under "Deviations".
+  #
+  # license-type and addlicense-version are left at the reusable workflow's
+  # defaults, "apache" and "1.2.0": both already match what mise.toml pins and
+  # what Taskfile.yaml passes, so spelling them out would only restate them.
   license:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
-      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
-      - run: task lint:license
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@v0.1.0
+    with:
+      copyright-holder: Simon Ostendorf
+      year: "2026"
+      find-commands: find . -name "*.go" -not -path "./.worktrees/*"
 
   markdownlint:
     runs-on: ubuntu-latest
