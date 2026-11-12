@@ -159,6 +159,17 @@ func (f *Forge) RepositoryLabels(ctx context.Context, owner, repo string) ([]str
 	return out, nil
 }
 
+// CreateLabel implements forge.Forge.
+func (f *Forge) CreateLabel(ctx context.Context, owner, repo, name, color, description string) error {
+	_, _, err := f.client.Issues.CreateLabel(ctx, owner, repo, gogithub.CreateIssueLabelRequest{
+		Name: name, Color: &color, Description: &description,
+	})
+	if err != nil {
+		return fmt.Errorf("github: create label %q: %w", name, err)
+	}
+	return nil
+}
+
 // DefaultBranch implements forge.Forge.
 func (f *Forge) DefaultBranch(ctx context.Context, owner, repo string) (string, error) {
 	r, _, err := f.client.Repositories.Get(ctx, owner, repo)

@@ -49,6 +49,7 @@ func TestDefaultSetsTheChangelogPathAndLabels(t *testing.T) {
 		PreRelease: []config.PreReleaseType{
 			{Type: "alpha", Label: "release: alpha"}, {Type: "beta", Label: "release: beta"}, {Type: "rc", Label: "release: rc"},
 		},
+		CreateMissing: true,
 	}
 	if !reflect.DeepEqual(got.Labels, want) {
 		t.Fatalf("Labels = %+v, want %+v", got.Labels, want)
@@ -109,6 +110,7 @@ func TestLoadReadsConfiguredKeys(t *testing.T) {
 						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
+					CreateMissing: true,
 				},
 				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
 				Versioning:               config.DefaultVersioning,
@@ -174,6 +176,7 @@ files:
 					PreRelease: []config.PreReleaseType{
 						{Type: "alpha", Label: "needs-alpha"}, {Type: "beta", Label: "needs-beta"}, {Type: "rc", Label: "needs-rc"},
 					},
+					CreateMissing: true,
 				},
 				Author:                              config.Author{Name: "renovate", Email: "renovate@example.com", Set: []string{"author.name", "author.email"}},
 				MajorTag:                            true,
@@ -210,6 +213,7 @@ files:
 						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
+					CreateMissing: true,
 				},
 				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
 				Versioning:               config.DefaultVersioning,
@@ -240,6 +244,7 @@ files:
 						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
+					CreateMissing: true,
 				},
 				Author:                   config.Author{Name: config.DefaultAuthorName, Email: config.DefaultAuthorEmail},
 				Versioning:               config.DefaultVersioning,
@@ -270,6 +275,7 @@ files:
 						{Type: "beta", Label: config.DefaultBetaLabel},
 						{Type: "rc", Label: config.DefaultRcLabel},
 					},
+					CreateMissing: true,
 				},
 				Author:                   config.Author{Name: "renovate", Email: config.DefaultAuthorEmail, Set: []string{"author.name"}},
 				Versioning:               config.DefaultVersioning,

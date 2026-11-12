@@ -63,6 +63,40 @@ func TestLoadReadsALabelRoleAsOneNameOrAList(t *testing.T) {
 	}
 }
 
+func TestCreateMissingDefaultsToTrueAndReadsAnExplicitFalse(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{name: "the default, no release-me.yaml", content: "", want: true},
+		{name: "an empty labels block", content: "labels:\n  pending: release\n", want: true},
+		{name: "turned off", content: "labels:\n  create-missing: false\n", want: false},
+		{name: "turned on explicitly", content: "labels:\n  create-missing: true\n", want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			path := writeFile(t, tc.content)
+			got, err := config.Load(path)
+			if err != nil {
+				t.Fatalf("Load() error = %v", err)
+			}
+			if got.Labels.CreateMissing != tc.want {
+				t.Fatalf("Labels.CreateMissing = %v, want %v", got.Labels.CreateMissing, tc.want)
+			}
+		})
+	}
+}
+
+func TestDefaultSetsCreateMissingToTrue(t *testing.T) {
+	t.Parallel()
+	if !config.Default().Labels.CreateMissing {
+		t.Fatal("Default().Labels.CreateMissing = false, want true")
+	}
+}
+
 func TestLoadRejectsALabelListThatCannotWork(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

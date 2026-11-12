@@ -139,6 +139,12 @@ type Forge interface {
 	// ErrUnauthorized is returned when the credentials are rejected.
 	RepositoryLabels(ctx context.Context, owner, repo string) ([]string, error)
 
+	// CreateLabel creates a label named name on the repository, colored
+	// color, a 6 character hex string without a leading "#", and carrying
+	// description. A caller names a label missingLabels already reported
+	// absent; the forge is left to report a name that already exists.
+	CreateLabel(ctx context.Context, owner, repo, name, color, description string) error
+
 	// DefaultBranch returns the repository's default branch name.
 	DefaultBranch(ctx context.Context, owner, repo string) (string, error)
 

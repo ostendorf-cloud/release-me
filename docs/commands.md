@@ -72,8 +72,11 @@ request for every component instead, on branch `release-me/main`: see
 same check `check` runs: the `pending` and `tagged` labels, every
 [`labels.extra`](configuration.md#labels) one, and the label of every enabled pre-release type,
 `release: alpha`, `release: beta` and `release: rc` by default, a type turned off expecting
-none. The labels are shared across every component; the default branch is resolved once and
-shared too.
+none. With [`labels.create-missing`](configuration.md#labels) at its default `true`, a label
+absent from the repository is created there and then, with a fixed color and description for
+its role; `labels.create-missing: false` restores reporting every missing label by name and
+failing instead. The labels are shared across every component; the default branch is resolved
+once and shared too.
 
 The changelog heading, the same one `changelog` prints, links the version to the forge's compare
 view, between the tag the release's entries are collected since and the tag it will get:
@@ -275,7 +278,9 @@ label exists on the repository, the `pending` and `tagged` ones, every
 [`labels.extra`](configuration.md#labels) one and the label of every enabled pre-release type,
 and that the token environment variable is both set and accepted by the forge: a rejected token
 is reported as such, not as a missing label, since the symptom from the forge is the same 401
-either way.
+either way. With [`labels.create-missing`](configuration.md#labels) at its default `true`, a
+missing label is created instead of reported; `labels.create-missing: false` reports every
+missing label by name instead, release-me's behavior before that key existed.
 Prints every missing or invalid item and exits 1 when anything is missing, 0 otherwise.
 
 ## comment

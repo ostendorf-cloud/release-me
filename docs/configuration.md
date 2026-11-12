@@ -901,6 +901,22 @@ This is release-please's `prerelease-type` with a free name. A pre-release stays
 human asks for on the release pull request: there is no key that cuts every release as a
 pre-release, as release-please's `prerelease: true` does.
 
+`labels.create-missing`: whether `pr` and `check` create a label absent from the repository,
+default `true`. `false` restores reporting every missing label by name and failing instead,
+release-me's behavior before this key existed. A created label gets a fixed color and
+description, by its role:
+
+| role | color | description |
+| --- | --- | --- |
+| `labels.pending` | `ededed` | `Release pull request open.` |
+| `labels.tagged` | `ededed` | `Release tagged.` |
+| `labels.prerelease` (`alpha`, `beta`, `rc`) | `c2e0c6` | `Next release as alpha pre-release.`, `Next release as beta pre-release.`, `Next release as release candidate.`, matching each type |
+| `labels.prerelease` (any other type) | `c2e0c6` | `Next release as <type> pre-release.` |
+| `labels.extra` | `ededed` | `Added to release-me's release pull requests.` |
+
+Creating a label uses the forge's own REST API, GitHub's Issues endpoint, which needs the
+`issues: write` permission the [README](../README.md#install) names.
+
 ### `comment-mention`
 
 The mention prefix a comment on the release pull request names to issue a `release-as` or

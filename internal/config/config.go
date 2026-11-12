@@ -261,6 +261,13 @@ type Labels struct {
 	// release-me.yaml adds appended after them, in the order it declares
 	// them.
 	PreRelease []PreReleaseType
+	// CreateMissing is the "labels.create-missing" key, default true:
+	// ensureLabels creates a label missingLabels reports absent from the
+	// repository, with a color and description picked from the label's
+	// own role, instead of leaving check and pr to report it and fail.
+	// false restores that report-and-fail behavior exactly, naming every
+	// missing label.
+	CreateMissing bool
 }
 
 // PreReleaseType is one pre-release type and the label that selects it on
@@ -786,7 +793,8 @@ type rawLabels struct {
 	// applyPreReleaseTypes can read its entries back in release-me.yaml's
 	// order: a Go map gives no such guarantee. A zero Kind means the
 	// "labels.prerelease" key was left out.
-	PreRelease yaml.Node `yaml:"prerelease"`
+	PreRelease    yaml.Node `yaml:"prerelease"`
+	CreateMissing *bool     `yaml:"create-missing"`
 }
 
 // labelList is "labels.pending", "labels.tagged" or "labels.extra": one
@@ -944,6 +952,7 @@ func Default() Config {
 				{Type: "beta", Label: DefaultBetaLabel},
 				{Type: "rc", Label: DefaultRcLabel},
 			},
+			CreateMissing: true,
 		},
 		CommentMention: DefaultCommentMention,
 
@@ -1220,6 +1229,9 @@ func Load(path string) (cfg Config, err error) {
 				return Config{}, err
 			}
 			cfg.Labels.PreRelease = types
+		}
+		if r.Labels.CreateMissing != nil {
+			cfg.Labels.CreateMissing = *r.Labels.CreateMissing
 		}
 	}
 	if err := validateLabels(path, cfg.Labels); err != nil {
