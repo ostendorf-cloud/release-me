@@ -41,6 +41,13 @@ tasks:
     cmds:
       - golangci-lint run
 
+  lint:license:
+    desc: License header check for every Go source file
+    cmds:
+      - |
+        addlicense -check -c "Simon Ostendorf" -y 2026 -l apache -s=only \
+          $(find . -name "*.go" -not -path "./.worktrees/*")
+
   lint:markdown:
     desc: Markdown lint
     cmds:
@@ -107,6 +114,7 @@ tasks:
       - task: lint:fmt
       - task: lint:vet
       - task: lint:golangci
+      - task: lint:license
       - task: lint:markdown
       - task: lint:yaml
       - task: lint:actions

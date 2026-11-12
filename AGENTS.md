@@ -62,6 +62,8 @@ task run -- next     # run the CLI from source
 // SPDX-License-Identifier: Apache-2.0
 ```
 
+Enforced by `lint:license` in CI.
+
 ## Git
 
 - Update a branch with a rebase, never a merge: a rebase replays its commits onto the new
