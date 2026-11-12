@@ -43,14 +43,18 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.sha }}
           fetch-depth: 0
 
-      # No release-me release exists yet: run from source until the first,
-      # hand tagged release lands, then pin this to that version.
+      # The released action and the released binary, not this checkout:
+      # release-me releases itself with the last version it actually shipped,
+      # so a broken change on main cannot take its own release path down with
+      # it. The commit digest is the one v0.5.0 points at; the version input
+      # names the release to download, which the action verifies against the
+      # published checksums.
       - name: Tag and draft a release for every merged release pull request
         id: release-me
-        uses: ./action
+        uses: ostendorf-cloud/release-me/action@1ce702d00e64f065f639373321c7fb4f5775636a  # v0.5.0
         with:
           token: ${{ steps.app-token.outputs.token }}
-          version: source
+          version: "0.5.0"
 
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
         if: steps.release-me.outputs.tags != ''
@@ -104,15 +108,38 @@ jobs:
           # default, shallow checkout.
           fetch-depth: 0
 
-      # No release-me release exists yet: build from source. Once the
-      # first one is tagged, this job should run the downloaded binary the
-      # same way the release job does.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
-        with:
-          go-version-file: go.mod
+      # The released binary, not a build from this checkout, matching the
+      # release job above: the checkout here is the default branch, whose code
+      # is unreleased. The composite action cannot be reused for it, because
+      # the action runs the release flow and this job runs the "comment"
+      # command, so the action's own download, verify and extract chain is
+      # spelled out here instead, through gh rather than curl because this
+      # repository's release scripts already reach for gh and the runner
+      # ships it. The checksum is verified before anything extracts or runs.
+      #
+      # linux_amd64 is hardcoded against this job's own "runs-on:
+      # ubuntu-latest" above. A different runner needs a different archive.
+      - name: Download the pinned release-me release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: "0.5.0"
+        run: |
+          cd "${RUNNER_TEMP}"
 
-      - name: Build release-me
-        run: go build -o "${RUNNER_TEMP}/release-me" ./cmd/release-me
+          archive="release-me_linux_amd64.tar.gz"
+          checksums="release-me_${VERSION}_checksums.txt"
+
+          gh release download "v${VERSION}" \
+            --repo ostendorf-cloud/release-me \
+            --pattern "${archive}" \
+            --pattern "${checksums}"
+
+          # Escape the "." in the file name so it is not a regex metacharacter.
+          pattern="${archive//./\\.}"
+          grep -E " ${pattern}\$" "${checksums}" | sha256sum -c -
+
+          tar -xzf "${archive}" release-me
+          chmod +x release-me
 
       - name: Apply the comment command
         env:
