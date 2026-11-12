@@ -3,4 +3,5 @@ dist/
 coverage.out
 .DS_Store
 .worktrees/
+.claude/worktrees/
 .claude/.cc-writes/

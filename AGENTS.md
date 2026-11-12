@@ -21,7 +21,8 @@ and are not repeated here.
 - `internal/migrate/`: another release tool's configuration translated into `release-me.yaml`.
 - `action/`: the composite action. `Dockerfile`: the image for runners with an image cache.
 - `scripts/`: CI glue specific to this repository's own workflows, such as attaching and
-  publishing release assets after `release.yaml` drafts a release.
+  publishing release assets after `release.yaml` drafts a release, and `check-dco.sh`, which
+  the shared DCO workflow runs out of this checkout.
 - `release-me.yaml`: the tool's own release configuration.
 - `skills/`: agent skills for using release-me, one folder each, shipped through skills.sh.
 
@@ -75,4 +76,14 @@ Enforced by `lint:license` in CI.
 
 ## Deviations
 
-- None.
+- The `license` job in `.github/workflows/checks.yaml` calls
+  `ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml` instead of
+  `task lint:license`, the one CI job that does not call its matching task target. The check is
+  shared infrastructure now, maintained in one place for every repository in the organisation.
+  `task lint:license` stays for local development and runs the same tool with the same flags.
+
+- `scripts/check-dco.sh` and its test stay in this repository although
+  `.github/workflows/dco.yaml` only calls the shared `reusable-dco.yaml`. That reusable workflow
+  checks out the calling repository and runs the script from it, so the caller supplies it. The
+  copy here is byte-identical to the one in `ostendorf-cloud/workflows` and the test holds it to
+  the same behaviour.

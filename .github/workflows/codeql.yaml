@@ -1,5 +1,17 @@
 name: codeql
 
+# The analysis itself comes from the shared reusable workflow in
+# ostendorf-cloud/workflows instead of a copy of the CodeQL job.
+#
+# The triggers stay here: a "workflow_call" workflow carries none of its
+# own, so push, pull_request and the weekly schedule are the caller's.
+#
+# "languages" is Go alone, this repository's only compiled language. The
+# reusable workflow builds Go with CodeQL's autobuild mode and runs mise
+# first so the pinned Go toolchain is on PATH.
+#
+# The permissions block stays here because the token a called workflow gets
+# is the caller's.
 on:
   push:
     branches: [main]
@@ -17,16 +29,6 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze Go with CodeQL
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
-      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
-      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
-        with:
-          languages: go
-          build-mode: autobuild
-      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
-        with:
-          category: "/language:go"
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-codeql.yaml@v0.1.0
+    with:
+      languages: '["go"]'
