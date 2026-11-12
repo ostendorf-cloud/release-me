@@ -1,5 +1,22 @@
 # Changelog
 
+## [v0.5.0](https://github.com/ostendorf-cloud/release-me/compare/v0.4.0...v0.5.0) (2026-11-12)
+
+### Breaking Changes
+
+- **pr:** create the release commit through the forge so it is signed ([#78](https://github.com/ostendorf-cloud/release-me/pull/78))
+
+### Features
+
+- **labels:** create a missing label instead of failing ([#139](https://github.com/ostendorf-cloud/release-me/pull/139))
+- **ci:** enforce the Go license header with addlicense ([#136](https://github.com/ostendorf-cloud/release-me/pull/136))
+- **ci:** enforce the DCO sign-off of every commit in a pull request ([#132](https://github.com/ostendorf-cloud/release-me/pull/132))
+
+### Bug Fixes
+
+- **release:** reject or correct the dangerous release config combinations ([#122](https://github.com/ostendorf-cloud/release-me/pull/122))
+- **history:** keep empty commits out of a component older than them ([#123](https://github.com/ostendorf-cloud/release-me/pull/123))
+
 ## [v0.4.0](https://github.com/ostendorf-cloud/release-me/compare/v0.3.0...v0.4.0) (2026-11-10)
 
 ### Breaking Changes
