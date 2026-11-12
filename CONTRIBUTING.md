@@ -72,8 +72,12 @@ Signing off means the contributor certifies they wrote the change, or otherwise 
 right to submit it under this project's license, Apache-2.0. It is required because it gives
 the project a clear chain of provenance for every contribution.
 
-DCO enforcement in CI is not wired up yet. Nothing currently blocks an unsigned commit, but
-contributors are still expected to sign off by convention.
+CI enforces this. The `dco` workflow checks every commit of a pull request and fails on one
+whose trailer is missing, or whose name and address match neither the commit's author nor its
+committer. Merge commits and commits authored by a bot are skipped, since neither can sign
+off. The failing check names every commit it rejected and how to fix it: amend the most
+recent one with `git commit --amend --signoff`, or several with
+`git rebase --signoff <base branch>`, then push with `--force-with-lease`.
 
 ## Local development
 

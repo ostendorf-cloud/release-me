@@ -1,0 +1,151 @@
+name: dco
+
+# Checks that every commit in a pull request carries a Developer
+# Certificate of Origin sign-off, the requirement CONTRIBUTING.md states,
+# and publishes the result as a check run owned by this organisation's
+# own ostendorf-cloud-security GitHub App instead of github-actions[bot].
+#
+# "pull_request", never "pull_request_target": a fork's pull request
+# brings code this workflow checks out and runs, and pull_request_target
+# would hand that code the app's installation token. The cost is that a
+# fork's run gets no secrets at all, so the sign-off verdict then lives
+# in this job's own status alone. The verdict itself does not depend on
+# the app: the validation step runs first, with GITHUB_TOKEN, and the job
+# fails on an unsigned commit whether or not the check run could be
+# published. That also keeps this workflow enforcing before the app's
+# secrets exist.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  signoff:
+    name: Every commit carries a DCO sign-off
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
+
+      # The pull request commits endpoint, not git log against the merge
+      # base: scripts/check-dco.sh explains why. It is read with
+      # GITHUB_TOKEN, scoped read only above, so the app's token is
+      # minted for the one write this workflow makes.
+      - name: Check the sign-off of every commit in the pull request
+        id: dco
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DCO_EXPECTED_COMMITS: ${{ github.event.pull_request.commits }}
+        run: |
+          gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/commits" \
+            >"${RUNNER_TEMP}/commits.json"
+
+          code=0
+          DCO_REPORT="${RUNNER_TEMP}/dco.md" ./scripts/check-dco.sh \
+            "${RUNNER_TEMP}/commits.json" || code=$?
+
+          # A failing sign-off is reported, not raised here: the job's own
+          # failure comes from the last step, after the check run is
+          # published. Any other exit code means the check itself is
+          # broken, which stops the job right away, before the report is
+          # read, rather than being published as a verdict about the pull
+          # request.
+          case "${code}" in
+          0) conclusion=success ;;
+          1) conclusion=failure ;;
+          *) exit "${code}" ;;
+          esac
+
+          cat "${RUNNER_TEMP}/dco.md" >>"${GITHUB_STEP_SUMMARY}"
+          echo "conclusion=${conclusion}" >>"${GITHUB_OUTPUT}"
+
+      # The secrets context cannot be read in a job or step "if", so the
+      # presence of the app's credentials is turned into a step output
+      # first. Only emptiness is tested, nothing is printed.
+      - name: Check whether the security app credentials are available
+        id: credentials
+        env:
+          APP_ID: ${{ vars.GH_APP_SECURITY_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.GH_APP_SECURITY_PRIVATE_KEY }}
+        run: |
+          if [ -n "${APP_ID}" ] && [ -n "${PRIVATE_KEY}" ]; then
+            echo "available=true" >>"${GITHUB_OUTPUT}"
+          else
+            echo "available=false" >>"${GITHUB_OUTPUT}"
+            echo "GH_APP_SECURITY_APP_ID or GH_APP_SECURITY_PRIVATE_KEY is" \
+              "unset, which is also the case for a pull request from a" \
+              "fork: no check run is published, this job's status carries" \
+              "the verdict." >>"${GITHUB_STEP_SUMMARY}"
+          fi
+
+      # The token is scoped to the one permission the check run below
+      # needs, so nothing else the app is installed for is reachable from
+      # this job. The step revokes the token when the job ends.
+      - name: Mint a token for the security app
+        id: app-token
+        if: steps.credentials.outputs.available == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        with:
+          app-id: ${{ vars.GH_APP_SECURITY_APP_ID }}
+          private-key: ${{ secrets.GH_APP_SECURITY_PRIVATE_KEY }}
+          permission-checks: write
+
+      # A check run, not a pull request comment: a check run is attributed
+      # to the app that created it, it can be made a required check in a
+      # ruleset, and it carries the full report as its own output. A
+      # comment would notify every subscriber of the pull request again
+      # for each push.
+      #
+      # "POST /check-runs" always creates a new check run; nothing here
+      # looks up or PATCHes an existing one. In the common case that still
+      # reads as one check run per push, because each push produces a new
+      # head SHA and GitHub scopes check runs per SHA. A "reopened" event,
+      # which this workflow's "on: pull_request:" trigger includes, or a
+      # manual re-run against the same head SHA, instead POSTs a second,
+      # duplicate check run for that commit rather than replacing the
+      # first. That duplicate-run case is a known edge case this step does
+      # not handle.
+      - name: Publish the result as the security app's check run
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CONCLUSION: ${{ steps.dco.outputs.conclusion }}
+        run: |
+          if [ "${CONCLUSION}" = "success" ]; then
+            title="Every commit is signed off"
+          else
+            title="A commit is missing its sign-off"
+          fi
+
+          jq -n \
+            --arg head_sha "${HEAD_SHA}" \
+            --arg conclusion "${CONCLUSION}" \
+            --arg title "${title}" \
+            --rawfile summary "${RUNNER_TEMP}/dco.md" \
+            '{
+              name: "DCO",
+              head_sha: $head_sha,
+              status: "completed",
+              conclusion: $conclusion,
+              output: {title: $title, summary: $summary},
+            }' |
+            gh api --method POST "repos/${REPO}/check-runs" --input -
+
+      - name: Fail the job when a commit lacks a sign-off
+        if: steps.dco.outputs.conclusion == 'failure'
+        run: |
+          echo "a commit in this pull request lacks a valid DCO sign-off," \
+            "see the step summary or the DCO check run" >&2
+          exit 1
