@@ -15,6 +15,9 @@ jq = "1"
 goreleaser = "2"
 hadolint = "2"
 shellcheck = "0"
+# addlicense has no entry in the mise registry under a short name, so it
+# comes from the aqua backend directly, pinned here like every other tool.
+"aqua:google/addlicense" = "1.2.0"
 # govulncheck has no entry in the mise or aqua registry, so it comes from
 # mise's go backend, still pinned here and installed by "mise install" in CI
 # like every other tool.
