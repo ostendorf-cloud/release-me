@@ -1038,14 +1038,20 @@ func TestDoPRFailsCleanlyWhenTheBaseBranchCannotBeResolved(t *testing.T) {
 	}
 }
 
-func TestDoPRRejectsAMissingLabelBeforeWritingAnything(t *testing.T) {
+func TestDoPRRejectsAMissingLabelBeforeWritingAnythingWhenCreateMissingIsFalse(t *testing.T) {
 	dir, origin := newPRRepo(t)
 	commitEntry(t, dir, "feat: add the next command")
 
 	f := newPRFake(origin)
 	f.RepoLabels = []string{"release: pending"} // "release: tagged" is missing
+	// "labels.create-missing" defaults to true on config.Default(), which
+	// would otherwise create the missing "release: tagged" label instead
+	// of rejecting it, so this test, proving the report-and-fail behavior
+	// the key restores, forces it off.
+	cfg := config.Default()
+	cfg.Labels.CreateMissing = false
 
-	err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, io.Discard)
+	err := doPR(t.Context(), dir, cfg, "", f, discardLogger(), false, io.Discard)
 	if err == nil {
 		t.Fatal("doPR() error = nil, want an error")
 	}

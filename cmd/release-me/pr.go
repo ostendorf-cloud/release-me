@@ -71,9 +71,11 @@ func runPR(args []string, stdout, stderr io.Writer) int {
 }
 
 // doPR creates or updates the release pull request for every component
-// component resolves to. The pending and tagged labels and the base
-// branch are checked once, shared by every component; a failure there
-// stops before any component writes anything.
+// component resolves to. The pending, tagged and extra labels and the base
+// branch are checked once, shared by every component: a label absent from
+// the repository is created, by default, before any component writes
+// anything; a failure there, creating a label or anything else, stops the
+// same way.
 func doPR(ctx context.Context, dir string, cfg config.Config, component string, f forge.Forge, logger *slog.Logger, dryRun bool, stdout io.Writer) error {
 	warnIgnoredAuthor(cfg, logger)
 	owner, repoName, err := history.Remote(ctx, dir)
@@ -88,8 +90,11 @@ func doPR(ctx context.Context, dir string, cfg config.Config, component string, 
 	multi := len(components) > 1
 
 	// The pending and tagged labels must exist before anything is written,
-	// the same check doCheck runs.
-	missing, unauthorized, err := missingLabels(ctx, f, owner, repoName, cfg)
+	// the same check doCheck runs: with "labels.create-missing" at its
+	// default true, a label absent from the repository is created here
+	// instead of stopping the run; "labels.create-missing: false" restores
+	// stopping with every missing label named.
+	missing, unauthorized, err := ensureLabels(ctx, f, owner, repoName, cfg)
 	if err != nil {
 		if unauthorized {
 			return fmt.Errorf("release-me: token rejected by the forge: %w", err)

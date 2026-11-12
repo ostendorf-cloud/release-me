@@ -101,7 +101,11 @@ func warnIgnoredAuthor(cfg config.Config, logger *slog.Logger) {
 // doCheck validates config, the --component name, the configured labels
 // and the token, returning every missing or invalid item. An empty result
 // means every check passed. f is nil when cfgErr is set: the labels cannot
-// be checked against an unparsed configuration.
+// be checked against an unparsed configuration. With "labels.create-missing"
+// at its default true, a label absent from the repository is created
+// instead of reported here; a creation failure is reported like any other
+// item. "labels.create-missing: false" restores reporting every missing
+// label by name instead.
 func doCheck(ctx context.Context, cfg config.Config, cfgErr, componentErr error, tokenEnv, token, owner, repoName string, f forge.Forge) []string {
 	var missing []string
 
@@ -116,7 +120,7 @@ func doCheck(ctx context.Context, cfg config.Config, cfgErr, componentErr error,
 	}
 
 	if cfgErr == nil && f != nil {
-		labels, unauthorized, err := missingLabels(ctx, f, owner, repoName, cfg)
+		labels, unauthorized, err := ensureLabels(ctx, f, owner, repoName, cfg)
 		switch {
 		case unauthorized:
 			missing = append(missing, fmt.Sprintf("token: environment variable %s is rejected by the forge: %v", tokenEnv, err))

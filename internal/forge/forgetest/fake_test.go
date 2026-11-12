@@ -251,6 +251,33 @@ func TestFakeRepositoryLabelsReturnsTheConfiguredList(t *testing.T) {
 	}
 }
 
+func TestFakeCreateLabelRecordsTheCall(t *testing.T) {
+	t.Parallel()
+	f := &forgetest.Fake{}
+
+	if err := f.CreateLabel(context.Background(), "owner", "repo", "release: pending", "ededed", "Release pull request open."); err != nil {
+		t.Fatalf("CreateLabel() error = %v", err)
+	}
+	want := forgetest.CreateLabelCall{Owner: "owner", Repo: "repo", Name: "release: pending", Color: "ededed", Description: "Release pull request open."}
+	if len(f.CreateLabelCalls) != 1 || f.CreateLabelCalls[0] != want {
+		t.Fatalf("CreateLabelCalls = %+v, want %+v", f.CreateLabelCalls, want)
+	}
+}
+
+func TestFakeCreateLabelReturnsTheConfiguredErrorAndRecordsNoCall(t *testing.T) {
+	t.Parallel()
+	wantErr := errors.New("403 Forbidden")
+	f := &forgetest.Fake{CreateLabelErr: wantErr}
+
+	err := f.CreateLabel(context.Background(), "owner", "repo", "release: pending", "ededed", "Release pull request open.")
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("CreateLabel() error = %v, want %v", err, wantErr)
+	}
+	if len(f.CreateLabelCalls) != 0 {
+		t.Fatalf("CreateLabelCalls = %+v, want none recorded", f.CreateLabelCalls)
+	}
+}
+
 func TestFakeCreateTag(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

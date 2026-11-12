@@ -26,8 +26,9 @@ mise use ubi:ostendorf-cloud/release-me
 
 As a GitHub Action, pinned to a commit digest, the convention every action in this
 organisation follows. `release-me run` opens and updates pull requests, creates tags and
-releases and deletes a released release branch, so the job needs `contents: write` and
-`pull-requests: write`; `secrets.GITHUB_TOKEN`
+releases, deletes a released release branch and creates a label missing from the repository, so
+the job needs `contents: write`, `pull-requests: write` and `issues: write`, the last one for
+creating a label through the REST API's Issues endpoint; `secrets.GITHUB_TOKEN`
 cannot trigger the checks on the release pull request it opens, a repository or GitHub App
 token can.
 
@@ -35,6 +36,7 @@ token can.
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 steps:
   - uses: actions/create-github-app-token@v3

@@ -404,6 +404,60 @@ func TestRepositoryLabelsReturnsErrUnauthorizedOnA401(t *testing.T) {
 	}
 }
 
+func TestCreateLabel(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		handler http.HandlerFunc
+		wantErr bool
+	}{
+		{
+			name: "creates the label with its color and description",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode label body: %v", err)
+				}
+				if body["name"] != "release: pending" || body["color"] != "ededed" || body["description"] != "Release pull request open." {
+					t.Fatalf("label body = %v", body)
+				}
+				fmt.Fprint(w, `{"name": "release: pending", "color": "ededed", "description": "Release pull request open."}`)
+			},
+		},
+		{
+			name: "wraps a server error",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				fmt.Fprint(w, `{"message": "Resource not accessible by integration"}`)
+			},
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v3/repos/owner/repo/labels", tc.handler)
+			f := newTestForge(t, mux)
+
+			err := f.CreateLabel(context.Background(), "owner", "repo", "release: pending", "ededed", "Release pull request open.")
+			switch {
+			case tc.wantErr:
+				if err == nil {
+					t.Fatal("CreateLabel() error = nil, want an error")
+				}
+				if !strings.Contains(err.Error(), `create label "release: pending"`) {
+					t.Fatalf("CreateLabel() error = %v, want it to name the label", err)
+				}
+			default:
+				if err != nil {
+					t.Fatalf("CreateLabel() error = %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestCreateTag(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

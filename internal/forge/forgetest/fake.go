@@ -59,6 +59,11 @@ type SetLabelsCall struct {
 	Labels      []string
 }
 
+// CreateLabelCall records one call to CreateLabel.
+type CreateLabelCall struct {
+	Owner, Repo, Name, Color, Description string
+}
+
 // CreateTagCall records one call to CreateTag.
 type CreateTagCall struct {
 	Owner, Repo, Tag, SHA string
@@ -118,6 +123,11 @@ type Fake struct {
 	// RepoLabelsErr, when set, is returned by RepositoryLabels instead of
 	// RepoLabels, to simulate a rejected token or another forge failure.
 	RepoLabelsErr error
+
+	// CreateLabelErr, when set, is returned by CreateLabel instead of
+	// recording the call, simulating a forge that refuses the create, for
+	// a permission the token lacks, a rate limit or any other reason.
+	CreateLabelErr error
 
 	// DefaultBranchName is what DefaultBranch returns, unless
 	// DefaultBranchErr is set.
@@ -191,6 +201,7 @@ type Fake struct {
 	UpdatedPullRequests []UpdatePullRequestCall
 	AddLabelsCalls      []AddLabelsCall
 	SetLabelsCalls      []SetLabelsCall
+	CreateLabelCalls    []CreateLabelCall
 	CreatedTags         []CreateTagCall
 	MovedTags           []MoveTagCall
 	CreatedReleases     []CreateReleaseCall
@@ -327,6 +338,15 @@ func (f *Fake) RepositoryLabels(_ context.Context, _, _ string) ([]string, error
 		return nil, f.RepoLabelsErr
 	}
 	return f.RepoLabels, nil
+}
+
+// CreateLabel implements forge.Forge.
+func (f *Fake) CreateLabel(_ context.Context, owner, repo, name, color, description string) error {
+	if f.CreateLabelErr != nil {
+		return f.CreateLabelErr
+	}
+	f.CreateLabelCalls = append(f.CreateLabelCalls, CreateLabelCall{Owner: owner, Repo: repo, Name: name, Color: color, Description: description})
+	return nil
 }
 
 // DefaultBranch implements forge.Forge.
