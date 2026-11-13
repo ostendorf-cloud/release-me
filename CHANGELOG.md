@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.5.1](https://github.com/ostendorf-cloud/release-me/compare/v0.5.0...v0.5.1) (2026-11-13)
+
+### Bug Fixes
+
+- **scripts:** give publish-release-assets' mktemp -d a template ([#151](https://github.com/ostendorf-cloud/release-me/pull/151))
+- **action:** give mktemp -d an explicit template ([#150](https://github.com/ostendorf-cloud/release-me/pull/150))
+- **renovate:** pinDigests is a config key, not a preset ([#147](https://github.com/ostendorf-cloud/release-me/pull/147))
+- **releasepr:** tolerate a CRLF pull request body ([#144](https://github.com/ostendorf-cloud/release-me/pull/144))
+
 ## [v0.5.0](https://github.com/ostendorf-cloud/release-me/compare/v0.4.0...v0.5.0) (2026-11-12)
 
 ### Breaking Changes
