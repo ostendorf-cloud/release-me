@@ -521,8 +521,9 @@ func toPullRequest(pr *gogithub.PullRequest) forge.PullRequest {
 }
 
 // normalizeLineEndings replaces every CRLF line ending in body with a lone
-// "\n". Nothing in this codebase ever produces a lone "\r" not preceded by
-// "\n", so this one pass covers every case that matters.
+// "\n". GitHub is never observed to store a lone "\r" not preceded by
+// "\n", only "\r\n" or "\n", so this one pass covers every case that
+// matters.
 func normalizeLineEndings(body string) string {
 	return strings.ReplaceAll(body, "\r\n", "\n")
 }

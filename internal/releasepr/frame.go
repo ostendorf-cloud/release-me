@@ -23,6 +23,12 @@ type Frame struct {
 // content is, so a header or footer never opens a release-me-notes,
 // release-me-version or release-me block that a later run would read back:
 // nothing in them is ever read, only rendered.
+//
+// This is the one exported function in this package taking a body that is
+// exempt from normalizeLineEndings' invariant: body here is already this
+// package's own render output, assembled from already-normalized pieces,
+// never a raw GitHub pull request body a fence-matching pattern still has
+// to read.
 func (f Frame) Wrap(body string) string {
 	if header := strings.Trim(f.Header, "\n"); header != "" {
 		body = escapeFence(header) + "\n\n" + body

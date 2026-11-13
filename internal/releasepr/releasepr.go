@@ -217,8 +217,8 @@ func codeList(names []string, conjunction string) string {
 // confirm its first line is the same normalizeLineEndings call every other
 // one makes.
 //
-// Nothing in this codebase ever produces a lone "\r" not preceded by "\n",
-// so this one pass covers every case that matters here.
+// GitHub is never observed to store a lone "\r" not preceded by "\n", only
+// "\r\n" or "\n", so this one pass covers every case that matters here.
 func normalizeLineEndings(body string) string {
 	return strings.ReplaceAll(body, "\r\n", "\n")
 }
