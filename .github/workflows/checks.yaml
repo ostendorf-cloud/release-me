@@ -151,3 +151,9 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db  # v3.6.3
       - run: task build
+
+  # Validates renovate.json the same way the license job validates the
+  # license header: a shared, centrally maintained reusable workflow, not a
+  # local task target.
+  renovate-config:
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@v0.2.0
