@@ -50,7 +50,7 @@ jobs:
   # defaults, "apache" and "1.2.0": both already match what mise.toml pins and
   # what Taskfile.yaml passes, so spelling them out would only restate them.
   license:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@v0.1.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@0906f36104c9a448d409732f4b24ece1a0398d26 # v0.1.0
     with:
       copyright-holder: Simon Ostendorf
       year: "2026"
