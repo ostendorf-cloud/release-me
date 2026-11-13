@@ -58,6 +58,19 @@ func TestToPullRequest(t *testing.T) {
 			},
 			want: forge.PullRequest{Number: 12, Title: "chore(main): release v0.4.0", Labels: []string{}},
 		},
+		{
+			name: "a body saved with CRLF line endings maps to LF only",
+			pr: &gogithub.PullRequest{
+				Number: new(13),
+				Title:  new("chore(main): release v0.5.0"),
+				Body:   new("Release v0.5.0\r\n\r\n```release-me-notes\r\nUpgrade note.\r\n```\r\n"),
+			},
+			want: forge.PullRequest{
+				Number: 13, Title: "chore(main): release v0.5.0",
+				Body:   "Release v0.5.0\n\n```release-me-notes\nUpgrade note.\n```\n",
+				Labels: []string{},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

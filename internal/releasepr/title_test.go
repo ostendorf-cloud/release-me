@@ -249,3 +249,27 @@ func TestTitleMetadataIgnoresPreservedFreeText(t *testing.T) {
 		})
 	}
 }
+
+// TestTitleMetadataIgnoresAPreservedMarkerInACRLFBody is
+// TestTitleMetadataIgnoresPreservedFreeText on a body saved with CRLF line
+// endings throughout: BodyTitlePattern's titleMarker pattern and its
+// notesBlock/versionBlock exclusion list both carry the same "\n"-only
+// anchors ExtractNotes needed normalizeLineEndings for, so without
+// normalizing first neither the quoted marker inside the notes block nor
+// the real one further down is found at all.
+func TestTitleMetadataIgnoresAPreservedMarkerInACRLFBody(t *testing.T) {
+	t.Parallel()
+	old := "build(${component}): ship ${version} after 2.0.0"
+	quoted := "<!-- release-me-title-pattern: build(${component}): ship 1.2.3 after ${version} -->"
+	actual, err := releasepr.NewTitlePattern(old, releasepr.TitlePerComponent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := strings.ReplaceAll(releasepr.TitlePatternMarker(actual, releasepr.TitlePerComponent), "\n", "\r\n")
+	body := "```release-me-notes\r\n" + quoted + "\r\n```\r\n" + "Release v1.2.3\r\n" + marker
+
+	got, ok := releasepr.BodyTitlePattern(body, releasepr.TitlePerComponent)
+	if !ok || got.String() != old {
+		t.Fatalf("pattern = %q,%v, want %q,true", got.String(), ok, old)
+	}
+}

@@ -24,3 +24,25 @@ func TestCanonicalDatesIgnoreMetadataQuotedInPreservedBlocks(t *testing.T) {
 		})
 	}
 }
+
+// TestCanonicalDatesIgnoreMetadataQuotedInACRLFPreservedBlock is
+// TestCanonicalDatesIgnoreMetadataQuotedInPreservedBlocks on a body saved
+// with CRLF line endings throughout: canonicalDateMarker anchors on
+// "^"/"$", the same "\n"-only anchors notesBlock and versionBlock carry, so
+// without normalizing first it matches neither the quoted date nor the
+// real one, and ExtractDate loses the real date entirely instead of only
+// the fake one it is supposed to ignore.
+func TestCanonicalDatesIgnoreMetadataQuotedInACRLFPreservedBlock(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"release-me-notes", "release-me-version"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Parallel()
+			body := "Team header\r\n```" + kind + "\r\n<!-- release-me-date: 2040-01-01 -->\r\n```\r\nTeam footer\r\n<!-- release-me-date: 2026-10-01 -->\r\n"
+			got, ok := releasepr.ExtractDate(body, "%d.%m.%Y")
+			want := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+			if !ok || !got.Equal(want) {
+				t.Fatalf("date=%v,%v;want %v", got, ok, want)
+			}
+		})
+	}
+}
