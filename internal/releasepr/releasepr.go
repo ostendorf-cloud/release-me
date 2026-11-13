@@ -193,18 +193,32 @@ func codeList(names []string, conjunction string) string {
 }
 
 // normalizeLineEndings replaces every CRLF line ending in body with a lone
-// "\n", so notesBlock and versionBlock's "^"/"$"-anchored patterns, which
-// only account for "\n", still match a body built with CRLF throughout.
-// ExtractNotes and ExtractVersionOverride both call it on their input: a
-// second, independent layer of defense alongside the normalization
-// internal/forge/github's toPullRequest already applies to a GitHub pull
-// request body, the one place such a body enters this tool. Nothing in
-// this codebase ever produces a lone "\r" not preceded by "\n", so this one
-// pass covers every case that matters here.
+// "\n". notesBlock, versionBlock, changelogOpen, canonicalDateMarker and
+// title.go's titleMarker all anchor on "^"/"$", which only account for
+// "\n", so none of them reliably matches a body built with CRLF
+// throughout, the shape GitHub's web editor can save an entire pull
+// request body in.
 //
-// SetNotes, SetVersionOverride and setFencedBlock need no matching change:
-// every body they ever see already went through toPullRequest first, and
-// they themselves only ever write "\n".
+// Every exported function in this package that takes the raw pull request
+// body as a parameter, named body, calls normalizeLineEndings on it as its
+// first step, before any pattern in this file or title.go ever sees it.
+// internal/forge/github's toPullRequest already normalizes a GitHub pull
+// request body the one place it enters this tool, so this is a second,
+// independent layer of defense for a caller that bypasses that boundary, a
+// test included. It started out covering only ExtractNotes and
+// ExtractVersionOverride; ExtractChangelog's and ExtractDate's own
+// notesBlock/versionBlock exclusion lists carried the identical gap and
+// went unnoticed for a release, and title.go's BodyTitlePattern carries it
+// too. Normalizing once at the top of every such function, instead of deep
+// inside whichever regexp call happens to need it, turns "this package's
+// patterns only ever see \n" into a property every function with a body
+// parameter upholds by construction, not a habit a function added later
+// has to remember on its own: a reviewer checking a new one need only
+// confirm its first line is the same normalizeLineEndings call every other
+// one makes.
+//
+// Nothing in this codebase ever produces a lone "\r" not preceded by "\n",
+// so this one pass covers every case that matters here.
 func normalizeLineEndings(body string) string {
 	return strings.ReplaceAll(body, "\r\n", "\n")
 }
@@ -252,18 +266,23 @@ func ExtractVersionOverride(body string) (version string, ok bool) {
 // replaced by notes, or a new block appended at the end when body carries
 // none yet. It is how a "release-notes" comment command sets the block
 // immediately, without the full render Body does: the next pr run's own
-// render moves it to Body's usual place.
+// render moves it to Body's usual place. body is read with
+// normalizeLineEndings first, for the same reason ExtractNotes does: a
+// caller's body already went through toPullRequest, but a CRLF body would
+// otherwise match no existing block to replace and get a second, stale one
+// appended instead.
 func SetNotes(body, notes string) string {
-	return setFencedBlock(body, "release-me-notes", notesBlock, notes)
+	return setFencedBlock(normalizeLineEndings(body), "release-me-notes", notesBlock, notes)
 }
 
 // SetVersionOverride returns body with its release-me-version fenced
 // block's content replaced by version, or a new block appended at the end
 // when body carries none yet. It is how a "release-as" comment command
 // sets the override immediately, without the full render Body does: the
-// next pr run's own render moves it to Body's usual place.
+// next pr run's own render moves it to Body's usual place. body is read
+// with normalizeLineEndings first, for the same reason SetNotes does.
 func SetVersionOverride(body, version string) string {
-	return setFencedBlock(body, "release-me-version", versionBlock, version)
+	return setFencedBlock(normalizeLineEndings(body), "release-me-version", versionBlock, version)
 }
 
 // VersionOverrides reads the text of a release-me-version block the way a
@@ -293,8 +312,11 @@ func VersionOverrides(raw string) (byComponent map[string]string, unscoped strin
 // fenced block carrying the line "<name> <version>", replacing an earlier
 // line for name and keeping every other line, or a new block appended at
 // the end when body carries none yet: SetVersionOverride for one component
-// of a shared release pull request with independent versions.
+// of a shared release pull request with independent versions. body is read
+// with normalizeLineEndings first, for the same reason SetVersionOverride
+// does.
 func SetComponentVersionOverride(body, name, version string) string {
+	body = normalizeLineEndings(body)
 	raw, _ := ExtractVersionOverride(body)
 	var lines []string
 	replaced := false
@@ -392,8 +414,13 @@ var changelogOpen = regexp.MustCompile(`<details>\s*<summary>Changelog</summary>
 // inside a release-me-notes or release-me-version block is not the
 // changelog's, and the block ends at the "</details>" line that closes
 // it, not at the first one: a LayoutDetails changelog nests one details
-// block per component.
+// block per component. body is read with normalizeLineEndings first, for
+// the same reason ExtractNotes does: on a CRLF body, notesBlock and
+// versionBlock would otherwise find no block to exclude, so a
+// "<details><summary>Changelog</summary>" sitting inside someone's notes
+// text would be read back as the real changelog opener.
 func ExtractChangelog(body string) string {
+	body = normalizeLineEndings(body)
 	fenced := append(notesBlock.FindAllStringIndex(body, -1), versionBlock.FindAllStringIndex(body, -1)...)
 	for _, loc := range changelogOpen.FindAllStringIndex(body, -1) {
 		if insideAny(loc[0], fenced) {
@@ -443,8 +470,12 @@ func untilClosingDetails(rest string) string {
 // release pull request, the first component's own, in any layout. ok is
 // false when body carries no such block, or no heading with a parseable
 // date. Canonical machine metadata wins; legacy headings are read in the
-// configured format, then in the default ISO format.
+// configured format, then in the default ISO format. body is read with
+// normalizeLineEndings first, for the same reason ExtractNotes does:
+// recordedDate's own canonicalDateMarker exclusion list has the same
+// notesBlock/versionBlock gap on a CRLF body that ExtractChangelog has.
 func ExtractDate(body, dateFormat string) (date time.Time, ok bool) {
+	body = normalizeLineEndings(body)
 	if date, ok := recordedDate(body); ok {
 		return date, true
 	}
@@ -474,8 +505,13 @@ func ExtractDate(body, dateFormat string) (date time.Time, ok bool) {
 
 // ReleaseBody renders the GitHub release body from a release pull request
 // body: the free text of the release-me-notes block, when present, followed
-// by the changelog, with the <details> wrapper removed.
+// by the changelog, with the <details> wrapper removed. body is read with
+// normalizeLineEndings first, for the same reason ExtractNotes does, before
+// being handed to ExtractNotes and ExtractChangelog, which normalize it
+// again themselves: redundant for a caller that already normalized, but it
+// keeps the invariant exceptionless.
 func ReleaseBody(body string) string {
+	body = normalizeLineEndings(body)
 	var parts []string
 	if notes, ok := ExtractNotes(body); ok && notes != "" {
 		parts = append(parts, notes)

@@ -217,8 +217,14 @@ func TitlePatternMarker(p TitlePattern, kind TitleKind) string {
 
 // BodyTitlePattern returns the title pattern body records, see
 // TitlePatternMarker, compiled for kind. ok is false when body records none,
-// or one that does not compile for kind.
+// or one that does not compile for kind. body is read with
+// normalizeLineEndings first, for the same reason releasepr.go's
+// ExtractNotes does: titleMarker's "^"/"$" anchors, and the
+// notesBlock/versionBlock exclusion list that keeps a quoted marker inside
+// someone's notes from being read as the real one, both need a "\n"-only
+// body to match a CRLF one correctly.
 func BodyTitlePattern(body string, kind TitleKind) (p TitlePattern, ok bool) {
+	body = normalizeLineEndings(body)
 	fenced := append(notesBlock.FindAllStringIndex(body, -1), versionBlock.FindAllStringIndex(body, -1)...)
 	for _, loc := range titleMarker.FindAllStringSubmatchIndex(body, -1) {
 		if insideAny(loc[0], fenced) {
@@ -235,8 +241,13 @@ func BodyTitlePattern(body string, kind TitleKind) (p TitlePattern, ok bool) {
 // ReadPatterns returns the patterns release reads the title of a merged
 // release pull request of kind back with: its recorded pattern first, then
 // the legacy default shape, then configured fallbacks. A current setting
-// must never reinterpret a title created with an earlier pattern.
+// must never reinterpret a title created with an earlier pattern. body is
+// read with normalizeLineEndings first, before being handed to
+// BodyTitlePattern, which normalizes it again itself: redundant, but it
+// keeps "a function with a body parameter normalizes it first" true here
+// too, not just in the function that happens to need it today.
 func ReadPatterns(configured []TitlePattern, body string, kind TitleKind) []TitlePattern {
+	body = normalizeLineEndings(body)
 	out := make([]TitlePattern, 0, len(configured)+2)
 	add := func(p TitlePattern) {
 		if !slices.ContainsFunc(out, func(o TitlePattern) bool { return o.raw == p.raw }) {

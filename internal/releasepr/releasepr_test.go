@@ -309,6 +309,37 @@ func TestExtractVersionOverrideToleratesCRLFLineEndings(t *testing.T) {
 	}
 }
 
+// TestExtractChangelogIgnoresAFakeOpenerInsideACRLFNotesBlock reproduces
+// the failure mode issue #143's fix left open: ExtractChangelog builds its
+// exclusion list with notesBlock and versionBlock against the raw body,
+// the same "\n"-only anchors ExtractNotes needed normalizeLineEndings for.
+// On a CRLF body, that list comes back empty, so a
+// "<details><summary>Changelog</summary>" sitting inside the free text of
+// a release-me-notes block is read back as the real changelog opener
+// instead of the actual one further down.
+func TestExtractChangelogIgnoresAFakeOpenerInsideACRLFNotesBlock(t *testing.T) {
+	t.Parallel()
+	body := "Release v1.2.3\r\n\r\n" +
+		"```release-me-notes\r\n" +
+		"See the changelog below for what actually shipped.\r\n\r\n" +
+		"<details><summary>Changelog</summary>\r\n\r\n" +
+		"## Not the real changelog\r\n\r\n- this line lives inside the notes block\r\n\r\n" +
+		"</details>\r\n" +
+		"```\r\n\r\n" +
+		"<details>\r\n<summary>Changelog</summary>\r\n\r\n" +
+		"## v1.2.3 (2026-03-14)\r\n\r\n### Features\r\n\r\n- add the real thing\r\n\r\n" +
+		"</details>\r\n"
+
+	want := "## v1.2.3 (2026-03-14)\n\n### Features\n\n- add the real thing"
+	got := releasepr.ExtractChangelog(body)
+	if got != want {
+		t.Fatalf("ExtractChangelog() = %q, want %q", got, want)
+	}
+	if strings.Contains(got, "\r") {
+		t.Fatalf("ExtractChangelog() = %q, want no stray carriage return", got)
+	}
+}
+
 func TestExtractDate(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

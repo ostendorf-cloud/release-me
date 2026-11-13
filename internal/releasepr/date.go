@@ -22,6 +22,10 @@ func DateMarker(date time.Time, format string) string {
 	return "\n<!-- release-me-date: " + date.Format("2006-01-02") + " -->\n"
 }
 
+// recordedDate is unexported and has no normalizeLineEndings call of its
+// own: ExtractDate, its only caller, already normalized body before
+// calling it, the same way every exported function with a body parameter
+// does.
 func recordedDate(body string) (time.Time, bool) {
 	fenced := append(notesBlock.FindAllStringIndex(body, -1), versionBlock.FindAllStringIndex(body, -1)...)
 	for _, loc := range canonicalDateMarker.FindAllStringSubmatchIndex(body, -1) {
