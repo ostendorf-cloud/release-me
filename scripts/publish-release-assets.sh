@@ -80,7 +80,9 @@ while IFS= read -r tag; do
   esac
 
   echo "building ${tag} in its own worktree"
-  worktree_dir="$(mktemp -d)"
+  # An explicit template, because macOS mktemp ignores TMPDIR without one
+  # and always lands in the system temporary directory.
+  worktree_dir="$(mktemp -d "${TMPDIR:-/tmp}/publish-release-assets.XXXXXXXX")"
   git worktree add --quiet --detach "${worktree_dir}" "${tag}"
 
   (
