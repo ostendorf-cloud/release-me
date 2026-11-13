@@ -51,7 +51,7 @@ jobs:
       # published checksums.
       - name: Tag and draft a release for every merged release pull request
         id: release-me
-        uses: ostendorf-cloud/release-me/action@1ce702d00e64f065f639373321c7fb4f5775636a  # v0.5.0
+        uses: ostendorf-cloud/release-me/action@e3346c4a5aa463642e8d0627b01b3308dc49e2ec  # v0.5.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           version: "0.5.0"
