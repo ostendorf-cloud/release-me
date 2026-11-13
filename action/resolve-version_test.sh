@@ -9,7 +9,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 resolver="${script_dir}/resolve-version.sh"
-work="$(mktemp -d)"
+# An explicit template, because macOS mktemp ignores TMPDIR without one
+# and always lands in the system temporary directory.
+work="$(mktemp -d "${TMPDIR:-/tmp}/resolve-version.XXXXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 
 # with-version/action is a sibling of a VERSION file, the shape the action
