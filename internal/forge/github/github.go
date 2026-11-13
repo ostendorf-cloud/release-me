@@ -502,15 +502,29 @@ func webURL(api string) string {
 // endpoints.
 func toPullRequest(pr *gogithub.PullRequest) forge.PullRequest {
 	return forge.PullRequest{
-		Number:  pr.GetNumber(),
-		Title:   pr.GetTitle(),
-		Body:    pr.GetBody(),
+		Number: pr.GetNumber(),
+		Title:  pr.GetTitle(),
+		// GitHub's web editor can save an entire pull request body with CRLF
+		// line endings. releasepr's notesBlock and versionBlock regexes
+		// anchor each fence line on "\n" only, so a body saved that way
+		// would otherwise lose its release-me-notes or release-me-version
+		// block without any error. Normalizing here, the one place a GitHub
+		// pull request's body enters this tool, means no reader downstream
+		// has to remember this on its own.
+		Body:    normalizeLineEndings(pr.GetBody()),
 		Labels:  labelNames(pr.Labels),
 		URL:     pr.GetHTMLURL(),
 		Merged:  pr.GetMerged() || !pr.GetMergedAt().IsZero(),
 		HeadSHA: pr.GetHead().GetSHA(),
 		Author:  pr.GetUser().GetLogin(),
 	}
+}
+
+// normalizeLineEndings replaces every CRLF line ending in body with a lone
+// "\n". Nothing in this codebase ever produces a lone "\r" not preceded by
+// "\n", so this one pass covers every case that matters.
+func normalizeLineEndings(body string) string {
+	return strings.ReplaceAll(body, "\r\n", "\n")
 }
 
 // labelNames reads the names off a slice of go-github labels.

@@ -192,15 +192,36 @@ func codeList(names []string, conjunction string) string {
 	}
 }
 
+// normalizeLineEndings replaces every CRLF line ending in body with a lone
+// "\n", so notesBlock and versionBlock's "^"/"$"-anchored patterns, which
+// only account for "\n", still match a body built with CRLF throughout.
+// ExtractNotes and ExtractVersionOverride both call it on their input: a
+// second, independent layer of defense alongside the normalization
+// internal/forge/github's toPullRequest already applies to a GitHub pull
+// request body, the one place such a body enters this tool. Nothing in
+// this codebase ever produces a lone "\r" not preceded by "\n", so this one
+// pass covers every case that matters here.
+//
+// SetNotes, SetVersionOverride and setFencedBlock need no matching change:
+// every body they ever see already went through toPullRequest first, and
+// they themselves only ever write "\n".
+func normalizeLineEndings(body string) string {
+	return strings.ReplaceAll(body, "\r\n", "\n")
+}
+
 // notesBlock matches the "release-me-notes" fenced block of a release pull
 // request body. Both fences are anchored to the start of their own line,
 // so a nested fence inside the notes does not truncate the match early.
 var notesBlock = regexp.MustCompile("(?sm)^```release-me-notes[ \t]*$\n(.*?)^```[ \t]*$")
 
 // ExtractNotes returns the free text of the release-me-notes fenced block in
-// body. ok is false when body carries no such block.
+// body. ok is false when body carries no such block. body is read with
+// normalizeLineEndings first, a second, independent layer of defense
+// alongside the forge-layer normalization toPullRequest already applies to
+// a GitHub pull request body: this function stays correct even for a
+// caller that bypasses that layer.
 func ExtractNotes(body string) (notes string, ok bool) {
-	m := notesBlock.FindStringSubmatch(body)
+	m := notesBlock.FindStringSubmatch(normalizeLineEndings(body))
 	if m == nil {
 		return "", false
 	}
@@ -217,9 +238,10 @@ var versionBlock = regexp.MustCompile("(?sm)^```release-me-version[ \t]*$\n(.*?)
 // ExtractVersionOverride returns the free text of the release-me-version
 // fenced block in body, trimmed. ok is false when body carries no such
 // block. The text is read back exactly as written; a caller that needs a
-// real version decides for itself whether it parses.
+// real version decides for itself whether it parses. body is read with
+// normalizeLineEndings first, for the same reason ExtractNotes does.
 func ExtractVersionOverride(body string) (version string, ok bool) {
-	m := versionBlock.FindStringSubmatch(body)
+	m := versionBlock.FindStringSubmatch(normalizeLineEndings(body))
 	if m == nil {
 		return "", false
 	}

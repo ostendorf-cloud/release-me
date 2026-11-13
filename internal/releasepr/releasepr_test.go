@@ -267,6 +267,48 @@ func TestExtractNotesDoesNotStopAtTripleBackticksMidLine(t *testing.T) {
 	}
 }
 
+// TestExtractNotesToleratesCRLFLineEndings reproduces a pull request body
+// saved through GitHub's web editor, which can come back with CRLF line
+// endings throughout: notesBlock anchors each fence line on "\n" only, so
+// without normalizing first, the match would fail silently the way issue
+// #143 described. This is independent of the forge-layer fix in
+// internal/forge/github's toPullRequest: it proves ExtractNotes stays
+// correct even for a caller that bypasses that layer.
+func TestExtractNotesToleratesCRLFLineEndings(t *testing.T) {
+	t.Parallel()
+	body := "Release v1.2.3\r\n\r\n```release-me-notes\r\nUpgrade note.\r\n```\r\n\r\n<details>...\r\n"
+
+	text, ok := releasepr.ExtractNotes(body)
+	if !ok {
+		t.Fatal("ExtractNotes() ok = false, want true")
+	}
+	if text != "Upgrade note." {
+		t.Fatalf("ExtractNotes() = %q, want %q", text, "Upgrade note.")
+	}
+	if strings.Contains(text, "\r") {
+		t.Fatalf("ExtractNotes() = %q, want no stray carriage return", text)
+	}
+}
+
+// TestExtractVersionOverrideToleratesCRLFLineEndings is
+// TestExtractNotesToleratesCRLFLineEndings for ExtractVersionOverride and
+// versionBlock.
+func TestExtractVersionOverrideToleratesCRLFLineEndings(t *testing.T) {
+	t.Parallel()
+	body := "Release v1.2.3\r\n\r\n```release-me-version\r\n2.0.0\r\n```\r\n\r\n<details>...\r\n"
+
+	text, ok := releasepr.ExtractVersionOverride(body)
+	if !ok {
+		t.Fatal("ExtractVersionOverride() ok = false, want true")
+	}
+	if text != "2.0.0" {
+		t.Fatalf("ExtractVersionOverride() = %q, want %q", text, "2.0.0")
+	}
+	if strings.Contains(text, "\r") {
+		t.Fatalf("ExtractVersionOverride() = %q, want no stray carriage return", text)
+	}
+}
+
 func TestExtractDate(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
