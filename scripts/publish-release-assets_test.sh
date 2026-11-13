@@ -91,8 +91,8 @@ FAKE_GIT
 chmod +x "${fake_bin}/git"
 
 # fake-bin/mktemp logs nothing: publish-release-assets.sh only ever calls
-# it as "mktemp -d" to name one tag's worktree directory, and that call
-# itself is not part of what a test asserts about. It instead returns a
+# it with an explicit template to name one tag's worktree directory, and
+# that call itself is not part of what a test asserts about. It instead returns a
 # deterministic, numbered directory under the test's own work directory,
 # so a test can name the exact path a worktree add or remove call used.
 # The counter file is reset at the start of every run_case,
