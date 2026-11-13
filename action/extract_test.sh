@@ -7,7 +7,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 script="${script_dir}/extract.sh"
-work="$(mktemp -d)"
+# An explicit template, because macOS mktemp ignores TMPDIR without one
+# and always lands in the system temporary directory.
+work="$(mktemp -d "${TMPDIR:-/tmp}/extract.XXXXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 
 failures=0

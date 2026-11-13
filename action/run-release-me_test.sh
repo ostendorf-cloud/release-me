@@ -10,7 +10,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 runner="${script_dir}/run-release-me.sh"
-work="$(mktemp -d)"
+# An explicit template, because macOS mktemp ignores TMPDIR without one
+# and always lands in the system temporary directory.
+work="$(mktemp -d "${TMPDIR:-/tmp}/run-release-me.XXXXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 
 current="${work}/current"
