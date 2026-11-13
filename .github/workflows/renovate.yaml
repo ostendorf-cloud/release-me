@@ -1,0 +1,35 @@
+name: renovate
+
+# Thin, per-repository trigger for this repository's own Renovate run, as
+# ostendorf-cloud/workflows' README documents for
+# "reusable-renovate.yaml". The "issues"/"pull_request" "edited" triggers
+# exist so a human checking a Renovate rebase checkbox (on the Dependency
+# Dashboard issue, or on a single Renovate pull request) reacts within
+# this run's CI time instead of waiting for the next "schedule" tick. The
+# anti-loop guard deciding whether an "edited" event should actually
+# trigger a run lives inside "reusable-renovate.yaml" itself, as that
+# reusable workflow's own job-level "if:", so this caller needs no
+# condition of its own.
+on:
+  # Off-peak, staggered away from other repositories' own Renovate
+  # schedules in this organisation.
+  schedule:
+    - cron: "34 4 * * *"
+  workflow_dispatch:
+  issues:
+    types: [edited]
+  pull_request:
+    types: [edited]
+
+# "contents: read" is enough for this caller: it only declares triggers and
+# calls "reusable-renovate.yaml" unconditionally, needing no permission of
+# its own. The actual Renovate run's permissions come from the token
+# "reusable-renovate.yaml" mints for itself, not from this workflow's own
+# GITHUB_TOKEN.
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate.yaml@v0.2.0
+    secrets: inherit
