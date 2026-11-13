@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION}" -o /relea
 
 # gcr.io/distroless/static:nonroot, runs as the image's built in "nonroot"
 # user (65532:65532), so no USER instruction is needed here.
-FROM gcr.io/distroless/static@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88
+FROM gcr.io/distroless/static@sha256:1a64f46364620465ef9e9a8f5413757dfdf22695e050bbfd7303eeaf17a59383
 
 COPY --from=builder /release-me /release-me
 
