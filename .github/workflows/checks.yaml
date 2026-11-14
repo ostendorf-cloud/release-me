@@ -156,4 +156,4 @@ jobs:
   # license header: a shared, centrally maintained reusable workflow, not a
   # local task target.
   renovate-config:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@v0.2.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@287204461266c02cdd2fe9da20527ac3f3ac842c # v0.2.0

@@ -31,5 +31,5 @@ permissions:
 
 jobs:
   renovate:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate.yaml@v0.2.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate.yaml@287204461266c02cdd2fe9da20527ac3f3ac842c # v0.2.0
     secrets: inherit
