@@ -50,7 +50,7 @@ jobs:
   # defaults, "apache" and "1.2.0": both already match what mise.toml pins and
   # what Taskfile.yaml passes, so spelling them out would only restate them.
   license:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@0906f36104c9a448d409732f4b24ece1a0398d26 # v0.1.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@91979cf4cff86d00ebee28dfaf6e3b452aaeb1a9 # v0.2.2
     with:
       copyright-holder: Simon Ostendorf
       year: "2026"
@@ -156,4 +156,4 @@ jobs:
   # license header: a shared, centrally maintained reusable workflow, not a
   # local task target.
   renovate-config:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@v0.2.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@91979cf4cff86d00ebee28dfaf6e3b452aaeb1a9 # v0.2.2
