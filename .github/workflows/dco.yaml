@@ -35,5 +35,5 @@ concurrency:
 
 jobs:
   signoff:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-dco.yaml@0906f36104c9a448d409732f4b24ece1a0398d26 # v0.1.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-dco.yaml@a798b963d20b239bec48c101af965e08fac36146 # v0.3.0
     secrets: inherit
