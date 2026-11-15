@@ -6,7 +6,7 @@ task = "3"
 # 2.15.0 is verified against go 1.27.4 above; check "golangci-lint run" before moving either.
 golangci-lint = "2.15.0"
 actionlint = "1"
-markdownlint-cli2 = "0.20"
+markdownlint-cli2 = "0.24.1"
 yamllint = "1"
 gitleaks = "8"
 # jq parses the pull request commit JSON scripts/check-dco.sh reads, for
