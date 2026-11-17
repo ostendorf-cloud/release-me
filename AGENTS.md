@@ -21,8 +21,8 @@ and are not repeated here.
 - `internal/migrate/`: another release tool's configuration translated into `release-me.yaml`.
 - `action/`: the composite action. `Dockerfile`: the image for runners with an image cache.
 - `scripts/`: CI glue specific to this repository's own workflows, such as attaching and
-  publishing release assets after `release.yaml` drafts a release, and `check-dco.sh`, which
-  the shared DCO workflow runs out of this checkout.
+  publishing release assets after `release.yaml` drafts a release, and `check-dco.sh`, a local
+  copy of the check the shared DCO workflow runs from its own repository.
 - `release-me.yaml`: the tool's own release configuration.
 - `skills/`: agent skills for using release-me, one folder each, shipped through skills.sh.
 
@@ -84,6 +84,7 @@ Enforced by `lint:license` in CI.
 
 - `scripts/check-dco.sh` and its test stay in this repository although
   `.github/workflows/dco.yaml` only calls the shared `reusable-dco.yaml`. That reusable workflow
-  checks out the calling repository and runs the script from it, so the caller supplies it. The
-  copy here is byte-identical to the one in `ostendorf-cloud/workflows` and the test holds it to
-  the same behaviour.
+  runs its own copy of the script from its own repository and reads no file of this one. The
+  copy here serves local runs and as a parity reference, and is byte-identical to the shared
+  one today. `scripts/check-dco_test.sh` checks only the behaviour of this copy, so a drift
+  shows only in a comparison of the two files, for example of their `git hash-object` values.

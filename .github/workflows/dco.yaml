@@ -14,14 +14,13 @@ name: dco
 # trigger is the caller's own: "pull_request_target" would hand a fork's
 # code the app's installation token.
 #
-# scripts/check-dco.sh stays in this repository on purpose. The reusable
-# workflow's own actions/checkout step checks out the CALLING repository
-# (actions/checkout defaults "repository" to "github.repository", which in a
-# reusable workflow is the caller), and the workflow then runs
-# "./scripts/check-dco.sh" from that checkout. Removing the script here
-# would break the check. The copy in this repository is byte-identical to
-# the one in the workflows repository, and scripts/check-dco_test.sh keeps
-# it that way.
+# The reusable workflow checks out its own repository at the commit the
+# caller resolved and runs its own copy of scripts/check-dco.sh. It reads
+# no file of this repository. This repository keeps its copy and
+# scripts/check-dco_test.sh for local runs and as a parity reference. Both
+# copies are byte-identical today. The test checks only the behaviour of
+# this copy, so a drift shows only in a comparison of the two files, for
+# example of their "git hash-object" values.
 on:
   pull_request:
 
@@ -35,5 +34,5 @@ concurrency:
 
 jobs:
   signoff:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-dco.yaml@0906f36104c9a448d409732f4b24ece1a0398d26 # v0.1.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-dco.yaml@v0
     secrets: inherit
