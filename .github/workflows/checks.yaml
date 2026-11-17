@@ -46,11 +46,13 @@ jobs:
   # development, running the same tool with the same flags. AGENTS.md records
   # the exception under "Deviations".
   #
-  # license-type and addlicense-version are left at the reusable workflow's
-  # defaults, "apache" and "1.2.0": both already match what mise.toml pins and
-  # what Taskfile.yaml passes, so spelling them out would only restate them.
+  # license-type and addlicense-version are left unset. The reusable workflow
+  # then checks against "apache", its fallback when neither license-type nor
+  # license-file is set, with addlicense "1.2.0", its input default. Both
+  # already match what mise.toml pins and what Taskfile.yaml passes, so
+  # spelling them out would only restate them.
   license:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@0906f36104c9a448d409732f4b24ece1a0398d26 # v0.1.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@v0
     with:
       copyright-holder: Simon Ostendorf
       year: "2026"
@@ -156,4 +158,4 @@ jobs:
   # license header: a shared, centrally maintained reusable workflow, not a
   # local task target.
   renovate-config:
-    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@v0.2.0
+    uses: ostendorf-cloud/workflows/.github/workflows/reusable-renovate-config.yaml@v0

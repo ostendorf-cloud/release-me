@@ -9,8 +9,9 @@ actionlint = "1"
 markdownlint-cli2 = "0.20"
 yamllint = "1"
 gitleaks = "8"
-# jq parses the pull request commit JSON scripts/check-dco.sh reads, and
-# builds the check run payload .github/workflows/dco.yaml posts.
+# jq parses the pull request commit JSON scripts/check-dco.sh reads, for
+# local runs of the script and of its test. CI's DCO check runs the shared
+# workflow's own copy with that repository's own jq.
 jq = "1"
 goreleaser = "2"
 hadolint = "2"
