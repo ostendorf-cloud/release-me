@@ -30,9 +30,11 @@ var ErrReleaseNotFound = errors.New("release not found")
 
 // ErrBranchMoved reports that publishing a release commit was rejected
 // because the branch is somewhere other than the caller expected. The
-// command layer returns it when git refuses the push, a stale
-// "--force-with-lease" or a non-fast-forward, and the branch is left where
-// it is then. No Forge method returns it: CommitBranch moves no reference.
+// command layer returns it only when git refuses a push for its
+// "--force-with-lease", and the branch is left where it is then. A push
+// without a lease that git refuses, a non-fast-forward say, is a plain
+// error carrying git's reason instead. No Forge method returns it:
+// CommitBranch moves no reference.
 var ErrBranchMoved = errors.New("branch moved")
 
 // ErrUnauthorized is returned when the forge rejects the request's
