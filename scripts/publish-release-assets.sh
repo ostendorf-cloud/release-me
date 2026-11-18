@@ -36,19 +36,17 @@ git fetch origin --tags --force
 # detaching "git checkout" would switch to a different commit of; a separate
 # worktree leaves the running checkout, and this script, untouched.
 #
-# original_ref and worktree_dir are restored and removed by the trap below
-# on every exit path, success or failure: a plain "restore at the end of the
-# script" line would never run once "set -euo pipefail" or an explicit
-# "exit 1" stops the script early, for a tag whose release view, build,
-# upload or publish step failed.
-original_ref="$(git rev-parse HEAD)"
+# worktree_dir is removed by the trap below on every exit path, success or
+# failure: a plain "remove it at the end of the script" line would never
+# run once "set -euo pipefail" or an explicit "exit 1" stops the script
+# early, for a tag whose release view, build, upload or publish step
+# failed.
 worktree_dir=""
 
 cleanup() {
   if [ -n "${worktree_dir}" ] && [ -d "${worktree_dir}" ]; then
     git worktree remove --force "${worktree_dir}"
   fi
-  git checkout --quiet "${original_ref}"
 }
 trap cleanup EXIT
 

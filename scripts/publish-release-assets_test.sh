@@ -17,9 +17,8 @@ trap 'rm -rf "${work}"' EXIT
 fake_bin="${work}/fake-bin"
 mkdir -p "${fake_bin}"
 
-# fake-bin/git logs the call. "rev-parse" answers a fixed fake SHA, the
-# only output publish-release-assets.sh reads from git, so the trap's own
-# "restore the original ref" checkout has something to check out.
+# fake-bin/git logs the call. publish-release-assets.sh reads no output
+# from git, so every other subcommand just succeeds silently.
 # "worktree add" and "worktree remove" actually create and delete the
 # directory they are given, like the real git worktree would for the
 # script's own "cd" into it and later cleanup. Unlike real git, this fake
@@ -29,8 +28,8 @@ mkdir -p "${fake_bin}"
 # anything else fails loudly with a message naming the flag, the same
 # shape as real git's own "error: unknown option" for a flag a subcommand
 # does not support. That is what caught "--quiet" on "worktree remove"
-# here, a flag real git worktree remove has never supported; "checkout"
-# and "fetch" need no output at all.
+# here, a flag real git worktree remove has never supported; "fetch" needs
+# no output at all.
 cat <<'FAKE_GIT' >"${fake_bin}/git"
 #!/usr/bin/env bash
 echo "git $*" >>"${CALL_LOG}"
@@ -83,10 +82,6 @@ case "$1 $2" in
   exit 0
   ;;
 esac
-
-if [ "$1" = "rev-parse" ]; then
-  echo fake-sha
-fi
 FAKE_GIT
 chmod +x "${fake_bin}/git"
 
@@ -120,7 +115,7 @@ chmod +x "${fake_bin}/mktemp"
 # its current directory, the worktree the real script "cd"s into first.
 # GORELEASER_CURRENT_TAG naming a tag ending "-goreleaser-fails" fails the
 # build instead, to test that a failure partway through one tag's build
-# still restores original_ref and removes that tag's worktree.
+# still removes that tag's worktree.
 cat <<'FAKE_GORELEASER' >"${fake_bin}/goreleaser"
 #!/usr/bin/env bash
 echo "goreleaser $*" >>"${CALL_LOG}"
@@ -259,9 +254,8 @@ run_failure_case() {
 # run_partial_failure_case name tags want_stderr_substring asserts the
 # opposite side of the same cleanup: a failure that happens after a
 # worktree already exists, partway through one tag's build, upload or
-# publish, must still restore original_ref and leave no worktree directory
-# behind, the trap covering both the "normal" and the "killed by set -e"
-# exit path alike.
+# publish, must still leave no worktree directory behind, the trap covering
+# both the "normal" and the "killed by set -e" exit path alike.
 run_partial_failure_case() {
   local case_name="$1" tags="$2" want_stderr_substring="$3"
   reset_case_state
@@ -280,12 +274,6 @@ run_partial_failure_case() {
     return
   fi
 
-  if ! grep -qF "git checkout --quiet fake-sha" "${CALL_LOG}"; then
-    echo "FAIL ${case_name}: calls = $(cat "${CALL_LOG}"), want the trap to still restore original_ref"
-    failures=$((failures + 1))
-    return
-  fi
-
   if find "${work}" -maxdepth 1 -name 'worktree-*' | grep -q .; then
     echo "FAIL ${case_name}: a worktree directory is still on disk after the failure"
     failures=$((failures + 1))
@@ -299,40 +287,34 @@ run_case "nothing released makes no call at all" "" ""
 
 run_case "a draft release is built, attached and published" "v1.0.0-draft" \
   "git fetch origin --tags --force
-git rev-parse HEAD
 gh release view v1.0.0-draft --json isDraft --jq .isDraft
 git worktree add --quiet --detach ${work}/worktree-1 v1.0.0-draft
 goreleaser release --clean --skip=announce,validate,publish
 gh release upload v1.0.0-draft dist/fixture_linux_amd64.tar.gz dist/fixture_1.0.0_checksums.txt --clobber
 gh release edit v1.0.0-draft --draft=false
-git worktree remove ${work}/worktree-1
-git checkout --quiet fake-sha"
+git worktree remove ${work}/worktree-1"
 
 run_case "an already published release is left alone" "v1.0.0-published" \
   "git fetch origin --tags --force
-git rev-parse HEAD
-gh release view v1.0.0-published --json isDraft --jq .isDraft
-git checkout --quiet fake-sha"
+gh release view v1.0.0-published --json isDraft --jq .isDraft"
 
 run_case "every tag in a multi-line TAGS is handled" "v1.0.0-draft
 v2.0.0-published" \
   "git fetch origin --tags --force
-git rev-parse HEAD
 gh release view v1.0.0-draft --json isDraft --jq .isDraft
 git worktree add --quiet --detach ${work}/worktree-1 v1.0.0-draft
 goreleaser release --clean --skip=announce,validate,publish
 gh release upload v1.0.0-draft dist/fixture_linux_amd64.tar.gz dist/fixture_1.0.0_checksums.txt --clobber
 gh release edit v1.0.0-draft --draft=false
 git worktree remove ${work}/worktree-1
-gh release view v2.0.0-published --json isDraft --jq .isDraft
-git checkout --quiet fake-sha"
+gh release view v2.0.0-published --json isDraft --jq .isDraft"
 
 run_failure_case \
   "a gh release view failure stops the script instead of being treated as already published" \
   "v1.0.0-view-fails" "cannot read the release for v1.0.0-view-fails"
 
 run_partial_failure_case \
-  "a goreleaser failure partway through a build still restores original_ref and removes the worktree" \
+  "a goreleaser failure partway through a build still removes the worktree" \
   "v1.0.0-draft-goreleaser-fails" "fake goreleaser: build failed"
 
 if [ "${failures}" -ne 0 ]; then
