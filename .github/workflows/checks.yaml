@@ -95,12 +95,26 @@ jobs:
   # license-file is set, with addlicense "1.2.0", its input default. Both
   # already match what mise.toml pins and what Taskfile.yaml passes, so
   # spelling them out would only restate them.
+  #
+  # The file set is scripts/license-files.sh, the one place that names it.
+  # "task lint:license" and the spdx job read it from there too.
   license:
     uses: ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml@v0
     with:
       copyright-holder: Simon Ostendorf
       year: "2026"
-      find-commands: find . -name "*.go" -not -path "./.worktrees/*"
+      find-commands: bash scripts/license-files.sh
+
+  # Presence is not correctness: the license job accepts a header that names
+  # another license. This job compares the SPDX identifier of every covered
+  # file with the license LICENSE holds.
+  license-spdx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d  # v5.2.9
+      - run: task lint:license-spdx
 
   markdownlint:
     runs-on: ubuntu-latest
