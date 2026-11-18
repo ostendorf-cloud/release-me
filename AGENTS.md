@@ -81,14 +81,17 @@ The script recognises three `LICENSE` texts. Any other text exits 2.
 
 - Apache-2.0: opens with `Apache License` and `Version 2.0, January 2004`.
 - Elastic-2.0: opens with `Elastic License 2.0`.
-- MIT: the full text in one of three forms. The title is `MIT License`, `The MIT License (MIT)`
-  or absent, as in the SPDX text. The text holds the sentence `Permission is hereby granted,
-  free of charge, to any person obtaining a copy` in its first 10 lines. It also holds the
-  clause `The above copyright notice and this permission notice shall be included`. Line
-  wrapping and letter case do not matter.
+- MIT: the script does not check the title. It checks two phrases and two exclusions.
+  - The sentence `Permission is hereby granted, free of charge, to any person obtaining a
+    copy` must be in the first 10 lines. Letter case matters here, line wrapping does not.
+  - The clause `The above copyright notice and this permission notice shall be included` must
+    be somewhere in the file. Letter case and line wrapping do not matter.
+  - A first line of `MIT No Attribution` (MIT-0) is refused, and so is a `Good, not Evil`
+    clause (the JSON license).
 
-MIT-0 (`MIT No Attribution`), the JSON license (the `Good, not Evil` clause), ISC and
-proprietary texts that quote the MIT sentence exit 2, because they are not MIT.
+ISC and texts that lack either phrase exit 2. A look-alike that carries both phrases is read
+as MIT. The X11 license and a proprietary text that quotes both phrases are such cases. The
+check is a guard against a wrong header, not a license classifier.
 
 A new license needs a new row in the script and a test case.
 
