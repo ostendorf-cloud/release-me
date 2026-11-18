@@ -42,11 +42,22 @@ tasks:
       - golangci-lint run
 
   lint:license:
-    desc: License header check for every Go source file
+    desc: License header presence check for every Go and shell file
     cmds:
+      # The file set comes from scripts/license-files.sh, shared with the CI
+      # job and lint:license-spdx. An empty set fails instead of passing.
       - |
-        addlicense -check -c "Simon Ostendorf" -y 2026 -l apache -s=only \
-          $(find . -name "*.go" -not -path "./.worktrees/*")
+        files=$(scripts/license-files.sh)
+        if [ -z "$files" ]; then
+          echo "no file matched scripts/license-files.sh, nothing was checked" >&2
+          exit 1
+        fi
+        addlicense -check -c "Simon Ostendorf" -y 2026 -l apache -s=only $files
+
+  lint:license-spdx:
+    desc: Check that the SPDX identifier of every covered file names the license in LICENSE
+    cmds:
+      - scripts/check-license-spdx.sh
 
   lint:markdown:
     desc: Markdown lint
@@ -107,6 +118,7 @@ tasks:
       - action/resolve-platform_test.sh
       - scripts/check-dco_test.sh
       - scripts/publish-release-assets_test.sh
+      - scripts/check-license-spdx_test.sh
 
   check:
     desc: Every check, one after another
@@ -115,6 +127,7 @@ tasks:
       - task: lint:vet
       - task: lint:golangci
       - task: lint:license
+      - task: lint:license-spdx
       - task: lint:markdown
       - task: lint:yaml
       - task: lint:actions

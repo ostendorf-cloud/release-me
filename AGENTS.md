@@ -22,7 +22,8 @@ and are not repeated here.
 - `action/`: the composite action. `Dockerfile`: the image for runners with an image cache.
 - `scripts/`: CI glue specific to this repository's own workflows, such as attaching and
   publishing release assets after `release.yaml` drafts a release, and `check-dco.sh`, a local
-  copy of the check the shared DCO workflow runs from its own repository.
+  copy of the check the shared DCO workflow runs from its own repository. The license checks
+  live here too: `license-files.sh`, `check-license-spdx.sh` and its test.
 - `release-me.yaml`: the tool's own release configuration.
 - `skills/`: agent skills for using release-me, one folder each, shipped through skills.sh.
 
@@ -55,15 +56,34 @@ task run -- next     # run the CLI from source
   components, environment. It lives in the `Config` struct in `internal/config/config.go` and
   in `docs/configuration.md`'s headings. Every config struct, `Load` and `Resolve`'s literals,
   the doc headings and a new key follow it.
-- License header first in every `.go` file, a blank line, then the package comment where one
-  exists:
+- License header first in every `.go` and `.sh` file, a blank line, then the package comment
+  where one exists. Shell scripts carry it after the shebang, with `#` instead of `//`:
 
 ```text
 // Copyright 2026 Simon Ostendorf
 // SPDX-License-Identifier: Apache-2.0
 ```
 
-Enforced by `lint:license` in CI.
+Two checks enforce it, and neither replaces the other:
+
+- `lint:license` runs `addlicense -check`. It catches a missing header. It cannot catch a header
+  that names the wrong license: a file saying `Elastic-2.0` passes it.
+- `lint:license-spdx` runs `scripts/check-license-spdx.sh`. It reads the license from the
+  opening lines of `LICENSE` (Apache-2.0, MIT and Elastic-2.0 are recognised, anything else
+  fails) and compares it with the `SPDX-License-Identifier` line in the first 5 lines of every
+  covered file. It catches a wrong or missing identifier and a `LICENSE` swapped without the
+  headers. It cannot catch a wrong copyright holder or year, a `LICENSE` that is itself wrong,
+  a license text edited below its opening lines, or a file outside the covered set. A new
+  license needs a new row in the script.
+
+Both read the covered files from `scripts/license-files.sh`: every `.go` and `.sh` file,
+except copies under `.worktrees/` and `.claude/worktrees/`. Nothing else is excluded, no file
+is generated. Markdown, YAML, JSON, TOML, the `Dockerfile`, `go.mod`, `go.sum`, `LICENSE` and
+`VERSION` carry no header on purpose, the decision is made, not an oversight. A new file type
+that should carry one is added in `scripts/license-files.sh` only. The CI `license` job calls
+that script, so the file set cannot drift between the checks.
+`scripts/check-license-spdx_test.sh` proves the second check on scratch copies, a wrong header
+and a swapped `LICENSE` both fail.
 
 ## Git
 
@@ -80,7 +100,8 @@ Enforced by `lint:license` in CI.
   `ostendorf-cloud/workflows/.github/workflows/reusable-license.yaml` instead of
   `task lint:license`, the one CI job that does not call its matching task target. The check is
   shared infrastructure now, maintained in one place for every repository in the organisation.
-  `task lint:license` stays for local development and runs the same tool with the same flags.
+  `task lint:license` stays for local development and runs the same tool with the same flags
+  over the same files, listed by `scripts/license-files.sh`.
 
 - `scripts/check-dco.sh` and its test stay in this repository although
   `.github/workflows/dco.yaml` only calls the shared `reusable-dco.yaml`. That reusable workflow
