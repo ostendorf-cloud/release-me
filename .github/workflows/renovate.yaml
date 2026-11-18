@@ -11,10 +11,10 @@ name: renovate
 # reusable workflow's own job-level "if:", so this caller needs no
 # condition of its own.
 on:
-  # Off-peak, staggered away from other repositories' own Renovate
+  # Staggered away from other repositories' own Renovate
   # schedules in this organisation.
   schedule:
-    - cron: "34 4 * * *"
+    - cron: "34 * * * *"
   workflow_dispatch:
   issues:
     types: [edited]
