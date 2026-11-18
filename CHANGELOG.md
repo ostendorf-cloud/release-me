@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.5.3](https://github.com/ostendorf-cloud/release-me/compare/v0.5.2...v0.5.3) (2026-11-18)
+
+### Bug Fixes
+
+- drop the dead ref restore from publish-release-assets.sh ([#180](https://github.com/ostendorf-cloud/release-me/pull/180))
+- **deps:** update module github.com/yuin/goldmark to v2 ([#177](https://github.com/ostendorf-cloud/release-me/pull/177))
+
 ## [v0.5.2](https://github.com/ostendorf-cloud/release-me/compare/v0.5.1...v0.5.2) (2026-11-18)
 
 ### Bug Fixes
