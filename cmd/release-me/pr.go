@@ -303,7 +303,7 @@ func doPRComponent(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, f, owner, repoName, existing, comp.Branch, date, releasepr.CommitMessage(title, cfg.Signoff), logger); err != nil {
+		if err := plan.write(ctx, cfg, f, owner, repoName, existing, comp.Branch, date, releasepr.CommitMessage(title, cfg.Signoff), cfg.TitlePatterns(), logger); err != nil {
 			return fmt.Errorf("release-me: component %s: %w", comp.Name, err)
 		}
 
@@ -537,7 +537,7 @@ func publishSharedPR(
 			return nil
 		}
 
-		if err := plan.write(ctx, cfg, f, owner, repoName, existing, branch, date, releasepr.CommitMessage(title, cfg.Signoff), logger); err != nil {
+		if err := plan.write(ctx, cfg, f, owner, repoName, existing, branch, date, releasepr.CommitMessage(title, cfg.Signoff), cfg.SharedTitlePatterns(), logger); err != nil {
 			return fmt.Errorf("release-me: %s: %w", who, err)
 		}
 
@@ -1096,19 +1096,32 @@ func headingReadsBack(version, compareURL string) bool {
 // The commit's parent is the commit the temporary worktree planned in p is
 // checked out at, dir's HEAD, the same one a local commit there would get,
 // and it carries exactly the content a local commit would: every
-// changelog with its section prepended and every bumped file. A fresh
-// branch, with no existing pull request to lease against, is created, or
-// moved only as a fast-forward; otherwise the lease is the existing pull
-// request's head SHA from the forge. The forge attributes the commit to
-// the token's own identity: cfg's author is not passed, since GitHub
-// leaves a commit with a custom author or committer unsigned.
+// changelog with its section prepended and every bumped file. With an
+// existing pull request the lease is its head SHA from the forge. Without
+// one, see leftoverBranchLease: a branch absent from the remote is
+// created, and a branch an earlier release pull request left behind,
+// closed or merged, is replaced while it is still at the commit just read,
+// as long as that commit is a release commit matching patterns. The forge
+// attributes the commit to the token's own identity: cfg's author is not
+// passed, since GitHub leaves a commit with a custom author or committer
+// unsigned.
 func (p *releasePlan) write(
 	ctx context.Context, cfg config.Config, f forge.Forge, owner, repoName string, existing *forge.PullRequest, branch string, date time.Time, commitMessage string,
-	logger *slog.Logger,
+	patterns []releasepr.TitlePattern, logger *slog.Logger,
 ) error {
 	parent, err := gitOutput(ctx, p.tmp, "rev-parse", "HEAD")
 	if err != nil {
 		return fmt.Errorf("release-me: release branch %s: resolve parent commit: %w", branch, err)
+	}
+
+	lease := ""
+	if existing != nil {
+		lease = existing.HeadSHA
+	} else {
+		lease, err = leftoverBranchLease(ctx, p.tmp, branch, patterns, logger)
+		if err != nil {
+			return fmt.Errorf("release-me: release branch %s: %w", branch, err)
+		}
 	}
 
 	contents := make(map[string]string, len(p.changelogs)+len(p.desiredFiles))
@@ -1164,10 +1177,6 @@ func (p *releasePlan) write(
 		}
 		return fmt.Errorf("release-me: commit release branch %s: %w", branch, err)
 	}
-	lease := ""
-	if existing != nil {
-		lease = existing.HeadSHA
-	}
 	if err := publishReleaseCommit(ctx, p.tmp, branch, sha, lease); err != nil {
 		if existing != nil {
 			return fmt.Errorf("release-me: publish release branch %s for pull request #%d: %w", branch, existing.Number, err)
@@ -1178,40 +1187,143 @@ func (p *releasePlan) write(
 	return nil
 }
 
-// publishReleaseCommit fetches the API-created object before publishing it.
-// The receive-pack comparison is atomic, including a writer arriving after
-// the fetch. A new branch retains the ordinary fast-forward-only push rule.
-func publishReleaseCommit(ctx context.Context, dir, branch, sha, expected string) error {
+// errForeignReleaseBranch reports a release branch with no open release
+// pull request whose head commit is not a release commit: someone pushed to
+// it by hand, and replacing it would discard their work.
+var errForeignReleaseBranch = errors.New("the branch exists on the remote with no open release pull request, " +
+	"and its head commit is not a release commit under the configured title patterns")
+
+// leftoverBranchLease returns the lease a publication without an open
+// release pull request holds on branch. A branch absent from the remote
+// yields "", no lease, and the push creates it. A branch that exists is
+// what a closed release pull request, merged or not, leaves behind when
+// nothing deletes it: its content is dead, and the next release replaces
+// it. The lease is the commit "git ls-remote" just read, so a writer that
+// moves the branch after this read still makes the push fail with
+// forge.ErrBranchMoved. The branch is only replaced when that commit is a
+// release commit: its message is one isReleaseCommit accepts, and its one
+// parent is on the default branch, see onDefaultBranch. Any other head
+// carries work someone added by hand, and the run fails with
+// errForeignReleaseBranch, naming the commit and what to do, rather than
+// discard it. dir is checked out at the default branch's tip.
+func leftoverBranchLease(ctx context.Context, dir, branch string, patterns []releasepr.TitlePattern, logger *slog.Logger) (string, error) {
+	heads, err := remoteBranches(ctx, dir, branch)
+	if err != nil {
+		return "", fmt.Errorf("read the branch on the remote: %w", err)
+	}
+	sha, ok := heads[branch]
+	if !ok {
+		return "", nil
+	}
+	if err := fetchCommit(ctx, dir, sha); err != nil {
+		return "", fmt.Errorf("fetch the head of the leftover branch: %w", err)
+	}
+	message, err := gitOutput(ctx, dir, "log", "-1", "--format=%B", sha)
+	if err != nil {
+		return "", fmt.Errorf("read the head of the leftover branch: %w", err)
+	}
+	subject, _, _ := strings.Cut(message, "\n")
+	reason := ""
+	switch {
+	case !isReleaseCommit(message, patterns):
+		reason = "its message does not match the configured title patterns"
+	case !onDefaultBranch(ctx, dir, sha):
+		reason = "its parent is not a commit of the default branch"
+	}
+	if reason != "" {
+		return "", fmt.Errorf("%w: commit %s %q is left alone because %s: "+
+			"save it elsewhere if it is needed, delete the branch %s on the remote and run again",
+			errForeignReleaseBranch, sha, subject, reason, branch)
+	}
+	logger.Info("replacing a release branch no open release pull request uses", "branch", branch, "commit", sha)
+	return sha, nil
+}
+
+// isReleaseCommit reports whether message is the message
+// releasepr.CommitMessage writes: a subject that reads back with one of
+// patterns, the release pull request titles the branch is written with,
+// and at most a single "Signed-off-by" trailer after it.
+func isReleaseCommit(message string, patterns []releasepr.TitlePattern) bool {
+	subject, rest, _ := strings.Cut(strings.TrimSpace(message), "\n")
+	if _, _, ok := releasepr.ParseAny(patterns, subject); !ok {
+		return false
+	}
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return true
+	}
+	identity, ok := strings.CutPrefix(rest, "Signed-off-by: ")
+	return ok && !strings.Contains(identity, "\n")
+}
+
+// onDefaultBranch reports whether sha has exactly one parent and that
+// parent is HEAD of dir, the default branch's tip, or an older commit of
+// it: the shape of every release commit, which CommitBranch builds on the
+// checkout's HEAD. A root commit, a merge, a parent that cannot be read and
+// a parent that is hand work on top of the default branch all report
+// false.
+func onDefaultBranch(ctx context.Context, dir, sha string) bool {
+	line, err := gitOutput(ctx, dir, "rev-list", "--parents", "-n", "1", sha)
+	if err != nil {
+		return false
+	}
+	commits := strings.Fields(line)
+	if len(commits) != 2 {
+		return false
+	}
+	return gitRun(ctx, dir, "merge-base", "--is-ancestor", commits[1], "HEAD") == nil
+}
+
+// fetchCommit fetches the commit sha from the push URL of origin into dir,
+// without any ref of its own, so its objects can be read or published. An
+// error names the remote "origin", since the URL can carry a credential.
+func fetchCommit(ctx context.Context, dir, sha string) error {
 	pushURL, err := gitOutput(ctx, dir, "remote", "get-url", "--push", "origin")
 	if err != nil {
 		return fmt.Errorf("resolve publication remote: %w", err)
 	}
-	//nolint:gosec // pushURL comes from the repository's own git remote config and sha from the object this tool just created, neither is externally supplied
+	//nolint:gosec // pushURL comes from the repository's own git remote config and sha from the forge or the remote, never a shell argument
 	cmd := exec.CommandContext(ctx, "git", "fetch", "--quiet", "--no-tags", pushURL, sha)
 	cmd.Dir = dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("fetch prepared release commit from origin: %w: %s", err,
+		return fmt.Errorf("fetch commit %s from origin: %w: %s", sha, err,
 			strings.ReplaceAll(strings.TrimSpace(stderr.String()), pushURL, "origin"))
+	}
+	return nil
+}
+
+// publishReleaseCommit fetches the API-created object before publishing it.
+// With expected set, the push replaces branch only while it is at
+// expected, and receive-pack's comparison is atomic, including a writer
+// arriving after the fetch. With expected empty, no lease, the push follows
+// the ordinary rule: it creates the branch or moves it as a fast-forward.
+func publishReleaseCommit(ctx context.Context, dir, branch, sha, expected string) error {
+	if err := fetchCommit(ctx, dir, sha); err != nil {
+		return fmt.Errorf("fetch prepared release commit: %w", err)
+	}
+	pushURL, err := gitOutput(ctx, dir, "remote", "get-url", "--push", "origin")
+	if err != nil {
+		return fmt.Errorf("resolve publication remote: %w", err)
 	}
 	args := []string{"push", "--porcelain"}
 	if expected != "" {
 		args = append(args, "--force-with-lease=refs/heads/"+branch+":"+expected)
 	}
 	args = append(args, "origin", sha+":refs/heads/"+branch)
-	cmd = exec.CommandContext(ctx, "git", args...)
+	//nolint:gosec // the binary is the fixed literal "git", args are a branch name from configuration and SHAs, never a shell argument
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	var stdout bytes.Buffer
-	stderr.Reset()
+	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if leaseLost(stdout.String()) {
+		if leaseLost(stdout.String(), expected != "") {
 			return fmt.Errorf("publish branch %s: %w", branch, forge.ErrBranchMoved)
 		}
-		return fmt.Errorf("publish branch %s: %w: %s", branch, err,
-			strings.ReplaceAll(strings.TrimSpace(stderr.String()), pushURL, "origin"))
+		reason := strings.TrimSpace(rejectedStatus(stdout.String()) + "\n" + stderr.String())
+		return fmt.Errorf("publish branch %s: %w: %s", branch, err, strings.ReplaceAll(reason, pushURL, "origin"))
 	}
 	return nil
 }
@@ -1222,12 +1334,30 @@ func publishReleaseCommit(ctx context.Context, dir, branch, sha, expected string
 // branch that already moved when the push started; receive-pack's
 // compare-and-swap prints "[remote rejected] (incorrect old value
 // provided)", for one that moves while the push runs, which is the
-// concurrent case the lease exists for. Every other "[remote rejected]"
-// stays a plain error carrying git's own reason, a ruleset declining an
-// unsigned commit through the pre-receive hook above all.
-func leaseLost(porcelain string) bool {
-	return strings.Contains(porcelain, "[rejected]") ||
-		strings.Contains(porcelain, "(incorrect old value provided)")
+// concurrent case the lease exists for. A push without a lease, leased
+// false, never loses one: its "[rejected] (non-fast-forward)" is a plain
+// error carrying git's reason. So is every other "[remote rejected]", a
+// ruleset declining an unsigned commit through the pre-receive hook above
+// all.
+func leaseLost(porcelain string, leased bool) bool {
+	return leased && (strings.Contains(porcelain, "[rejected] (stale info)") ||
+		strings.Contains(porcelain, "(incorrect old value provided)"))
+}
+
+// rejectedStatus returns the summary of every rejected ref in the
+// porcelain output of a failed push, "[rejected] (non-fast-forward)" say,
+// one per line. git prints that reason only there under "--porcelain",
+// not on stderr. The "To <url>" line is left out, since the URL can carry
+// a credential.
+func rejectedStatus(porcelain string) string {
+	var out []string
+	for _, line := range strings.Split(porcelain, "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) == 3 && fields[0] == "!" {
+			out = append(out, fields[1]+" "+fields[2])
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // warnUnsigned reads the signature the forge verified on sha, the commit

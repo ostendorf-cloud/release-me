@@ -119,9 +119,9 @@ sets the heading to today's date. The new commit is always built on the default 
 and replaces the existing branch only while it is still at the existing pull request's head
 SHA from the forge, the lease `--force-with-lease` takes; a branch found anywhere else is left
 alone and `pr` fails, naming the branch and the pull request. The commit object is fetched
-from the forge and published through Git with an atomic `--force-with-lease` comparison. A fresh
-branch, with no existing pull request to lease against, is created, or moved only as a
-fast-forward, the rule a push without force follows.
+from the forge and published through Git with an atomic `--force-with-lease` comparison. A
+branch absent from the remote is created. A branch with no open pull request is a
+[leftover release branch](#leftover-release-branch).
 Editing only the notes block of an open pull request updates its body, with no push: the content
 that would land on the branch did not change.
 
@@ -144,6 +144,41 @@ the release notes GitHub generates instead, the same in the changelog file, the 
 release. The guide never reaches the changelog file or the GitHub release. A shared release pull
 request's title and body name every component it releases: see
 [shared release pull request](versioning-modes.md#shared-release-pull-request).
+
+### Leftover release branch
+
+A release pull request closed without a merge leaves its branch behind. So does a merged one when
+nothing deleted the branch, [`delete-release-branch: false`](#release) or a failed delete. With no
+open release pull request, `pr` treats such a branch as dead content and replaces it, the same
+for a closed and a merged pull request. It reads the branch's commit from the remote with
+`git ls-remote` and pushes the new release commit with `--force-with-lease` on that commit. The
+new release pull request then opens from that branch. A writer that moves the branch after the
+read keeps its commit, and `pr` fails with `branch moved`.
+
+`pr` replaces the branch only when its head is a release commit under the configured title
+patterns. Its message is a subject that reads back as a release pull request title, with at most
+one `Signed-off-by` trailer after it. Its one parent is the default branch's tip or an older
+commit of it, the commit every release commit is built on. Any other head is left alone: a fix
+pushed by hand after the pull request closed, or a commit copying the release title on top of
+hand work. `pr` then fails naming the branch, the commit and the reason. Save that commit
+elsewhere if it is needed, delete the branch on the remote and run `pr` again.
+
+The same applies after a change of
+[`release-pull-request-title`](configuration.md#release-pull-request-title) to a pattern the old
+title no longer matches, or after a switch between one release pull request per component and
+`release-pull-request: shared`. The old branch's head no longer reads back as a release commit
+then, so delete the old branch once.
+
+The check reads the head commit only. An amended release commit that keeps the release title
+and the parent passes it, and is replaced.
+
+A branch absent from the remote is pushed without a lease. Should another writer create it while
+that push runs, git refuses the push, and `pr` reports a plain error with git's reason, not
+`branch moved`. The next run finds the branch and handles it as above.
+
+A push git refuses for another reason keeps git's own reason in the error: a ruleset or branch
+protection declining the commit, or a non fast forward of a push without a lease. Only a lease
+that no longer holds reports `branch moved`.
 
 ### Signed release commits
 
