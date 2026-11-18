@@ -77,13 +77,18 @@ Two checks enforce it, and neither replaces the other:
   the year. It cannot catch a `LICENSE` that is itself wrong, or a license text edited below
   its opening lines.
 
-Recognised `LICENSE` texts, anything else exits 2:
+The script recognises three `LICENSE` texts. Any other text exits 2.
 
 - Apache-2.0: opens with `Apache License` and `Version 2.0, January 2004`.
 - Elastic-2.0: opens with `Elastic License 2.0`.
-- MIT: holds the sentence `Permission is hereby granted, free of charge, to any person
-  obtaining a copy` in its first 10 lines. That covers the GitHub text, `The MIT License (MIT)`
-  and the SPDX text that opens with a copyright line.
+- MIT: the full text in one of three forms. The title is `MIT License`, `The MIT License (MIT)`
+  or absent, as in the SPDX text. The text holds the sentence `Permission is hereby granted,
+  free of charge, to any person obtaining a copy` in its first 10 lines. It also holds the
+  clause `The above copyright notice and this permission notice shall be included`. Line
+  wrapping and letter case do not matter.
+
+MIT-0 (`MIT No Attribution`), the JSON license (the `Good, not Evil` clause), ISC and
+proprietary texts that quote the MIT sentence exit 2, because they are not MIT.
 
 A new license needs a new row in the script and a test case.
 

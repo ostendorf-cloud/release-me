@@ -22,16 +22,22 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/check-license-spdx.XXXXXXXX")"
 trap 'rm -rf "${work}"' EXIT
 
 failures=0
-counter=0
 mit_permission='Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction.'
+# The condition clause the real MIT text carries and MIT-0 drops.
+mit_condition='The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.'
+# The permission sentence on one line, as the first line of the opening block.
+mit_sentence='Permission is hereby granted, free of charge, to any person obtaining a copy'
 
 # new_tree <license> echoes the root of a fresh scratch tree. <license> is
 # apache, mit, elastic or gpl, the opening lines of that text.
 new_tree() {
-  counter=$((counter + 1))
-  local root="${work}/tree-${counter}"
+  # A fresh directory per call. A counter would not do: the call runs in a
+  # command substitution, so its increment never reaches the caller.
+  local root
+  root="$(mktemp -d "${work}/tree.XXXXXXXX")"
   mkdir -p "${root}/scripts" "${root}/cmd"
   cp "${scripts}/license-files.sh" "${scripts}/check-license-spdx.sh" "${root}/scripts/"
   case "$1" in
@@ -39,7 +45,8 @@ new_tree() {
     printf '                                 Apache License\n                           Version 2.0, January 2004\n' >"${root}/LICENSE"
     ;;
   mit)
-    printf 'MIT License\n\nCopyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_permission}" >"${root}/LICENSE"
+    printf 'MIT License\n\nCopyright (c) 2026 Simon Ostendorf\n\n%s\n\n%s\n' \
+      "${mit_permission}" "${mit_condition}" >"${root}/LICENSE"
     ;;
   elastic)
     printf 'Elastic License 2.0\n\nURL: https://www.elastic.co/licensing/elastic-license\n' >"${root}/LICENSE"
@@ -124,9 +131,53 @@ mit_case() {
   run_check "${root}"
   expect "$1" 1 "LICENSE is MIT"
 }
-mit_case "the GitHub MIT text is recognised" "$(printf 'MIT License\n\nCopyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_permission}")"
-mit_case "the classic MIT text is recognised" "$(printf 'The MIT License (MIT)\n\nCopyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_permission}")"
-mit_case "the SPDX MIT text without a title is recognised" "$(printf 'Copyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_permission}")"
+mit_body="$(printf '%s\n\n%s\n' "${mit_permission}" "${mit_condition}")"
+mit_case "the GitHub MIT text is recognised" \
+  "$(printf 'MIT License\n\nCopyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_body}")"
+mit_case "the classic MIT text is recognised" \
+  "$(printf 'The MIT License (MIT)\n\nCopyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_body}")"
+mit_case "the SPDX MIT text without a title is recognised" \
+  "$(printf 'Copyright (c) 2026 Simon Ostendorf\n\n%s\n' "${mit_body}")"
+mit_case "an MIT text wrapped at 60 columns is recognised" \
+  "$(printf 'Copyright (c) 2026 Simon Ostendorf\n\nPermission is hereby granted, free of charge, to any person\nobtaining a copy of this software.\n\nThe above copyright notice and this permission\nnotice shall be included in all copies.\n')"
+mit_case "an MIT text with a trailing blank on each line is recognised" \
+  "$(printf 'MIT License  \n\nCopyright (c) 2026 Simon Ostendorf \n\n%s\n' "${mit_body}")"
+
+# Texts that look like MIT and are not. Each one exits 2, never 0 or 1.
+not_recognised() {
+  root="$(new_tree apache)"
+  printf '%s' "$2" >"${root}/LICENSE"
+  run_check "${root}"
+  expect "$1" 2 "LICENSE is not recognised"
+}
+not_recognised "MIT-0 is not MIT" \
+  "$(printf 'MIT No Attribution\n\nCopyright 2026 Simon Ostendorf\n\n%s\nwithout limitation.\n' "${mit_sentence}")"
+not_recognised "a text without the MIT condition clause is not MIT" \
+  "$(printf 'Copyright 2026 Simon Ostendorf\n\n%s\nwithout limitation.\n' "${mit_sentence}")"
+not_recognised "the MIT-0 title is refused even with the condition clause" \
+  "$(printf 'MIT No Attribution\n\nCopyright 2026 Simon Ostendorf\n\n%s\n' "${mit_body}")"
+not_recognised "the JSON license is not MIT" \
+  "$(printf 'Copyright (c) 2002 JSON.org\n\n%s\n\nThe Software shall be used for Good, not Evil.\n' "${mit_body}")"
+not_recognised "the Good, not Evil clause is found in any case" \
+  "$(printf 'Copyright (c) 2002 JSON.org\n\n%s\n\nTHE SOFTWARE SHALL BE USED FOR GOOD, NOT EVIL.\n' "${mit_body}")"
+not_recognised "a proprietary text quoting the MIT sentence is not MIT" \
+  "$(printf 'PROPRIETARY LICENSE AGREEMENT\n\nThis software is NOT open source. The MIT sentence\n"%s"\ndoes not apply here.\nAll rights reserved.\n' "${mit_sentence}")"
+not_recognised "ISC is not MIT" \
+  "$(printf 'ISC License\n\nCopyright (c) 2026 Simon Ostendorf\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted, provided that the above\ncopyright notice and this permission notice appear in all copies.\n')"
+not_recognised "a text with a shortened permission sentence is not MIT" \
+  "$(printf 'Copyright 2026 Simon Ostendorf\n\nPermission is hereby granted, for nothing.\n\n%s\n' "${mit_condition}")"
+not_recognised "a title that only starts like Elastic is not Elastic" \
+  "$(printf 'Elastic License 2.0 (ELv2)\n\nURL: https://www.elastic.co/licensing/elastic-license\n')"
+
+root="$(new_tree apache)"
+printf '                                 Apache License   \n                           Version 2.0, January 2004 \t\n' >"${root}/LICENSE"
+run_check "${root}"
+expect "trailing blanks on the Apache lines are ignored" 0
+
+root="$(new_tree apache)"
+printf 'Elastic License 2.0  \n\nURL: https://www.elastic.co/licensing/elastic-license\n' >"${root}/LICENSE"
+run_check "${root}"
+expect "trailing blanks on the Elastic line are ignored" 1 "LICENSE is Elastic-2.0"
 
 root="$(new_tree apache)"
 printf 'Copyright (c) 2026 Simon Ostendorf\n\nAll rights reserved.\n' >"${root}/LICENSE"
@@ -139,7 +190,7 @@ run_check "${root}"
 expect "an MIT title without the permission sentence is not recognised" 2 "LICENSE is not recognised"
 
 root="$(new_tree apache)"
-printf '\n\n\n\n\n\n\n\n\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\n' >"${root}/LICENSE"
+printf '\n\n\n\n\n\n\n\n\n\n%s\n\n%s\n' "${mit_sentence}" "${mit_condition}" >"${root}/LICENSE"
 run_check "${root}"
 expect "the MIT permission sentence below line 10 is not recognised" 2 "LICENSE is not recognised"
 
@@ -149,7 +200,7 @@ run_check "${root}"
 expect "another sentence that starts with Permission is not MIT" 2 "LICENSE is not recognised"
 
 root="$(new_tree apache)"
-printf '\n\n\n\n\n\n\n\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\n' >"${root}/LICENSE"
+printf '\n\n\n\n\n\n\n\n\n%s\n\n%s\n' "${mit_sentence}" "${mit_condition}" >"${root}/LICENSE"
 run_check "${root}"
 expect "the MIT permission sentence on line 10 is recognised" 1 "LICENSE is MIT"
 
@@ -232,6 +283,23 @@ printf 'package y\n' >"${root}/.claude/worktrees/y/b.go"
 printf '# no header, a type that carries none\n' >"${root}/README.md"
 run_check "${root}"
 expect "worktree copies and other file types are not covered" 0
+
+# Only .claude/worktrees is excluded, not the rest of .claude.
+root="$(new_tree apache)"
+mkdir -p "${root}/.claude"
+printf 'package other\n' >"${root}/.claude/other.go"
+list="$("${root}/scripts/license-files.sh")"
+case "${list}" in
+*"./.claude/other.go"*)
+  echo "PASS license-files.sh lists a Go file under .claude outside worktrees"
+  ;;
+*)
+  echo "FAIL license-files.sh lists a Go file under .claude outside worktrees: ${list}"
+  failures=$((failures + 1))
+  ;;
+esac
+run_check "${root}"
+expect "a headerless Go file under .claude is checked and fails" 1 "./.claude/other.go"
 
 root="$(new_tree apache)"
 mkdir -p "${root}/dir.go" "${root}/dir.sh"

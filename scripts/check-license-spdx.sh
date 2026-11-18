@@ -4,8 +4,9 @@
 #
 # Checks that the SPDX-License-Identifier of every covered file names the
 # license this repository's own LICENSE file holds. addlicense -check accepts
-# a header that names another license. This script closes that gap. Exits 0 when every file matches, 1 when a
-# file does not or the set is empty, 2 when LICENSE is not recognised.
+# a header that names another license. This script closes that gap.
+# Exits 0 when every file matches, 1 when a file does not or the set is
+# empty, 2 when LICENSE is not recognised.
 #
 # The covered files come from scripts/license-files.sh, the same list the
 # addlicense check uses.
@@ -32,16 +33,42 @@ fi
 text="$(tr -d '\r' <"${license}")"
 
 # The first two non empty lines of LICENSE, trimmed.
-opening="$(printf '%s\n' "${text}" | awk 'NF { gsub(/^[ \t]+|[ \t]+$/, ""); print; if (++n == 2) exit }')"
+opening="$(printf '%s\n' "${text}" |
+  awk 'NF { gsub(/^[ \t]+|[ \t]+$/, ""); print; if (++n == 2) exit }')"
 first="$(printf '%s\n' "${opening}" | sed -n 1p)"
 second="$(printf '%s\n' "${opening}" | sed -n 2p)"
+
+# Whitespace squeezed to single spaces, so a wrapped sentence still matches.
+flatten() { tr '\n\t' '  ' | tr -s ' '; }
+top="$(printf '%s\n' "${text}" | head -n 10 | flatten)"
+all="$(printf '%s\n' "${text}" | flatten | tr '[:upper:]' '[:lower:]')"
+
+# True for the MIT text in its three common forms, false for look-alikes.
+# The title varies ("MIT License", "The MIT License (MIT)", none in the SPDX
+# text), so it is not what decides. These do:
+#   - the permission sentence in the first 10 lines,
+#   - the condition clause anywhere in the file. MIT-0 lacks it.
+#   - no "Good, not Evil" clause. The JSON license has it.
+#   - a first line other than "MIT No Attribution", which is MIT-0.
+is_mit() {
+  [ "${first}" != "MIT No Attribution" ] || return 1
+  case "${top}" in
+  *"Permission is hereby granted, free of charge, to any person obtaining a copy"*) ;;
+  *) return 1 ;;
+  esac
+  case "${all}" in
+  *"the above copyright notice and this permission notice shall be included"*) ;;
+  *) return 1 ;;
+  esac
+  case "${all}" in
+  *"good, not evil"*) return 1 ;;
+  esac
+}
 
 # Recognised forms:
 #   Apache-2.0   opens with "Apache License" and "Version 2.0, January 2004".
 #   Elastic-2.0  opens with "Elastic License 2.0".
-#   MIT          holds the permission sentence in its first 10 lines. The
-#                title varies ("MIT License", "The MIT License (MIT)", none
-#                in the SPDX text), the sentence does not.
+#   MIT          see is_mit above.
 expected=""
 case "${first}" in
 "Apache License")
@@ -53,8 +80,7 @@ case "${first}" in
   expected="Elastic-2.0"
   ;;
 *)
-  if printf '%s\n' "${text}" | head -n 10 |
-    grep -F 'Permission is hereby granted, free of charge, to any person obtaining a copy' >/dev/null; then
+  if is_mit; then
     expected="MIT"
   fi
   ;;
