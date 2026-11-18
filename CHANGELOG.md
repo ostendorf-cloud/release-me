@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.5.2](https://github.com/ostendorf-cloud/release-me/compare/v0.5.1...v0.5.2) (2026-11-18)
+
+### Bug Fixes
+
+- **pr:** replace a release branch left by a closed pull request ([#176](https://github.com/ostendorf-cloud/release-me/pull/176))
+- **deps:** update module github.com/yuin/goldmark to v1.8.7 ([#168](https://github.com/ostendorf-cloud/release-me/pull/168))
+
 ## [v0.5.1](https://github.com/ostendorf-cloud/release-me/compare/v0.5.0...v0.5.1) (2026-11-13)
 
 ### Bug Fixes
