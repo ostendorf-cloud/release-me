@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -84,11 +85,15 @@ func TestDoPRRecoversAReleaseBranchNoOpenPullRequestUses(t *testing.T) {
 			wantCreated: true,
 		},
 		{
-			name:          "a commit pushed by hand onto the leftover branch is left alone",
-			prs:           closedPR(false, "release: pending"),
-			humanCommit:   "docs: reword the upgrade note",
-			wantErrIs:     errForeignReleaseBranch,
-			wantErrHas:    []string{"component main", "release branch " + mainBranch, "docs: reword the upgrade note", "delete the branch " + mainBranch},
+			name:        "a commit pushed by hand onto the leftover branch is left alone",
+			prs:         closedPR(false, "release: pending"),
+			humanCommit: "docs: reword the upgrade note",
+			wantErrIs:   errForeignReleaseBranch,
+			wantErrHas: []string{
+				"component main", "release branch " + mainBranch, "docs: reword the upgrade note",
+				"not a release commit under the configured title patterns",
+				"its message does not match the configured title patterns", "delete the branch " + mainBranch,
+			},
 			wantUnchanged: true,
 		},
 		{
@@ -121,7 +126,7 @@ func TestDoPRRecoversAReleaseBranchNoOpenPullRequestUses(t *testing.T) {
 				old = bareBranchSHA(t, origin)
 			}
 			if tc.humanCommit != "" {
-				clone := cloneBranch(t, origin, mainBranch)
+				clone := cloneReleaseBranch(t, origin)
 				runGit(t, clone, "commit", "-q", "--allow-empty", "-m", tc.humanCommit)
 				runGit(t, clone, "push", "-q", "origin", "HEAD:refs/heads/"+mainBranch)
 			}
@@ -187,7 +192,7 @@ func TestDoPRRefusesAForeignCommitBeforeCreatingAnything(t *testing.T) {
 	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &bytes.Buffer{}); err != nil {
 		t.Fatalf("first doPR() error = %v", err)
 	}
-	clone := cloneBranch(t, origin, mainBranch)
+	clone := cloneReleaseBranch(t, origin)
 	runGit(t, clone, "commit", "-q", "--allow-empty", "-m", "chore(main): release v0.1.0", "-m", "Hand edited after the pull request closed.")
 	runGit(t, clone, "push", "-q", "origin", "HEAD:refs/heads/"+mainBranch)
 	commitEntry(t, dir, "fix: keep the export order stable")
@@ -312,5 +317,186 @@ func TestPreparedCommitPublicationWithoutALeaseKeepsGitsReason(t *testing.T) {
 	}
 	if got := bareBranchSHA(t, origin); got != leftover {
 		t.Fatalf("branch = %s, want it left at %s", got, leftover)
+	}
+}
+
+// TestIsReleaseCommitAcceptsOnlyTheMessageThisToolWrites pins the message
+// shape releasepr.CommitMessage writes: the release title alone, or
+// followed by exactly one Signed-off-by trailer. Anything a human adds, a
+// second trailer, another trailer, a body or text after the title, is not
+// a release commit.
+func TestIsReleaseCommitAcceptsOnlyTheMessageThisToolWrites(t *testing.T) {
+	patterns := config.Default().TitlePatterns()
+	for _, tc := range []struct {
+		name    string
+		message string
+		want    bool
+	}{
+		{name: "the release title alone", message: "chore(main): release v0.1.0\n", want: true},
+		{name: "one sign-off", message: "chore(main): release v0.1.0\n\nSigned-off-by: Release Bot <release-bot@example.com>\n", want: true},
+		{
+			name:    "two sign-offs",
+			message: "chore(main): release v0.1.0\n\nSigned-off-by: Release Bot <release-bot@example.com>\nSigned-off-by: Jane Doe <jane@example.com>\n",
+		},
+		{name: "a co-author trailer", message: "chore(main): release v0.1.0\n\nCo-authored-by: Jane Doe <jane@example.com>\n"},
+		{name: "a release title with a body", message: "chore(main): release v0.1.0\n\nReworded the upgrade note by hand.\n"},
+		{name: "a release title with trailing text", message: "chore(main): release v0.1.0 and a hand fix\n"},
+		{name: "another subject", message: "docs: reword the upgrade note\n"},
+		{name: "an empty message", message: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isReleaseCommit(tc.message, patterns); got != tc.want {
+				t.Fatalf("isReleaseCommit(%q) = %v, want %v", tc.message, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDoPRRefusesAReleaseTitledHeadOverHandWork covers a head whose
+// message looks like a release commit but which does not sit on the
+// default branch: a commit copying the release title on top of hand work,
+// or one with no parent at all. A release commit this tool made has the
+// default branch's tip, or an older commit of it, as its only parent, so
+// either head is refused and the hand work stays on the branch. The commits
+// are made in a separate clone, so the run has none of their objects
+// locally, the shape of a fresh CI checkout.
+func TestDoPRRefusesAReleaseTitledHeadOverHandWork(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		build func(t *testing.T, clone string)
+	}{
+		{
+			name: "a release title on top of a hand commit",
+			build: func(t *testing.T, clone string) {
+				runGit(t, clone, "commit", "-q", "--allow-empty", "-m", "fix: correct the changelog wording")
+				runGit(t, clone, "commit", "-q", "--allow-empty", "-m", "chore(main): release v0.1.0")
+			},
+		},
+		{
+			name: "a release title on a merge of hand work into the default branch",
+			build: func(t *testing.T, clone string) {
+				runGit(t, clone, "checkout", "-q", "-b", "hand-work")
+				runGit(t, clone, "commit", "-q", "--allow-empty", "-m", "fix: correct the changelog wording")
+				runGit(t, clone, "checkout", "-q", "--detach", "HEAD~2")
+				runGit(t, clone, "merge", "-q", "--no-ff", "-m", "chore(main): release v0.1.0", "hand-work")
+			},
+		},
+		{
+			name: "a release title on a commit without a parent",
+			build: func(t *testing.T, clone string) {
+				runGit(t, clone, "checkout", "-q", "--orphan", "rewritten")
+				runGit(t, clone, "commit", "-q", "--allow-empty", "-m", "chore(main): release v0.1.0")
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, origin := newPRRepo(t)
+			commitEntry(t, dir, "feat: add the export command")
+			f := newPRFake(origin)
+			if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &bytes.Buffer{}); err != nil {
+				t.Fatalf("first doPR() error = %v", err)
+			}
+			clone := cloneReleaseBranch(t, origin)
+			tc.build(t, clone)
+			runGit(t, clone, "push", "-q", "-f", "origin", "HEAD:refs/heads/"+mainBranch)
+			before := bareBranchSHA(t, origin)
+			commitEntry(t, dir, "fix: keep the export order stable")
+			f.CreatedPullRequests = nil
+			f.ListResponses = closedPR(false, "release: pending")("")
+
+			err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &bytes.Buffer{})
+			if !errors.Is(err, errForeignReleaseBranch) {
+				t.Fatalf("doPR() error = %v, want errForeignReleaseBranch", err)
+			}
+			if !strings.Contains(err.Error(), "its parent is not a commit of the default branch") {
+				t.Fatalf("doPR() error = %q, want it to name the parent", err)
+			}
+			if got := bareBranchSHA(t, origin); got != before {
+				t.Fatalf("branch = %s, want the hand work left at %s", got, before)
+			}
+			if len(f.CreatedPullRequests) != 0 {
+				t.Fatalf("CreatedPullRequests = %+v, want none", f.CreatedPullRequests)
+			}
+		})
+	}
+}
+
+// TestDoPRLeftoverTakeoverKeepsAHumanWritersCommit covers a person pushing
+// to the leftover branch while the takeover's push runs: their commit
+// stays, the run reports forge.ErrBranchMoved without the push URL in it,
+// and no pull request opens.
+func TestDoPRLeftoverTakeoverKeepsAHumanWritersCommit(t *testing.T) {
+	dir, origin := newPRRepo(t)
+	commitEntry(t, dir, "feat: add the export command")
+	f := newPRFake(origin)
+	if err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &bytes.Buffer{}); err != nil {
+		t.Fatalf("first doPR() error = %v", err)
+	}
+	old := bareBranchSHA(t, origin)
+	clone := cloneReleaseBranch(t, origin)
+	runGit(t, clone, "commit", "-q", "--allow-empty", "-m", "fix: urgent hand fix")
+	human := gitOut(t, clone, "rev-parse", "HEAD")
+	runGit(t, clone, "push", "-q", "origin", "HEAD:refs/heads/human-staging")
+	hookOnPush(t, origin, strings.ReplaceAll(moveRefHook, "{{other}}", human))
+	commitEntry(t, dir, "fix: keep the export order stable")
+	f.CreatedPullRequests = nil
+	f.ListResponses = closedPR(false, "release: pending")(old)
+
+	err := doPR(t.Context(), dir, config.Default(), "", f, discardLogger(), false, &bytes.Buffer{})
+	if !errors.Is(err, forge.ErrBranchMoved) {
+		t.Fatalf("doPR() error = %v, want ErrBranchMoved", err)
+	}
+	if strings.Contains(err.Error(), origin) {
+		t.Fatalf("error %q carries the push URL", err)
+	}
+	if got := bareBranchSHA(t, origin); got != human {
+		t.Fatalf("branch = %s, want the human commit %s", got, human)
+	}
+	if len(f.CreatedPullRequests) != 0 {
+		t.Fatalf("CreatedPullRequests = %+v, want none", f.CreatedPullRequests)
+	}
+}
+
+// TestLeftoverBranchLeaseErrorsNeverExposeTheRemote covers the read of the
+// leftover branch: a failing "git ls-remote" names the remote "origin",
+// never a push URL that can carry a credential.
+func TestLeftoverBranchLeaseErrorsNeverExposeTheRemote(t *testing.T) {
+	for _, name := range []string{"private-token", "user:private-token@remote"} {
+		t.Run(name, func(t *testing.T) {
+			dir, _ := newPRRepo(t)
+			runGit(t, dir, "remote", "set-url", "--push", "origin", filepath.Join(t.TempDir(), name))
+			_, err := leftoverBranchLease(t.Context(), dir, mainBranch, config.Default().TitlePatterns(), discardLogger())
+			if err == nil || strings.Contains(err.Error(), "private-token") {
+				t.Fatalf("error = %v, want a failure naming origin only", err)
+			}
+		})
+	}
+}
+
+// TestReleaseBranchNeverLeavesTheReleaseMeNamespace pins what makes the
+// forced push safe: a release branch is always "release-me/<name>", never
+// the default branch or a pattern, whatever the configuration tries.
+func TestReleaseBranchNeverLeavesTheReleaseMeNamespace(t *testing.T) {
+	for _, body := range []string{
+		"branch: main\n",
+		"release-branch: main\n",
+		"components:\n  \"../main\":\n    path: a\n",
+		"components:\n  \"main*\":\n    path: a\n",
+	} {
+		t.Run(body, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "release-me.yaml")
+			if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+				t.Fatalf("write %s: %v", path, err)
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				return
+			}
+			for _, c := range cfg.Resolve() {
+				if !strings.HasPrefix(c.Branch, "release-me/") || strings.ContainsAny(c.Branch, "*?[") {
+					t.Fatalf("branch %q leaves the release-me/ namespace", c.Branch)
+				}
+			}
+		})
 	}
 }

@@ -1191,7 +1191,7 @@ func (p *releasePlan) write(
 // pull request whose head commit is not a release commit: someone pushed to
 // it by hand, and replacing it would discard their work.
 var errForeignReleaseBranch = errors.New("the branch exists on the remote with no open release pull request, " +
-	"and its head commit is not a release commit")
+	"and its head commit is not a release commit under the configured title patterns")
 
 // leftoverBranchLease returns the lease a publication without an open
 // release pull request holds on branch. A branch absent from the remote
@@ -1201,9 +1201,11 @@ var errForeignReleaseBranch = errors.New("the branch exists on the remote with n
 // it. The lease is the commit "git ls-remote" just read, so a writer that
 // moves the branch after this read still makes the push fail with
 // forge.ErrBranchMoved. The branch is only replaced when that commit is a
-// release commit, see isReleaseCommit; any other head is a commit someone
-// added by hand, and the run fails with errForeignReleaseBranch, naming
-// the commit and what to do, rather than discard it.
+// release commit: its message is one isReleaseCommit accepts, and its one
+// parent is on the default branch, see onDefaultBranch. Any other head
+// carries work someone added by hand, and the run fails with
+// errForeignReleaseBranch, naming the commit and what to do, rather than
+// discard it. dir is checked out at the default branch's tip.
 func leftoverBranchLease(ctx context.Context, dir, branch string, patterns []releasepr.TitlePattern, logger *slog.Logger) (string, error) {
 	heads, err := remoteBranches(ctx, dir, branch)
 	if err != nil {
@@ -1220,11 +1222,18 @@ func leftoverBranchLease(ctx context.Context, dir, branch string, patterns []rel
 	if err != nil {
 		return "", fmt.Errorf("read the head of the leftover branch: %w", err)
 	}
-	if !isReleaseCommit(message, patterns) {
-		subject, _, _ := strings.Cut(message, "\n")
-		return "", fmt.Errorf("%w: commit %s %q is left alone, "+
+	subject, _, _ := strings.Cut(message, "\n")
+	reason := ""
+	switch {
+	case !isReleaseCommit(message, patterns):
+		reason = "its message does not match the configured title patterns"
+	case !onDefaultBranch(ctx, dir, sha):
+		reason = "its parent is not a commit of the default branch"
+	}
+	if reason != "" {
+		return "", fmt.Errorf("%w: commit %s %q is left alone because %s: "+
 			"save it elsewhere if it is needed, delete the branch %s on the remote and run again",
-			errForeignReleaseBranch, sha, subject, branch)
+			errForeignReleaseBranch, sha, subject, reason, branch)
 	}
 	logger.Info("replacing a release branch no open release pull request uses", "branch", branch, "commit", sha)
 	return sha, nil
@@ -1245,6 +1254,24 @@ func isReleaseCommit(message string, patterns []releasepr.TitlePattern) bool {
 	}
 	identity, ok := strings.CutPrefix(rest, "Signed-off-by: ")
 	return ok && !strings.Contains(identity, "\n")
+}
+
+// onDefaultBranch reports whether sha has exactly one parent and that
+// parent is HEAD of dir, the default branch's tip, or an older commit of
+// it: the shape of every release commit, which CommitBranch builds on the
+// checkout's HEAD. A root commit, a merge, a parent that cannot be read and
+// a parent that is hand work on top of the default branch all report
+// false.
+func onDefaultBranch(ctx context.Context, dir, sha string) bool {
+	line, err := gitOutput(ctx, dir, "rev-list", "--parents", "-n", "1", sha)
+	if err != nil {
+		return false
+	}
+	commits := strings.Fields(line)
+	if len(commits) != 2 {
+		return false
+	}
+	return gitRun(ctx, dir, "merge-base", "--is-ancestor", commits[1], "HEAD") == nil
 }
 
 // fetchCommit fetches the commit sha from the push URL of origin into dir,

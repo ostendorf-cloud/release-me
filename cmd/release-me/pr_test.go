@@ -54,13 +54,14 @@ func newPRFake(origin string) *forgetest.Fake {
 	return f
 }
 
-// cloneBranch clones branch of origin into a new temporary directory with
-// the same test identity newPRRepo sets. A plain clone inherits none of it,
-// and a runner has no identity git can derive, so a commit there fails.
-func cloneBranch(t *testing.T, origin, branch string) string {
+// cloneReleaseBranch clones mainBranch of origin into a new temporary
+// directory with the same test identity newPRRepo sets. A plain clone
+// inherits none of it, and a runner has no identity git can derive, so a
+// commit there fails.
+func cloneReleaseBranch(t *testing.T, origin string) string {
 	t.Helper()
 	clone := t.TempDir()
-	runGit(t, clone, "clone", "-q", "--branch", branch, origin, ".")
+	runGit(t, clone, "clone", "-q", "--branch", mainBranch, origin, ".")
 	runGit(t, clone, "config", "user.name", "release-me tests")
 	runGit(t, clone, "config", "user.email", "release-me-tests@example.com")
 	runGit(t, clone, "config", "commit.gpgsign", "false")

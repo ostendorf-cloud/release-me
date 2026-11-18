@@ -155,11 +155,26 @@ for a closed and a merged pull request. It reads the branch's commit from the re
 new release pull request then opens from that branch. A writer that moves the branch after the
 read keeps its commit, and `pr` fails with `branch moved`.
 
-`pr` replaces the branch only when its head is a release commit: a subject that reads back as a
-release pull request title, with at most a `Signed-off-by` trailer after it. A head commit
-anything else made, a fix pushed by hand after the pull request closed, is left alone, and `pr`
-fails naming the branch and the commit. Save that commit elsewhere if it is needed, delete the
-branch on the remote and run `pr` again.
+`pr` replaces the branch only when its head is a release commit under the configured title
+patterns. Its message is a subject that reads back as a release pull request title, with at most
+one `Signed-off-by` trailer after it. Its one parent is the default branch's tip or an older
+commit of it, the commit every release commit is built on. Any other head is left alone: a fix
+pushed by hand after the pull request closed, or a commit copying the release title on top of
+hand work. `pr` then fails naming the branch, the commit and the reason. Save that commit
+elsewhere if it is needed, delete the branch on the remote and run `pr` again.
+
+The same applies after a change of
+[`release-pull-request-title`](configuration.md#release-pull-request-title) to a pattern the old
+title no longer matches, or after a switch between one release pull request per component and
+`release-pull-request: shared`. The old branch's head no longer reads back as a release commit
+then, so delete the old branch once.
+
+The check reads the head commit only. An amended release commit that keeps the release title
+and the parent passes it, and is replaced.
+
+A branch absent from the remote is pushed without a lease. Should another writer create it while
+that push runs, git refuses the push, and `pr` reports a plain error with git's reason, not
+`branch moved`. The next run finds the branch and handles it as above.
 
 A push git refuses for another reason keeps git's own reason in the error: a ruleset or branch
 protection declining the commit, or a non fast forward of a push without a lease. Only a lease
