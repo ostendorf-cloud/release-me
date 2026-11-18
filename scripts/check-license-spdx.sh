@@ -3,9 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Checks that the SPDX-License-Identifier of every covered file names the
-# license this repository's own LICENSE file holds. addlicense -check only
-# proves a header exists, it accepts a header that names another license.
-# This script closes that gap. Exits 0 when every file matches, 1 when a
+# license this repository's own LICENSE file holds. addlicense -check accepts
+# a header that names another license. This script closes that gap. Exits 0 when every file matches, 1 when a
 # file does not or the set is empty, 2 when LICENSE is not recognised.
 #
 # The covered files come from scripts/license-files.sh, the same list the
@@ -28,11 +27,21 @@ if [ ! -f "${license}" ]; then
   exit 2
 fi
 
+# LICENSE without carriage returns, so a CRLF file reads like an LF one. The
+# strip comes before any blank line test: a line holding only a CR is blank.
+text="$(tr -d '\r' <"${license}")"
+
 # The first two non empty lines of LICENSE, trimmed.
-opening="$(awk 'NF { gsub(/^[ \t]+|[ \t\r]+$/, ""); print; if (++n == 2) exit }' "${license}")"
+opening="$(printf '%s\n' "${text}" | awk 'NF { gsub(/^[ \t]+|[ \t]+$/, ""); print; if (++n == 2) exit }')"
 first="$(printf '%s\n' "${opening}" | sed -n 1p)"
 second="$(printf '%s\n' "${opening}" | sed -n 2p)"
 
+# Recognised forms:
+#   Apache-2.0   opens with "Apache License" and "Version 2.0, January 2004".
+#   Elastic-2.0  opens with "Elastic License 2.0".
+#   MIT          holds the permission sentence in its first 10 lines. The
+#                title varies ("MIT License", "The MIT License (MIT)", none
+#                in the SPDX text), the sentence does not.
 expected=""
 case "${first}" in
 "Apache License")
@@ -40,11 +49,14 @@ case "${first}" in
     expected="Apache-2.0"
   fi
   ;;
-"MIT License")
-  expected="MIT"
-  ;;
 "Elastic License 2.0")
   expected="Elastic-2.0"
+  ;;
+*)
+  if printf '%s\n' "${text}" | head -n 10 |
+    grep -F 'Permission is hereby granted, free of charge, to any person obtaining a copy' >/dev/null; then
+    expected="MIT"
+  fi
   ;;
 esac
 

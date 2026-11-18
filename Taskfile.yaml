@@ -52,7 +52,8 @@ tasks:
           echo "no file matched scripts/license-files.sh, nothing was checked" >&2
           exit 1
         fi
-        addlicense -check -c "Simon Ostendorf" -y 2026 -l apache -s=only $files
+        printf '%s\n' "$files" | tr '\n' '\0' |
+          xargs -0 addlicense -check -c "Simon Ostendorf" -y 2026 -l apache -s=only
 
   lint:license-spdx:
     desc: Check that the SPDX identifier of every covered file names the license in LICENSE

@@ -66,24 +66,40 @@ task run -- next     # run the CLI from source
 
 Two checks enforce it, and neither replaces the other:
 
-- `lint:license` runs `addlicense -check`. It catches a missing header. It cannot catch a header
-  that names the wrong license: a file saying `Elastic-2.0` passes it.
+- `lint:license` runs `addlicense -check`. It fails a file that has no license header at all. It
+  accepts any file that already holds a header, whatever the license, holder or year: a file
+  with only `// SPDX-License-Identifier: Elastic-2.0` passes it. It skips generated Go files,
+  the ones marked `// Code generated ... DO NOT EDIT.`.
 - `lint:license-spdx` runs `scripts/check-license-spdx.sh`. It reads the license from the
-  opening lines of `LICENSE` (Apache-2.0, MIT and Elastic-2.0 are recognised, anything else
-  fails) and compares it with the `SPDX-License-Identifier` line in the first 5 lines of every
-  covered file. It catches a wrong or missing identifier and a `LICENSE` swapped without the
-  headers. It cannot catch a wrong copyright holder or year, a `LICENSE` that is itself wrong,
-  a license text edited below its opening lines, or a file outside the covered set. A new
-  license needs a new row in the script.
+  opening lines of `LICENSE` and compares it with the `SPDX-License-Identifier` line in the
+  first 5 lines of every covered file. It fails a wrong or missing identifier. It also fails
+  when `LICENSE` is swapped and the headers are not. It does not read the copyright holder or
+  the year. It cannot catch a `LICENSE` that is itself wrong, or a license text edited below
+  its opening lines.
 
-Both read the covered files from `scripts/license-files.sh`: every `.go` and `.sh` file,
-except copies under `.worktrees/` and `.claude/worktrees/`. Nothing else is excluded, no file
-is generated. Markdown, YAML, JSON, TOML, the `Dockerfile`, `go.mod`, `go.sum`, `LICENSE` and
-`VERSION` carry no header on purpose, the decision is made, not an oversight. A new file type
-that should carry one is added in `scripts/license-files.sh` only. The CI `license` job calls
-that script, so the file set cannot drift between the checks.
-`scripts/check-license-spdx_test.sh` proves the second check on scratch copies, a wrong header
-and a swapped `LICENSE` both fail.
+Recognised `LICENSE` texts, anything else exits 2:
+
+- Apache-2.0: opens with `Apache License` and `Version 2.0, January 2004`.
+- Elastic-2.0: opens with `Elastic License 2.0`.
+- MIT: holds the sentence `Permission is hereby granted, free of charge, to any person
+  obtaining a copy` in its first 10 lines. That covers the GitHub text, `The MIT License (MIT)`
+  and the SPDX text that opens with a copyright line.
+
+A new license needs a new row in the script and a test case.
+
+Both checks read the covered files from `scripts/license-files.sh`. It lists every regular `.go`
+and `.sh` file, except copies under `.worktrees/` and `.claude/worktrees/`. Nothing else is
+excluded. A symlink to a source file is covered by neither check.
+
+- Markdown, YAML, JSON, TOML, the `Dockerfile`, `go.mod`, `go.sum`, `LICENSE` and `VERSION`
+  carry no header. That is a decision, not an oversight.
+- A new file type that should carry a header is added in `scripts/license-files.sh` only. The
+  CI `license` job calls that script, so the file set cannot drift between the checks.
+- No file is generated today. The day one arrives, `lint:license` skips it and
+  `lint:license-spdx` fails it. Then either give the generator the header line, or exclude
+  the file in `scripts/license-files.sh` with a comment that says why.
+- `scripts/check-license-spdx_test.sh` runs both directions on scratch copies. A wrong header
+  fails. A swapped `LICENSE` fails.
 
 ## Git
 

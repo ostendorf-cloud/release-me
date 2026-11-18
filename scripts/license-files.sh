@@ -13,6 +13,9 @@
 # repository, and AGENTS.md records the decision. Worktrees are skipped
 # because they hold copies of this repository's own files.
 #
+# Regular files only: a symlink or a directory named like a source file is
+# not listed, so neither check sees it.
+#
 # Prints nothing when no file matches. The callers treat an empty set as a
 # failure, this script only selects.
 set -euo pipefail
