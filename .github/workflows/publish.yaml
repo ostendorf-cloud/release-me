@@ -17,15 +17,84 @@ on:
 permissions: {}
 
 jobs:
-  image:
-    runs-on: ubuntu-latest
+  # The image is built once per platform, each on that platform's own
+  # native GitHub-hosted runner, amd64 on ubuntu-latest and arm64 on
+  # ubuntu-24.04-arm, rather than cross-compiled through QEMU. Each leg
+  # pushes its own image by digest only, with no tag attached, so the two
+  # legs never race to overwrite each other's tag; image-merge below is
+  # the one place a tag is written, assembling both digests into one
+  # multi-platform manifest list.
+  image-build:
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      - name: Resolve the version and the artifact name
+        id: meta
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          {
+            echo "version=${TAG_NAME#v}"
+            echo "pair=${PLATFORM//\//-}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
+
+      - name: Export the digest for image-merge to pick up
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: image-digests-${{ steps.meta.outputs.pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
+
+  image-merge:
+    needs: image-build
+    runs-on: ubuntu-latest
+    # Metadata only: download the digests, assemble and push one
+    # manifest list, inspect it back. No build.
+    timeout-minutes: 5
+    permissions:
+      packages: write
+    steps:
       - name: Resolve the image tags
         id: tags
         env:
@@ -45,6 +114,12 @@ jobs:
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          path: /tmp/digests
+          pattern: image-digests-*
+          merge-multiple: true
+
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
@@ -53,9 +128,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
-        with:
-          context: .
-          push: true
-          build-args: VERSION=${{ steps.tags.outputs.version }}
-          tags: ${{ steps.tags.outputs.tags }}
+      - name: Create and push the multi-platform manifest list
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+        working-directory: /tmp/digests
+        run: |
+          shopt -s nullglob
+          digests=(*)
+          if [ "${#digests[@]}" -ne 2 ]; then
+            echo "expected 2 digests, found ${#digests[@]}: ${digests[*]}" >&2
+            exit 1
+          fi
+          mapfile -t tags <<< "${TAGS}"
+          tag_args=()
+          for tag in "${tags[@]}"; do
+            tag_args+=("-t" "${tag}")
+          done
+          digest_args=()
+          for digest in "${digests[@]}"; do
+            digest_args+=("${IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${tag_args[@]}" "${digest_args[@]}"
+
+      - name: Verify the manifest list covers both platforms
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          VERSION: ${{ steps.tags.outputs.version }}
+        run: |
+          platforms="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" \
+            --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{println}}{{end}}')"
+          missing=()
+          for want in linux/amd64 linux/arm64; do
+            grep -qx "${want}" <<< "${platforms}" || missing+=("${want}")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '%s:%s is missing %s; it carries:\n%s\n' \
+              "${IMAGE}" "${VERSION}" "${missing[*]}" "${platforms}" >&2
+            exit 1
+          fi

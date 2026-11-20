@@ -64,6 +64,7 @@ As a container image, for runners with an image cache:
 docker run --rm -e GITHUB_TOKEN ghcr.io/ostendorf-cloud/release-me:<version> run
 ```
 
+The image is one multi-platform manifest list for `linux/amd64` and `linux/arm64`.
 Images are tagged with the released version, without the `v`. A stable release also moves
 `latest`, a pre-release does not, so `:latest` is the newest stable release.
 
