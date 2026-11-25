@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:fmt
 
   vet:
@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - name: Cache Go modules and build output
         # Module cache avoids re-downloading dependencies, build cache keeps
         # a recompile fast instead of starting cold.
@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - name: Cache Go modules, build output and golangci-lint
         # Caches the same module and build directories as the other Go
         # jobs, plus golangci-lint's own analysis cache.
@@ -113,7 +113,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:license-spdx
 
   markdownlint:
@@ -121,7 +121,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:markdown
 
   yamllint:
@@ -129,7 +129,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:yaml
 
   actionlint:
@@ -137,7 +137,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:actions
 
   goreleaser:
@@ -145,7 +145,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:goreleaser
 
   dockerfile:
@@ -153,7 +153,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:dockerfile
 
   docker-build:
@@ -184,7 +184,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:shell
 
   gitleaks:
@@ -194,7 +194,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task lint:secrets
 
   govulncheck:
@@ -202,7 +202,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - name: Cache Go modules and build output
         # govulncheck loads and type-checks every package through the go
         # toolchain before it can build the call graph, so it needs the
@@ -235,7 +235,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - name: Cache Go modules and build output
         # Module cache avoids re-downloading dependencies, build cache keeps
         # a recompile fast instead of starting cold. runner.os already
@@ -263,7 +263,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - run: task test:action
 
   build:
@@ -271,7 +271,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a  # v5.2.10
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
       - name: Cache Go modules and build output
         # Module cache avoids re-downloading dependencies, build cache keeps
         # a recompile fast instead of starting cold.
