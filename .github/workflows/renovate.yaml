@@ -2,7 +2,7 @@ name: renovate
 
 # Thin, per-repository trigger for this repository's own Renovate run, as
 # ostendorf-cloud/workflows' README documents for
-# "reusable-renovate.yaml". The "issues"/"pull_request" "edited" triggers
+# "reusable-renovate.yaml". The "issues"/"pull_request_target" "edited" triggers
 # exist so a human checking a Renovate rebase checkbox (on the Dependency
 # Dashboard issue, or on a single Renovate pull request) reacts within
 # this run's CI time instead of waiting for the next "schedule" tick. The
@@ -18,7 +18,9 @@ on:
   workflow_dispatch:
   issues:
     types: [edited]
-  pull_request:
+  # A pull request with a merge conflict starts no pull_request run, so a
+  # rebase tick on it needs this trigger. It also covers clean pull requests.
+  pull_request_target:
     types: [edited]
   # Renovate runs when the checks of a Renovate branch have finished. The
   # list names every workflow that runs checks on a pull request: a
